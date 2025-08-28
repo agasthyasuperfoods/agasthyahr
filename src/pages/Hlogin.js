@@ -180,7 +180,7 @@ export default function Hlogin() {
 
               <p className="text-center text-xs text-gray-500">
                 By signing in, you acknowledge our{" "}
-                <a href="/" className="text-[#C1272D] hover:underline">Privacy Policy</a>.
+                <a href="/Hlogin" className="text-[#C1272D] hover:underline">Privacy Policy</a>.
               </p>
             </form>
           </div>

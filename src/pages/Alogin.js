@@ -192,7 +192,7 @@ export default function Alogin() {
 
               <p className="text-center text-xs text-gray-500">
                 By signing in, you acknowledge our{" "}
-                <a href="/" className="text-[#C1272D] hover:underline">Privacy Policy</a>.
+                <a href="/Alogin" className="text-[#C1272D] hover:underline">Privacy Policy</a>.
               </p>
             </form>
           </div>
