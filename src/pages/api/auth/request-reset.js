@@ -53,14 +53,13 @@ export default async function handler(req, res) {
     if (user?.email) {
       const payload = { sub: user.employeeid, email: user.email, typ: "pwreset" };
       const token = jwt.sign(payload, SECRET, { expiresIn: `${TTL_MIN}m` });
-      const link = `${APP_URL}/reset/${encodeURIComponent(token)}`;
-
+const link = `${APP_URL}/reset-password?token=${encodeURIComponent(token)}`;
       const subject = "Reset your Agasthya HR password";
       const html = `
         <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;line-height:1.5;color:#111">
           <h2>Reset your password</h2>
           <p>Hello${user.name ? ` ${escapeHtml(user.name)}` : ""},</p>
-          <p>We received a request to reset your Agasthya HR password. Click the button below:</p>
+          <p>We received a request to reset your Agasthya password. Click the button below:</p>
           <p>
             <a href="${link}" style="display:inline-block;background:#111;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none;">
               Reset password

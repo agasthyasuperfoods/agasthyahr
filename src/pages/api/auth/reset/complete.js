@@ -1,7 +1,7 @@
-// /pages/api/auth/reset/complete.js
+// /src/pages/api/auth/reset/complete.js
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
-import { query } from "@/lib/db";
+import pool from "@/lib/db";
 
 const SECRET = process.env.RESET_TOKEN_SECRET;
 
@@ -12,8 +12,8 @@ export default async function handler(req, res) {
     const { token, password } = req.body || {};
     const pwd = String(password || "");
 
-    if (!token || !pwd || pwd.length < 8) {
-      return res.status(400).json({ error: "Token and a minimum 8-char password are required" });
+    if (!token || pwd.length < 4) {
+      return res.status(400).json({ error: "Token and a minimum 4-char password are required" });
     }
 
     let payload;
@@ -22,21 +22,29 @@ export default async function handler(req, res) {
     } catch {
       return res.status(400).json({ error: "Invalid or expired token" });
     }
-    if (payload?.t !== "pwd_reset" || !payload?.email) {
+    if (payload?.typ !== "pwreset" || !payload?.email) {
       return res.status(400).json({ error: "Invalid token" });
     }
 
     const hash = await bcrypt.hash(pwd, 10);
 
-    // Update password (adjust table/column names if needed)
-    // Expecting `users` table with `email` and `password_hash`
-    const { rowCount } = await query(
-      `UPDATE users SET password_hash=$1, updated_at=NOW() WHERE LOWER(email)=LOWER($2)`,
-      [hash, payload.email]
-    );
+    // Try schema A: password_hash + updated_at
+    let result;
+    try {
+      const sqlA = `UPDATE "EmployeeTable"
+                    SET password_hash=$1, updated_at=NOW()
+                    WHERE LOWER(email)=LOWER($2)`;
+      result = await pool.query(sqlA, [hash, payload.email]);
+    } catch (e) {
+      // If column missing (42703), fall back to schema B: "password" only
+      if (e?.code !== "42703") throw e;
+      const sqlB = `UPDATE "EmployeeTable"
+                    SET "password"=$1
+                    WHERE LOWER(email)=LOWER($2)`;
+      result = await pool.query(sqlB, [hash, payload.email]);
+    }
 
-    if (!rowCount) return res.status(404).json({ error: "User not found" });
-
+    if (!result.rowCount) return res.status(404).json({ error: "User not found" });
     return res.status(200).json({ ok: true });
   } catch (e) {
     console.error(e);

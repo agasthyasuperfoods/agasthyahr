@@ -19,7 +19,6 @@ export default function ResetPassword() {
 
   useEffect(() => {
     if (!token) return;
-    // Optional: basic length sanity check
     if (String(token).length < 16) {
       Swal.fire({ icon: "error", title: "Invalid link", text: "This reset link is invalid." });
     }
@@ -31,8 +30,8 @@ export default function ResetPassword() {
       Swal.fire({ icon: "error", title: "Invalid link", text: "Missing reset token." });
       return;
     }
-    if (!pwd || pwd.length < 8) {
-      Swal.fire({ icon: "warning", title: "Weak password", text: "Use at least 8 characters." });
+    if (!pwd || pwd.length < 4) {
+      Swal.fire({ icon: "warning", title: "Weak password", text: "Use at least 4 characters." });
       return;
     }
     if (pwd !== pwd2) {
@@ -41,7 +40,7 @@ export default function ResetPassword() {
     }
     try {
       setLoading(true);
-      const res = await fetch("/api/auth/reset", {
+      const res = await fetch("/api/auth/reset/complete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token, password: pwd }),
@@ -84,7 +83,7 @@ export default function ResetPassword() {
                       value={pwd}
                       onChange={(e) => setPwd(e.target.value)}
                       className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 pr-10 text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-4 focus:ring-[#C1272D]/20 focus:border-[#C1272D]"
-                      placeholder="At least 8 characters"
+                      placeholder="At least 4 characters"
                       autoFocus
                     />
                     <button
