@@ -127,7 +127,7 @@ export default async function handler(req, res) {
     return res.status(200).json({
       ok: true,
       message:
-        "If an account exists for what you entered, we've sent a reset link. It will expire in ~15 minutes.",
+        "If an account exists for what you entered, we've sent a reset link. It will expire in 15 minutes.",
     });
   }
 }
