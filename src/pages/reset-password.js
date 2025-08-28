@@ -58,7 +58,7 @@ export default function ResetPassword() {
   return (
     <>
       <Head>
-        <title>Reset Password • Agasthya HR</title>
+        <title>Reset Password • Agasthya </title>
         <meta name="robots" content="noindex" />
       </Head>
 

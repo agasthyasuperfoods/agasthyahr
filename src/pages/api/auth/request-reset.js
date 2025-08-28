@@ -54,7 +54,7 @@ export default async function handler(req, res) {
       const payload = { sub: user.employeeid, email: user.email, typ: "pwreset" };
       const token = jwt.sign(payload, SECRET, { expiresIn: `${TTL_MIN}m` });
 const link = `${APP_URL}/reset-password?token=${encodeURIComponent(token)}`;
-      const subject = "Reset your Agasthya HR password";
+      const subject = "Reset your Agasthya  password";
       const html = `
         <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;line-height:1.5;color:#111">
           <h2>Reset your password</h2>
@@ -69,7 +69,7 @@ const link = `${APP_URL}/reset-password?token=${encodeURIComponent(token)}`;
           <p style="word-break:break-all;"><a href="${link}">${link}</a></p>
           <p>This link expires in ${TTL_MIN} minutes. If you didn't request this, you can ignore this email.</p>
           <hr style="border:none;border-top:1px solid #eee;margin:20px 0;" />
-          <p style="font-size:12px;color:#666;">Sent by Agasthya HR</p>
+          <p style="font-size:12px;color:#666;">Sent by Agasthya </p>
         </div>
       `;
 

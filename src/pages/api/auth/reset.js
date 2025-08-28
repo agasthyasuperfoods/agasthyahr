@@ -54,7 +54,7 @@ export default function ResetPassword() {
 
   return (
     <>
-      <Head><title>Reset Password • Agasthya HR</title></Head>
+      <Head><title>Reset Password • Agasthya </title></Head>
       <main className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
         <div className="w-full max-w-md bg-white border border-gray-200 rounded-2xl shadow-sm p-6">
           <h1 className="text-lg font-semibold text-gray-900">Set a new password</h1>
