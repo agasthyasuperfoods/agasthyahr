@@ -34,7 +34,7 @@ export default async function handler(req, res) {
 
       const html = `
         <div style="font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;">
-          <h2>Reset your Agasthya HR password</h2>
+          <h2>Reset your Agasthya  password</h2>
           <p>We received a request to reset the password for <strong>${user.email}</strong>.</p>
           <p>This link expires in <strong>${TTL_MIN} minutes</strong>:</p>
           <p>
@@ -48,7 +48,7 @@ export default async function handler(req, res) {
       try {
         await sendMailO365({
           to: user.email,
-          subject: "Reset your Agasthya HR password",
+          subject: "Reset your Agasthya password",
           html,
         });
       } catch (e) {

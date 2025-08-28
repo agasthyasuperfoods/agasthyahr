@@ -54,7 +54,7 @@ export default function ForgotPassword() {
   return (
     <>
       <Head>
-        <title>Forgot Password • Agasthya HR</title>
+        <title>Forgot Password • Agasthya</title>
         <meta name="robots" content="noindex" />
       </Head>
 
