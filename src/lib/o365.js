@@ -6,72 +6,43 @@ const {
   MS_SENDER_UPN,
 } = process.env;
 
-function assertEnv() {
-  const missing = [];
-  if (!MS_TENANT_ID) missing.push("MS_TENANT_ID");
-  if (!MS_CLIENT_ID) missing.push("MS_CLIENT_ID");
-  if (!MS_CLIENT_SECRET) missing.push("MS_CLIENT_SECRET");
-  if (!MS_SENDER_UPN) missing.push("MS_SENDER_UPN");
-  if (missing.length) {
-    throw new Error(`Missing env for O365 mail: ${missing.join(", ")}`);
-  }
-}
-
-async function getAppToken() {
-  assertEnv();
-  const url = `https://login.microsoftonline.com/${MS_TENANT_ID}/oauth2/v2.0/token`;
+async function getToken() {
   const body = new URLSearchParams({
     client_id: MS_CLIENT_ID,
     client_secret: MS_CLIENT_SECRET,
     scope: "https://graph.microsoft.com/.default",
     grant_type: "client_credentials",
   });
-
-  const res = await fetch(url, {
+  const r = await fetch(`https://login.microsoftonline.com/${MS_TENANT_ID}/oauth2/v2.0/token`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body,
   });
-  if (!res.ok) {
-    const err = await res.text().catch(() => "");
-    throw new Error(`OAuth token failed: ${res.status} ${err}`);
-  }
-  return res.json(); // { access_token, token_type, expires_in, ... }
+  if (!r.ok) throw new Error(`Token ${r.status}: ${await r.text()}`);
+  const j = await r.json();
+  return j.access_token;
 }
 
-export async function sendMail({ to, subject, html, text }) {
-  assertEnv();
-  if (!to) throw new Error("sendMail: 'to' is required");
+export async function sendMail({ to, subject, html }) {
+  if (!MS_SENDER_UPN) throw new Error("MS_SENDER_UPN not set");
+  const token = await getToken();
 
-  const { access_token } = await getAppToken();
-
-  const body = {
-    message: {
-      subject: subject || "",
-      body: {
-        contentType: html ? "HTML" : "Text",
-        content: html || text || "",
-      },
-      toRecipients: [{ emailAddress: { address: to } }],
-      from: { emailAddress: { address: MS_SENDER_UPN } },
+  const r = await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(MS_SENDER_UPN)}/sendMail`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
     },
-    saveToSentItems: "false",
-  };
-
-  const res = await fetch(
-    `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(MS_SENDER_UPN)}/sendMail`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${access_token}`,
-        "Content-Type": "application/json",
+    body: JSON.stringify({
+      message: {
+        subject,
+        body: { contentType: "HTML", content: html }, // <- force HTML
+        toRecipients: [{ emailAddress: { address: to } }],
+        from: { emailAddress: { address: MS_SENDER_UPN } },
       },
-      body: JSON.stringify(body),
-    }
-  );
+      saveToSentItems: false,
+    }),
+  });
 
-  if (!res.ok) {
-    const err = await res.text().catch(() => "");
-    throw new Error(`Graph sendMail failed: ${res.status} ${err}`);
-  }
+  if (!r.ok) throw new Error(`Graph sendMail failed (${r.status}): ${await r.text()}`);
 }
