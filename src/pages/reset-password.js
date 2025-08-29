@@ -74,7 +74,7 @@ export default function ResetPassword() {
       const res = await fetch("/api/auth/reset/complete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, password: pwd }),
+         body: JSON.stringify({ token, password: pwd, to: toPath }),
       });
       const j = await res.json().catch(() => ({}));
       if (!res.ok || !j.ok) throw new Error(j?.error || "Reset failed");
