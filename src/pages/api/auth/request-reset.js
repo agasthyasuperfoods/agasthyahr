@@ -8,6 +8,9 @@ const TTL_MIN = parseInt(process.env.RESET_TOKEN_TTL_MINUTES || "15", 10);
 const SECRET = process.env.RESET_TOKEN_SECRET;
 const DEBUG = process.env.DEBUG_RESET === "1";
 
+// Only allow returning to these pages
+const NEXT_WHITELIST = new Set(["/Alogin", "/Hlogin"]);
+
 // Keep quotes if your table name is mixed-case ("EmployeeTable")
 const SQL_FIND_USER = `
   SELECT employeeid, email, name
@@ -22,10 +25,12 @@ export default async function handler(req, res) {
   try {
     if (!SECRET) throw new Error("RESET_TOKEN_SECRET is not set");
 
-    const { identifier } = req.body || {};
+    const { identifier, to } = req.body || {};
     const id = String(identifier || "").trim();
 
-    // Always return generic response (no user enumeration)
+    // sanitize "to" (default to HR login if absent/invalid)
+    const nextPath = NEXT_WHITELIST.has(to) ? to : "/Hlogin";
+
     const generic = {
       ok: true,
       message:
@@ -37,7 +42,6 @@ export default async function handler(req, res) {
       return res.status(200).json(generic);
     }
 
-    // Lookup by email OR employeeid
     const { rows } = await pool.query(SQL_FIND_USER, [id]);
     const user = rows?.[0];
 
@@ -47,16 +51,18 @@ export default async function handler(req, res) {
         found: !!user,
         employeeid: user?.employeeid,
         email: user?.email ? "(redacted)" : null,
+        nextPath,
       });
     }
 
     if (user?.email) {
-      // Build token + link
+      // Build token + link (include the target "to")
       const payload = { sub: user.employeeid, email: user.email, typ: "pwreset" };
       const token = jwt.sign(payload, SECRET, { expiresIn: `${TTL_MIN}m` });
-      const link = `${BASE_URL}/reset-password?token=${encodeURIComponent(token)}`;
 
-      const subject = "Reset your Agasthya HR password";
+      const link = `${BASE_URL}/reset-password?token=${encodeURIComponent(token)}&to=${encodeURIComponent(nextPath)}`;
+
+      const subject = "Reset your Agasthya password";
       const preheader = "Use this link to set a new password. It expires soon.";
 
       const html = `<!doctype html>
@@ -72,7 +78,6 @@ export default async function handler(req, res) {
         <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width:560px;background:#ffffff;border:1px solid #eee;border-radius:12px;overflow:hidden;">
           <tr>
             <td style="padding:0;">
-              <!-- preheader (hidden) -->
               <div style="display:none!important;visibility:hidden;opacity:0;height:0;width:0;overflow:hidden;">
                 ${escapeHtml(preheader)}
               </div>
@@ -82,7 +87,7 @@ export default async function handler(req, res) {
                   Hello${user.name ? ` ${escapeHtml(user.name)}` : ""},
                 </p>
                 <p style="margin:0 0 16px 0;">
-                  We received a request to reset your Agasthya HR password.
+                  We received a request to reset your Agasthya password.
                 </p>
                 <p style="margin:0 0 24px 0;">
                   <a href="${link}" style="display:inline-block;background:#111;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none;">
@@ -113,7 +118,6 @@ export default async function handler(req, res) {
         await sendMail({ to: user.email, subject, html });
         if (DEBUG) console.log("[request-reset] Email sent to:", user.email);
       } catch (e) {
-        // Keep response generic; only log when DEBUG
         if (DEBUG) console.error("[request-reset] Graph sendMail failed:", e?.message || e);
       }
     } else if (DEBUG) {
@@ -123,7 +127,6 @@ export default async function handler(req, res) {
     return res.status(200).json(generic);
   } catch (e) {
     if (DEBUG) console.error("[request-reset] Fatal:", e?.message || e);
-    // Still keep response generic
     return res.status(200).json({
       ok: true,
       message:

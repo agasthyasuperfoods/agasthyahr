@@ -1,8 +1,9 @@
 // /src/pages/forgot-password.js
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Head from "next/head";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/router";
 import Swal from "sweetalert2";
 import { Mail, CheckCircle2, ArrowLeft } from "lucide-react";
 
@@ -13,10 +14,33 @@ function classifyIdentifier(v) {
   return isEmail ? "email" : "id";
 }
 
+function normalizeToPath(toParam) {
+  const ALLOWED = new Set(["/Alogin", "/Hlogin"]);
+  if (!toParam) return "/Hlogin";
+  let s = String(toParam).trim();
+  if (!s.startsWith("/")) s = `/${s}`; // accept Alogin → /Alogin
+  return ALLOWED.has(s) ? s : "/Hlogin";
+}
+
 export default function ForgotPassword() {
+  const router = useRouter();
+
+  // ✅ INITIALIZE from the real URL immediately to avoid flashing /Hlogin
+  const initialNext =
+    typeof window !== "undefined"
+      ? normalizeToPath(new URLSearchParams(window.location.search).get("to"))
+      : "/Hlogin";
+
+  const [nextPath, setNextPath] = useState(initialNext);
   const [identifier, setIdentifier] = useState("");
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
+
+  // Also react to router becoming ready (e.g., client-side nav)
+  useEffect(() => {
+    if (!router.isReady) return;
+    setNextPath(normalizeToPath(router.query?.to));
+  }, [router.isReady, router.query]);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -35,16 +59,15 @@ export default function ForgotPassword() {
       const res = await fetch("/api/auth/request-reset", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ identifier: idTrim }), // email or employee id
+        // include the resolved target so the email link goes back to the right page
+        body: JSON.stringify({ identifier: idTrim, to: nextPath }),
       });
-      // We intentionally treat any 200/202 as success and avoid leaking user existence
       if (!res.ok && res.status !== 202) {
         const j = await res.json().catch(() => ({}));
         throw new Error(j?.error || "Could not start reset");
       }
       setSent(true);
-    } catch (err) {
-      // Still flip to "sent" to avoid user enumeration (optional).
+    } catch {
       setSent(true);
     } finally {
       setLoading(false);
@@ -63,13 +86,7 @@ export default function ForgotPassword() {
           <div className="bg-white/80 backdrop-blur border border-gray-100 rounded-2xl shadow-xl p-8">
             <div className="flex flex-col items-center mb-6">
               <div className="relative mb-4 mx-auto h-24 w-24 md:h-28 md:w-28">
-                <Image
-                  src="/agasthyalogo.png"
-                  alt="Agasthya Super Foods"
-                  fill
-                  className="object-contain"
-                  priority
-                />
+                <Image src="/agasthyalogo.png" alt="Agasthya Super Foods" fill className="object-contain" priority />
               </div>
               <h1 className="text-xl font-semibold text-gray-900">Forgot your password?</h1>
               <p className="text-sm text-gray-500 mt-1 text-center">
@@ -98,9 +115,7 @@ export default function ForgotPassword() {
                       {identifier ? classifyIdentifier(identifier)?.toUpperCase() : ""}
                     </span>
                   </div>
-                  <p className="mt-1 text-xs text-gray-500">
-                    We&apos;ll email a secure link that expires in ~15 minutes.
-                  </p>
+                  <p className="mt-1 text-xs text-gray-500">We&apos;ll email a secure link that expires in ~15 minutes.</p>
                 </div>
 
                 <button
@@ -125,7 +140,7 @@ export default function ForgotPassword() {
                 </button>
 
                 <div className="flex items-center justify-between">
-                  <Link href="/Hlogin" className="inline-flex items-center gap-1 text-sm text-gray-700 hover:underline">
+                  <Link href={nextPath} className="inline-flex items-center gap-1 text-sm text-gray-700 hover:underline">
                     <ArrowLeft className="h-4 w-4" />
                     Back to sign in
                   </Link>
@@ -139,12 +154,11 @@ export default function ForgotPassword() {
                 </div>
                 <h2 className="text-base font-semibold text-gray-900">Check your email</h2>
                 <p className="mt-1 text-sm text-gray-600">
-                  If an account exists for what you entered, we&apos;ve sent a reset link.
-                  It will expire in ~15 minutes.
+                  If an account exists for what you entered, we&apos;ve sent a reset link. It will expire in ~15 minutes.
                 </p>
                 <div className="mt-4 flex items-center justify-center gap-2">
                   <Link
-                    href="/Hlogin"
+                    href={nextPath}
                     className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                   >
                     <ArrowLeft className="h-4 w-4" />
