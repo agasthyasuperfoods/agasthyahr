@@ -3,7 +3,6 @@ import { useEffect, useState } from "react";
 import Head from "next/head";
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/router";
 import Swal from "sweetalert2";
 import { Mail, CheckCircle2, ArrowLeft } from "lucide-react";
 
@@ -20,25 +19,28 @@ function classifyIdentifier(v) {
 function normalizeToPath(toParam) {
   if (!toParam) return "/Hlogin"; // default
   let s = String(toParam).trim();
-  // allow "Alogin" or "Hlogin" (no leading slash) and normalize it
-  if (!s.startsWith("/")) s = `/${s}`;
+  if (!s.startsWith("/")) s = `/${s}`; // allow "Alogin" → "/Alogin"
   return ALLOWED_TO.has(s) ? s : "/Hlogin";
 }
 
 export default function ForgotPassword() {
-  const router = useRouter();
   const [nextPath, setNextPath] = useState("/Hlogin"); // default HR login
   const [identifier, setIdentifier] = useState("");
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
 
-  // Read ?to= from query, accept "Alogin" or "/Alogin", and whitelist
+  // Robustly decide the target login page:
+  // 1) URL ?to= (supports Alogin or /Alogin)
+  // 2) localStorage.last_login_page (set by Alogin/Hlogin page)
+  // 3) default /Hlogin
   useEffect(() => {
-    if (!router.isReady) return;
-    const rawTo = router.query?.to;
-    const toParam = Array.isArray(rawTo) ? rawTo[0] : rawTo; // handle repeated params
-    setNextPath(normalizeToPath(toParam));
-  }, [router.isReady, router.query]);
+    if (typeof window === "undefined") return;
+    const usp = new URLSearchParams(window.location.search);
+    const rawTo = usp.get("to");
+    const fromStorage = window.localStorage?.getItem("last_login_page");
+    const target = normalizeToPath(rawTo || fromStorage || "/Hlogin");
+    setNextPath(target);
+  }, []);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -57,7 +59,7 @@ export default function ForgotPassword() {
       const res = await fetch("/api/auth/request-reset", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        // Include normalized 'to' so the email and the final redirect are correct
+        // Include normalized 'to' so email link + final redirect are correct
         body: JSON.stringify({ identifier: idTrim, to: nextPath }),
       });
 
