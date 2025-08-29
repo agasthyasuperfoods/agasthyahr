@@ -5,12 +5,13 @@ import Image from "next/image";
 import { useRouter } from "next/router";
 import Swal from "sweetalert2";
 
-const isEmail = (s) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
-const isEmpId = (s) => /^([A-Za-z]{2,}-?\d+|EMP-?\d+)$/i.test(s); // e.g. EMP-001 or HR12
+// Accepts EMP123 / EMP-123 / letters+digits like HR12 if you use those internally.
+// If you ONLY want EMP… IDs, change to: const isEmpId = (s) => /^EMP-?\d+$/i.test(s);
+const isEmpId = (s) => /^([A-Za-z]{2,}-?\d+|EMP-?\d+)$/i.test(s);
 
 export default function Alogin() {
   const router = useRouter();
-  const [identifier, setIdentifier] = useState("");
+  const [employeeId, setEmployeeId] = useState("");
   const [password, setPassword] = useState("");
   const [showPwd, setShowPwd] = useState(false);
   const [remember, setRemember] = useState(true);
@@ -19,58 +20,44 @@ export default function Alogin() {
   const onSubmit = async (e) => {
     e.preventDefault();
 
-    if (!identifier.trim() || !password.trim()) {
-      Swal.fire({
-        icon: "warning",
-        title: "Missing credentials",
-        text: "Please provide both your username/email and password.",
-      });
+    const idTrim = employeeId.trim();
+    const pwdTrim = password.trim();
+
+    if (!idTrim || !pwdTrim) {
+      Swal.fire({ icon: "warning", title: "Missing credentials", text: "Enter your Employee ID and password." });
+      return;
+    }
+    if (!isEmpId(idTrim)) {
+      Swal.fire({ icon: "error", title: "Invalid Employee ID", text: "Please enter a valid Employee ID (e.g., EMP1001)." });
       return;
     }
 
     try {
       setLoading(true);
 
-      // Authenticate
+      // Authenticate using employee ID
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ identifier, password, remember }),
+        body: JSON.stringify({ identifier: idTrim, password: pwdTrim, remember }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok || !json?.ok) throw new Error(json?.error || "Invalid credentials");
 
-      // Persist auth + identity keys for Admin page to resolve your profile
+      // Persist only employee ID (no name/email here)
       if (typeof window !== "undefined") {
-        const idTrim = identifier.trim();
-
         localStorage.setItem("auth", "1");
         if (remember) localStorage.setItem("remember", "1");
         else localStorage.removeItem("remember");
 
-        // Prefer email, else employee id, else name
-        if (isEmail(idTrim)) {
-          localStorage.setItem("adminEmail", idTrim);
-          localStorage.removeItem("adminEmployeeId");
-          localStorage.setItem("adminName", idTrim.split("@")[0]);
-        } else if (isEmpId(idTrim)) {
-          localStorage.setItem("adminEmployeeId", idTrim);
-          localStorage.removeItem("adminEmail");
-          localStorage.setItem("adminName", idTrim);
-        } else {
-          localStorage.setItem("adminName", idTrim);
-          localStorage.removeItem("adminEmail");
-          localStorage.removeItem("adminEmployeeId");
-        }
+        localStorage.setItem("adminEmployeeId", idTrim.toUpperCase());
+        localStorage.setItem("adminName", idTrim.toUpperCase()); // fallback label in header
+        localStorage.removeItem("adminEmail");
       }
 
       await router.push("/Admin");
     } catch (err) {
-      Swal.fire({
-        icon: "error",
-        title: "Login failed",
-        text: err.message || "The username or password you entered is incorrect.",
-      });
+      Swal.fire({ icon: "error", title: "Login failed", text: err.message || "The Employee ID or password is incorrect." });
     } finally {
       setLoading(false);
     }
@@ -89,13 +76,7 @@ export default function Alogin() {
             {/* Logo + header */}
             <div className="flex flex-col items-center mb-6">
               <div className="relative mb-4 mx-auto h-32 w-32 md:h-40 md:w-40 lg:h-44 lg:w-44">
-                <Image
-                  src="/agasthyalogo.png"
-                  alt="Agasthya Super Foods"
-                  fill
-                  className="object-contain"
-                  priority
-                />
+                <Image src="/agasthyalogo.png" alt="Agasthya Super Foods" fill className="object-contain" priority />
               </div>
               <h1 className="text-xl font-semibold text-gray-900">Admin Console</h1>
               <p className="text-sm text-gray-500 mt-1">Secure access to operational dashboards</p>
@@ -103,29 +84,25 @@ export default function Alogin() {
 
             <form onSubmit={onSubmit} className="space-y-5">
               <div>
-                <label htmlFor="identifier" className="block text-sm font-medium text-gray-700">
-                  Username
+                <label htmlFor="employeeId" className="block text-sm font-medium text-gray-700">
+                  Employee ID
                 </label>
                 <input
-                  id="identifier"
-                  name="identifier"
+                  id="employeeId"
+                  name="employeeId"
                   type="text"
                   autoComplete="username"
-                  value={identifier}
-                  onChange={(e) => setIdentifier(e.target.value)}
+                  value={employeeId}
+                  onChange={(e) => setEmployeeId(e.target.value)}
                   className="mt-1 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-4 focus:ring-[#C1272D]/20 focus:border-[#C1272D]"
-                  placeholder="vardhan"
+                  placeholder="e.g. EMP1001"
                 />
               </div>
 
               <div>
                 <div className="flex items-center justify-between">
-                  <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                    Password
-                  </label>
-                  <a href="#" className="text-xs text-[#C1272D] hover:underline">
-                    Forgot password?
-                  </a>
+                  <label htmlFor="password" className="block text-sm font-medium text-gray-700">Password</label>
+<a href="/forgot-password?to=Alogin" className="text-xs text-[#C1272D] hover:underline">                  Forgot password?</a>
                 </div>
                 <div className="mt-1 relative">
                   <input

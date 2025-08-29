@@ -1,21 +1,52 @@
-// /src/pages/reset-password.js
 import { useEffect, useState } from "react";
 import Head from "next/head";
 import Image from "next/image";
-import { useRouter } from "next/router";
 import Link from "next/link";
+import { useRouter } from "next/router";
 import Swal from "sweetalert2";
 import { Lock, CheckCircle2, ArrowLeft } from "lucide-react";
 
+function normalizeToPath(toParam) {
+  const ALLOWED = new Set(["/Alogin", "/Hlogin"]);
+  if (!toParam) return "/Hlogin";
+  let s = String(toParam).trim();
+  if (!s.startsWith("/")) s = `/${s}`; // allow "Alogin" -> "/Alogin"
+  return ALLOWED.has(s) ? s : "/Hlogin";
+}
+
+// Read token & to directly from the URL on FIRST render (before router is ready).
+function readInitialQuery() {
+  if (typeof window === "undefined") return { token: "", to: "/Hlogin" };
+  try {
+    const url = new URL(window.location.href);
+    const token = url.searchParams.get("token") || "";
+    const to = normalizeToPath(url.searchParams.get("to"));
+    return { token, to };
+  } catch {
+    return { token: "", to: "/Hlogin" };
+  }
+}
+
 export default function ResetPassword() {
   const router = useRouter();
-  const { token } = router.query;
+
+  const initial = readInitialQuery();
+  const [token, setToken] = useState(initial.token);
+  const [toPath, setToPath] = useState(initial.to);
 
   const [pwd, setPwd] = useState("");
   const [pwd2, setPwd2] = useState("");
   const [showPwd, setShowPwd] = useState(false);
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
+
+  // Sync with router when it becomes ready (covers client-side navigations)
+  useEffect(() => {
+    if (!router.isReady) return;
+    const q = router.query || {};
+    if (typeof q.token === "string") setToken(q.token);
+    setToPath(normalizeToPath(q.to));
+  }, [router.isReady, router.query]);
 
   useEffect(() => {
     if (!token) return;
@@ -46,7 +77,7 @@ export default function ResetPassword() {
         body: JSON.stringify({ token, password: pwd }),
       });
       const j = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(j?.error || "Reset failed");
+      if (!res.ok || !j.ok) throw new Error(j?.error || "Reset failed");
       setDone(true);
     } catch (e) {
       Swal.fire({ icon: "error", title: "Reset failed", text: e.message || "Something went wrong" });
@@ -55,10 +86,18 @@ export default function ResetPassword() {
     }
   };
 
+  const goBack = async () => {
+    try {
+      await router.replace(toPath);
+    } catch {
+      if (typeof window !== "undefined") window.location.href = toPath;
+    }
+  };
+
   return (
     <>
       <Head>
-        <title>Reset Password • Agasthya </title>
+        <title>Reset Password • Agasthya HR</title>
         <meta name="robots" content="noindex" />
       </Head>
 
@@ -70,7 +109,7 @@ export default function ResetPassword() {
                 <Image src="/agasthyalogo.png" alt="Agasthya Super Foods" fill className="object-contain" priority />
               </div>
               <h1 className="text-xl font-semibold text-gray-900">Reset your password</h1>
-              <p className="text-sm text-gray-500 mt-1 text-center">Create a new, strong password for your account.</p>
+              <p className="text-sm text-gray-500 mt-1 text-center">Create a new password for your account.</p>
             </div>
 
             {!done ? (
@@ -127,7 +166,7 @@ export default function ResetPassword() {
                 </button>
 
                 <div className="flex items-center justify-between">
-                  <Link href="/Hlogin" className="inline-flex items-center gap-1 text-sm text-gray-700 hover:underline">
+                  <Link href={toPath} className="inline-flex items-center gap-1 text-sm text-gray-700 hover:underline">
                     <ArrowLeft className="h-4 w-4" />
                     Back to sign in
                   </Link>
@@ -142,13 +181,13 @@ export default function ResetPassword() {
                 <h2 className="text-base font-semibold text-gray-900">Password updated</h2>
                 <p className="mt-1 text-sm text-gray-600">You can now sign in with your new password.</p>
                 <div className="mt-4">
-                  <Link
-                    href="/Hlogin"
+                  <button
+                    onClick={goBack}
                     className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                   >
                     <ArrowLeft className="h-4 w-4" />
                     Go to sign in
-                  </Link>
+                  </button>
                 </div>
               </div>
             )}
