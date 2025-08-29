@@ -1,179 +1,81 @@
-// /src/pages/forgot-password.js
 import { useEffect, useState } from "react";
 import Head from "next/head";
-import Image from "next/image";
-import Link from "next/link";
 import { useRouter } from "next/router";
 import Swal from "sweetalert2";
-import { Mail, CheckCircle2, ArrowLeft } from "lucide-react";
 
-const PRIMARY = "#C1272D";
-const NEXT_WHITELIST = new Set(["/Alogin", "/Hlogin"]);
-
-function classifyIdentifier(v) {
-  const s = String(v || "").trim();
-  if (!s) return null;
-  const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
-  return isEmail ? "email" : "id";
+function normalizeToPath(toParam) {
+  const ALLOWED = new Set(["/Alogin", "/Hlogin"]);
+  if (!toParam) return "/Hlogin";
+  let s = String(toParam).trim();
+  if (!s.startsWith("/")) s = `/${s}`;
+  return ALLOWED.has(s) ? s : "/Hlogin";
 }
 
-export default function ForgotPassword() {
+export default function ResetPassword() {
   const router = useRouter();
-  const [nextPath, setNextPath] = useState("/Hlogin"); // default HR
-  const [identifier, setIdentifier] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [sent, setSent] = useState(false);
+  const [token, setToken] = useState("");
+  const [toPath, setToPath] = useState("/Hlogin");
+  const [pwd, setPwd] = useState("");
+  const [pwd2, setPwd2] = useState("");
+  const [show, setShow] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  // Read ?to=/Alogin or ?to=/Hlogin and whitelist it
   useEffect(() => {
     if (!router.isReady) return;
-    const q = typeof router.query.to === "string" ? router.query.to : "";
-    if (NEXT_WHITELIST.has(q)) setNextPath(q);
-  }, [router.isReady, router.query.to]);
+    setToken(typeof router.query.token === "string" ? router.query.token : "");
+    setToPath(normalizeToPath(router.query?.to));
+  }, [router.isReady, router.query]);
 
   const submit = async (e) => {
     e.preventDefault();
-    const idTrim = identifier.trim();
-    if (!idTrim) {
-      Swal.fire({
-        icon: "warning",
-        title: "Enter your email or employee ID",
-        confirmButtonColor: PRIMARY,
-      });
-      return;
-    }
+    if (!token) { Swal.fire({ icon: "error", title: "Invalid link", text: "Missing or malformed token." }); return; }
+    if (pwd.length < 8) { Swal.fire({ icon: "warning", title: "Too short", text: "Password must be at least 8 characters." }); return; }
+    if (pwd !== pwd2) { Swal.fire({ icon: "warning", title: "Mismatch", text: "Passwords do not match." }); return; }
 
     try {
-      setLoading(true);
-      const res = await fetch("/api/auth/request-reset", {
+      setSaving(true);
+      const res = await fetch("/api/auth/reset/complete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        // Include `to` so the reset link knows where to return after completion
-        body: JSON.stringify({ identifier: idTrim, to: nextPath }),
+        body: JSON.stringify({ token, password: pwd, to: toPath }),
       });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || !j.ok) throw new Error(j?.error || "Reset failed");
 
-      // Keep response generic; treat 200/202 as success
-      if (!res.ok && res.status !== 202) {
-        const j = await res.json().catch(() => ({}));
-        throw new Error(j?.error || "Could not start reset");
-      }
-      setSent(true);
-    } catch {
-      // Still flip to "sent" to avoid user enumeration
-      setSent(true);
+      await Swal.fire({ icon: "success", title: "Password updated", text: "You can now sign in with your new password." });
+      router.replace(toPath);
+    } catch (err) {
+      Swal.fire({ icon: "error", title: "Reset failed", text: err.message || "Something went wrong" });
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
   return (
     <>
-      <Head>
-        <title>Forgot Password • Agasthya</title>
-        <meta name="robots" content="noindex" />
-      </Head>
+      <Head><title>Reset Password • Agasthya</title></Head>
+      <main className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+        <div className="w-full max-w-md bg-white border border-gray-200 rounded-2xl shadow-sm p-6">
+          <h1 className="text-lg font-semibold text-gray-900">Set a new password</h1>
+          <p className="text-sm text-gray-600 mt-1">Enter and confirm your new password.</p>
 
-      <main className="min-h-screen bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-gray-50 via-white to-gray-100 flex items-center justify-center px-4">
-        <div className="w-full max-w-md">
-          <div className="bg-white/80 backdrop-blur border border-gray-100 rounded-2xl shadow-xl p-8">
-            {/* Header */}
-            <div className="flex flex-col items-center mb-6">
-              <div className="relative mb-4 mx-auto h-24 w-24 md:h-28 md:w-28">
-                <Image
-                  src="/agasthyalogo.png"
-                  alt="Agasthya Super Foods"
-                  fill
-                  className="object-contain"
-                  priority
-                />
+          <form onSubmit={submit} className="mt-4 space-y-4">
+            <div>
+              <label className="block text-sm text-gray-700">New password</label>
+              <div className="relative mt-1">
+                <input type={show ? "text" : "password"} value={pwd} onChange={(e) => setPwd(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 pr-12 text-sm" placeholder="At least 8 characters" />
+                <button type="button" onClick={() => setShow((v) => !v)} className="absolute inset-y-0 right-0 px-3 text-gray-500">{show ? "Hide" : "Show"}</button>
               </div>
-              <h1 className="text-xl font-semibold text-gray-900">Forgot your password?</h1>
-              <p className="text-sm text-gray-500 mt-1 text-center">
-                Enter your work email or employee ID and we&apos;ll send a reset link.
-              </p>
+            </div>
+            <div>
+              <label className="block text-sm text-gray-700">Confirm password</label>
+              <input type={show ? "text" : "password"} value={pwd2} onChange={(e) => setPwd2(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
             </div>
 
-            {!sent ? (
-              <form onSubmit={submit} className="space-y-5">
-                <div>
-                  <label htmlFor="identifier" className="block text-sm font-medium text-gray-700">
-                    Email or Employee ID
-                  </label>
-                  <div className="mt-1 relative">
-                    <input
-                      id="identifier"
-                      name="identifier"
-                      type="text"
-                      value={identifier}
-                      onChange={(e) => setIdentifier(e.target.value)}
-                      autoFocus
-                      className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-4 focus:ring-[#C1272D]/20 focus:border-[#C1272D]"
-                      placeholder="e.g. no-reply@agasthya.co.in or EMP1001"
-                    />
-                    <span className="absolute inset-y-0 right-0 flex items-center pr-3 text-xs text-gray-500 select-none">
-                      {identifier ? classifyIdentifier(identifier)?.toUpperCase() : ""}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-xs text-gray-500">
-                    We&apos;ll email a secure link that expires in ~15 minutes.
-                  </p>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-[#C1272D] text-white font-medium py-2.5 hover:bg-[#a02125] focus:outline-none focus:ring-4 focus:ring-[#C1272D]/30 disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  {loading ? (
-                    <>
-                      <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
-                      </svg>
-                      Sending…
-                    </>
-                  ) : (
-                    <>
-                      <Mail className="h-4 w-4" />
-                      Send reset link
-                    </>
-                  )}
-                </button>
-
-                <div className="flex items-center justify-between">
-                  <Link href={nextPath} className="inline-flex items-center gap-1 text-sm text-gray-700 hover:underline">
-                    <ArrowLeft className="h-4 w-4" />
-                    Back to sign in
-                  </Link>
-                  <span className="text-xs text-gray-400">v1.0</span>
-                </div>
-              </form>
-            ) : (
-              <div className="text-center">
-                <div className="mx-auto mb-3 h-10 w-10 rounded-full bg-green-50 text-green-700 flex items-center justify-center">
-                  <CheckCircle2 className="h-6 w-6" />
-                </div>
-                <h2 className="text-base font-semibold text-gray-900">Check your email</h2>
-                <p className="mt-1 text-sm text-gray-600">
-                  If an account exists for what you entered, we&apos;ve sent a reset link.
-                  It will expire in ~15 minutes.
-                </p>
-                <div className="mt-4 flex items-center justify-center gap-2">
-                  <Link
-                    href={nextPath}
-                    className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                  >
-                    <ArrowLeft className="h-4 w-4" />
-                    Back to sign in
-                  </Link>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="text-center text-xs text-gray-400 mt-6">
-            © {new Date().getFullYear()} Agasthya Super Foods. All rights reserved.
-          </div>
+            <button type="submit" disabled={saving} className="w-full inline-flex items-center justify-center rounded-lg bg-[#C1272D] text-white font-medium py-2.5 hover:bg-[#a02125] disabled:opacity-60">
+              {saving ? "Saving…" : "Update password"}
+            </button>
+          </form>
         </div>
       </main>
     </>
