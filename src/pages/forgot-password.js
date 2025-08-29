@@ -7,6 +7,9 @@ import { useRouter } from "next/router";
 import Swal from "sweetalert2";
 import { Mail, CheckCircle2, ArrowLeft } from "lucide-react";
 
+const PRIMARY = "#C1272D";
+const NEXT_WHITELIST = new Set(["/Alogin", "/Hlogin"]);
+
 function classifyIdentifier(v) {
   const s = String(v || "").trim();
   if (!s) return null;
@@ -14,33 +17,19 @@ function classifyIdentifier(v) {
   return isEmail ? "email" : "id";
 }
 
-function normalizeToPath(toParam) {
-  const ALLOWED = new Set(["/Alogin", "/Hlogin"]);
-  if (!toParam) return "/Hlogin";
-  let s = String(toParam).trim();
-  if (!s.startsWith("/")) s = `/${s}`; // accept Alogin → /Alogin
-  return ALLOWED.has(s) ? s : "/Hlogin";
-}
-
 export default function ForgotPassword() {
   const router = useRouter();
-
-  // ✅ INITIALIZE from the real URL immediately to avoid flashing /Hlogin
-  const initialNext =
-    typeof window !== "undefined"
-      ? normalizeToPath(new URLSearchParams(window.location.search).get("to"))
-      : "/Hlogin";
-
-  const [nextPath, setNextPath] = useState(initialNext);
+  const [nextPath, setNextPath] = useState("/Hlogin"); // default HR
   const [identifier, setIdentifier] = useState("");
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
 
-  // Also react to router becoming ready (e.g., client-side nav)
+  // Read ?to=/Alogin or ?to=/Hlogin and whitelist it
   useEffect(() => {
     if (!router.isReady) return;
-    setNextPath(normalizeToPath(router.query?.to));
-  }, [router.isReady, router.query]);
+    const q = typeof router.query.to === "string" ? router.query.to : "";
+    if (NEXT_WHITELIST.has(q)) setNextPath(q);
+  }, [router.isReady, router.query.to]);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -49,7 +38,7 @@ export default function ForgotPassword() {
       Swal.fire({
         icon: "warning",
         title: "Enter your email or employee ID",
-        confirmButtonColor: "#C1272D",
+        confirmButtonColor: PRIMARY,
       });
       return;
     }
@@ -59,15 +48,18 @@ export default function ForgotPassword() {
       const res = await fetch("/api/auth/request-reset", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        // include the resolved target so the email link goes back to the right page
+        // Include `to` so the reset link knows where to return after completion
         body: JSON.stringify({ identifier: idTrim, to: nextPath }),
       });
+
+      // Keep response generic; treat 200/202 as success
       if (!res.ok && res.status !== 202) {
         const j = await res.json().catch(() => ({}));
         throw new Error(j?.error || "Could not start reset");
       }
       setSent(true);
     } catch {
+      // Still flip to "sent" to avoid user enumeration
       setSent(true);
     } finally {
       setLoading(false);
@@ -84,9 +76,16 @@ export default function ForgotPassword() {
       <main className="min-h-screen bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-gray-50 via-white to-gray-100 flex items-center justify-center px-4">
         <div className="w-full max-w-md">
           <div className="bg-white/80 backdrop-blur border border-gray-100 rounded-2xl shadow-xl p-8">
+            {/* Header */}
             <div className="flex flex-col items-center mb-6">
               <div className="relative mb-4 mx-auto h-24 w-24 md:h-28 md:w-28">
-                <Image src="/agasthyalogo.png" alt="Agasthya Super Foods" fill className="object-contain" priority />
+                <Image
+                  src="/agasthyalogo.png"
+                  alt="Agasthya Super Foods"
+                  fill
+                  className="object-contain"
+                  priority
+                />
               </div>
               <h1 className="text-xl font-semibold text-gray-900">Forgot your password?</h1>
               <p className="text-sm text-gray-500 mt-1 text-center">
@@ -115,7 +114,9 @@ export default function ForgotPassword() {
                       {identifier ? classifyIdentifier(identifier)?.toUpperCase() : ""}
                     </span>
                   </div>
-                  <p className="mt-1 text-xs text-gray-500">We&apos;ll email a secure link that expires in ~15 minutes.</p>
+                  <p className="mt-1 text-xs text-gray-500">
+                    We&apos;ll email a secure link that expires in ~15 minutes.
+                  </p>
                 </div>
 
                 <button
@@ -154,7 +155,8 @@ export default function ForgotPassword() {
                 </div>
                 <h2 className="text-base font-semibold text-gray-900">Check your email</h2>
                 <p className="mt-1 text-sm text-gray-600">
-                  If an account exists for what you entered, we&apos;ve sent a reset link. It will expire in ~15 minutes.
+                  If an account exists for what you entered, we&apos;ve sent a reset link.
+                  It will expire in ~15 minutes.
                 </p>
                 <div className="mt-4 flex items-center justify-center gap-2">
                   <Link
