@@ -1,6 +1,7 @@
-// src/components/UsersTable.js
+// /src/components/UsersTable.js
 import { useEffect, useMemo, useState } from "react";
 import Swal from "sweetalert2";
+import { Pencil, Trash2 } from "lucide-react";
 
 const ROLES = ["HR", "FINANCE", "EMPLOYEE"];
 const DEFAULT_PAGE_SIZE = 10;
@@ -40,14 +41,20 @@ export default function UsersTable() {
         employeeid: u.employeeid ?? u.id ?? "",
         name: u.name ?? "",
         email: u.email ?? "",
+        // role is intentionally not shown in the table now
         role: u.role ?? "",
         doj: u.doj ?? "",
         number: u.number ?? "",
+
         company: u.company ?? "",
         grossSalary: u.grossSalary ?? u.grosssalary ?? u.gross_salary ?? "",
         adhaarnumber: u.adhaarnumber ?? u.aadhaar ?? u.adhar ?? "",
         pancard: u.pancard ?? u.pan ?? "",
         address: u.address ?? "",
+
+        // NEW
+        designation: u.designation ?? "",
+        reporting_to_id: u.reporting_to_id ?? u.reportingToId ?? "",
       }));
       setUsers(normalized);
     } catch (e) {
@@ -71,12 +78,13 @@ export default function UsersTable() {
         u?.employeeid?.toString() ?? "",
         u?.name ?? "",
         u?.email ?? "",
-        u?.role ?? "",
         u?.company ?? "",
         u?.number ?? "",
         u?.pancard ?? "",
         u?.adhaarnumber ?? "",
         u?.address ?? "",
+        u?.designation ?? "",
+        u?.reporting_to_id ?? "",
       ];
       return fields.some((f) => String(f).toLowerCase().includes(q));
     });
@@ -106,11 +114,11 @@ export default function UsersTable() {
     setEditingUser(user || null);
     setShowUpdate(true);
   };
- const onDelete = async (employeeid, name) => {
+  const onDelete = async (employeeid, name) => {
     const ok = await Swal.fire({
       icon: "warning",
-  title: `Delete ${name || "this user"}?`,
-     text: name? `This will permanently delete ${name}.`: "This will permanently delete employee.",
+      title: `Delete ${name || "this user"}?`,
+      text: name ? `This will permanently delete ${name}.` : "This will permanently delete employee.",
       showCancelButton: true,
       confirmButtonText: "Yes, delete",
       cancelButtonText: "Cancel",
@@ -129,7 +137,8 @@ export default function UsersTable() {
       await Swal.fire({
         icon: "success",
         title: "Deleted",
-        text: name ? `${name} has been deleted.` : `Employee #${employeeid} has been deleted.`,        confirmButtonColor: "#C1272D",
+        text: name ? `${name} has been deleted.` : `Employee #${employeeid} has been deleted.`,
+        confirmButtonColor: "#C1272D",
       });
       await loadUsers();
     } catch (e) {
@@ -138,7 +147,7 @@ export default function UsersTable() {
   };
 
   return (
-    <section className="bg-white border border-gray-200 rounded-2xl shadow-sm p-6">
+    <section>
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
         <div>
           <h3 className="text-base font-semibold text-gray-900">Users</h3>
@@ -156,7 +165,7 @@ export default function UsersTable() {
                 setPage(1);
               }}
               className="block w-full sm:w-72 rounded-lg border border-gray-300 bg-white px-3 py-2 pl-9 text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-4 focus:ring-[#C1272D]/20 focus:border-[#C1272D]"
-              placeholder="Search by ID, name, email, role, company…"
+              placeholder="Search by ID, name, email, company, designation…"
             />
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">🔎</span>
           </div>
@@ -186,76 +195,86 @@ export default function UsersTable() {
         </div>
       </div>
 
-      {/* Table */}
-      <div className="overflow-x-auto border border-gray-200 rounded-xl">
-        <table className="min-w-full text-sm">
-          <thead className="bg-gray-50">
+      {/* Table wrapper ensures full visibility with horizontal scroll */}
+      <div className="relative overflow-x-auto border border-gray-200 rounded-xl">
+        <table className="min-w-[1200px] w-full text-xs">
+          <thead className="bg-gray-50 sticky top-0 z-10">
             <tr className="text-left text-gray-600">
-              <th className="px-3 py-2 border-b">Employee ID</th>
-              <th className="px-3 py-2 border-b">Full name</th>
-              <th className="px-3 py-2 border-b">Email</th>
-              <th className="px-3 py-2 border-b">Role</th>
-              <th className="px-3 py-2 border-b">DOJ</th>
-              <th className="px-3 py-2 border-b">Phone</th>
-              <th className="px-3 py-2 border-b">Company</th>
-              <th className="px-3 py-2 border-b">Gross Salary</th>
-              <th className="px-3 py-2 border-b">Aadhaar</th>
-              <th className="px-3 py-2 border-b">PAN</th>
-              <th className="px-3 py-2 border-b">Address</th>
-              <th className="px-3 py-2 border-b text-right">Actions</th>
+              <th className="px-3 py-2 border-b whitespace-nowrap">Employee ID</th>
+              <th className="px-3 py-2 border-b whitespace-nowrap">Full name</th>
+              <th className="px-3 py-2 border-b whitespace-nowrap">Email</th>
+              {/* Role removed from table */}
+              <th className="px-3 py-2 border-b whitespace-nowrap">Designation</th>
+              <th className="px-3 py-2 border-b whitespace-nowrap">Reporting To (Emp ID)</th>
+              <th className="px-3 py-2 border-b whitespace-nowrap">DOJ</th>
+              <th className="px-3 py-2 border-b whitespace-nowrap">Phone</th>
+              <th className="px-3 py-2 border-b whitespace-nowrap">Company</th>
+              <th className="px-3 py-2 border-b whitespace-nowrap">Gross Salary</th>
+              <th className="px-3 py-2 border-b whitespace-nowrap">Aadhaar</th>
+              <th className="px-3 py-2 border-b whitespace-nowrap">PAN</th>
+              <th className="px-3 py-2 border-b whitespace-nowrap">Address</th>
+              <th className="px-3 py-2 border-b text-right whitespace-nowrap">Actions</th>
             </tr>
           </thead>
 
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={12} className="px-3 py-6 text-center text-gray-500">
+                <td colSpan={13} className="px-3 py-6 text-center text-gray-500">
                   <span className="inline-block h-5 w-5 mr-2 animate-spin rounded-full border-2 border-gray-300 border-t-transparent" />
                   Loading users…
                 </td>
               </tr>
             ) : error ? (
               <tr>
-                <td colSpan={12} className="px-3 py-6 text-center text-red-600">{error}</td>
+                <td colSpan={13} className="px-3 py-6 text-center text-red-600">{error}</td>
               </tr>
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={12} className="px-3 py-6 text-center text-gray-500">No matching users. Try adjusting your search.</td>
+                <td colSpan={13} className="px-3 py-6 text-center text-gray-500">No matching users. Try adjusting your search.</td>
               </tr>
             ) : (
               pageSlice.map((u, i) => (
                 <tr key={String(u.employeeid || i)} className="odd:bg-white even:bg-gray-50">
-                  <td className="px-3 py-2 border-t">{u.employeeid ?? "-"}</td>
-                  <td className="px-3 py-2 border-t">{u.name || "-"}</td>
-                  <td className="px-3 py-2 border-t">{u.email || "-"}</td>
+                  <td className="px-3 py-2 border-t whitespace-nowrap">{u.employeeid ?? "-"}</td>
+                  <td className="px-3 py-2 border-t whitespace-nowrap">{u.name || "-"}</td>
+                  <td className="px-3 py-2 border-t whitespace-nowrap">{u.email || "-"}</td>
+                  {/* Role column removed */}
+                  <td className="px-3 py-2 border-t whitespace-nowrap">{u.designation || "-"}</td>
+                  <td className="px-3 py-2 border-t whitespace-nowrap">{u.reporting_to_id || "-"}</td>
+                  <td className="px-3 py-2 border-t whitespace-nowrap">{u.doj || "-"}</td>
+                  <td className="px-3 py-2 border-t whitespace-nowrap">{u.number || "-"}</td>
+                  <td className="px-3 py-2 border-t whitespace-nowrap">{u.company || "-"}</td>
+                  <td className="px-3 py-2 border-t whitespace-nowrap">{u.grossSalary ?? u.grosssalary ?? "-"}</td>
+                  <td className="px-3 py-2 border-t whitespace-nowrap">{u.adhaarnumber ?? u.aadhaar ?? u.adhar ?? "-"}</td>
+                  <td className="px-3 py-2 border-t whitespace-nowrap">{u.pancard ?? u.pan ?? "-"}</td>
                   <td className="px-3 py-2 border-t">
-                    <span className="rounded bg-gray-100 px-2 py-0.5">{u.role || "-"}</span>
+                    <div className="max-w-[240px] truncate">{u.address ?? "-"}</div>
                   </td>
-                  <td className="px-3 py-2 border-t">{u.doj || "-"}</td>
-                  <td className="px-3 py-2 border-t">{u.number || "-"}</td>
-                  <td className="px-3 py-2 border-t">{u.company || "-"}</td>
-                  <td className="px-3 py-2 border-t">{u.grossSalary ?? u.grosssalary ?? "-"}</td>
-                  <td className="px-3 py-2 border-t">{u.adhaarnumber ?? u.aadhaar ?? u.adhar ?? "-"}</td>
-                  <td className="px-3 py-2 border-t">{u.pancard ?? u.pan ?? "-"}</td>
-                  <td className="px-3 py-2 border-t">{u.address ?? "-"}</td>
                   <td className="px-3 py-2 border-t text-right">
-                    <div className="inline-flex items-center gap-2">
-                      <button
-                        onClick={() => onUpdate(u)}
-                        className="inline-flex items-center px-2.5 py-1.5 rounded-md bg-blue-50 text-blue-700 hover:bg-blue-100"
-                        title="Update user"
-                      >
-                        Update
-                      </button>
-                   <button
-  onClick={() => onDelete(u.employeeid, u.name)}
-    className="inline-flex items-center px-2.5 py-1.5 rounded-md bg-red-50 text-red-700 hover:bg-red-100"
-    title="Delete user"
-  >
-    Delete
-  </button>
-                    </div>
-                  </td>
+  <div className="inline-flex items-center gap-2">
+    {/* EDIT — neutral (no blue) */}
+    <button
+      onClick={() => onUpdate(u)}
+      className="inline-flex items-center justify-center p-2 rounded-full border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+      title="Update user"
+      aria-label="Update user"
+    >
+      <Pencil className="h-4 w-4" />
+    </button>
+
+    {/* DELETE — keep red (as you said it's fine) */}
+    <button
+      onClick={() => onDelete(u.employeeid, u.name)}
+      className="inline-flex items-center justify-center p-2 rounded-full bg-red-600 text-white hover:bg-red-700"
+      title="Delete user"
+      aria-label="Delete user"
+    >
+      <Trash2 className="h-4 w-4" />
+    </button>
+  </div>
+</td>
+
                 </tr>
               ))
             )}
@@ -283,7 +302,12 @@ export default function UsersTable() {
           onClose={() => setShowCreate(false)}
           onCreated={async () => {
             setShowCreate(false);
-            await Swal.fire({ icon: "success", title: "Employee created", text: "The employee profile has been provisioned successfully.", confirmButtonColor: "#C1272D" });
+            await Swal.fire({
+              icon: "success",
+              title: "Employee created",
+              text: "The employee profile has been provisioned successfully.",
+              confirmButtonColor: "#C1272D",
+            });
             await loadUsers();
           }}
         />
@@ -298,7 +322,12 @@ export default function UsersTable() {
           onUpdated={async () => {
             setShowUpdate(false);
             setEditingUser(null);
-            await Swal.fire({ icon: "success", title: "Employee updated", text: "The employee profile has been updated successfully.", confirmButtonColor: "#C1272D" });
+            await Swal.fire({
+              icon: "success",
+              title: "Employee updated",
+              text: "The employee profile has been updated successfully.",
+              confirmButtonColor: "#C1272D",
+            });
             await loadUsers();
           }}
         />
@@ -321,6 +350,11 @@ function CreateUserModal({ onClose, onCreated }) {
   const [pan, setPan] = useState("");
   const [address, setAddress] = useState("");
   const [password, setPassword] = useState("");
+
+  // NEW
+  const [designation, setDesignation] = useState("");
+  const [reportingToId, setReportingToId] = useState("");
+
   const [submitting, setSubmitting] = useState(false);
 
   const validate = () => {
@@ -354,12 +388,14 @@ function CreateUserModal({ onClose, onCreated }) {
         email,
         role,
         doj,
-        phone,
+        number: phone,                // API expects 'number'
         company,
-        grossSalary: String(grossSalary).trim(),
+        grosssalary: String(grossSalary).trim(), // API expects 'grosssalary'
         adhaarnumber: String(aadhaar).replace(/\D/g, ""),
         pancard: String(pan).toUpperCase(),
         address: String(address).trim(),
+        designation: String(designation).trim() || null,
+        reporting_to_id: String(reportingToId).trim() || null,
       };
       if (role === "HR" || role === "FINANCE") body.password = password;
 
@@ -381,14 +417,12 @@ function CreateUserModal({ onClose, onCreated }) {
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center" aria-modal="true" role="dialog">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} aria-hidden="true" />
-      {/* Wider + compact */}
       <div className="relative w-full md:max-w-7xl bg-white border border-gray-200 rounded-t-2xl md:rounded-2xl shadow-xl p-6 m-0 md:m-4">
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-base font-semibold text-gray-900">Onboard Employee</h3>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-700" aria-label="Close" title="Close">✕</button>
         </div>
 
-        {/* Compact form: 3 columns */}
         <form onSubmit={onSubmit} className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {/* Row 1 */}
           <div>
@@ -505,9 +539,31 @@ function CreateUserModal({ onClose, onCreated }) {
             />
           </div>
 
-          {/* Password ABOVE Address (only for HR/FINANCE) */}
+          {/* NEW Row 5: Designation + Reporting To */}
+          <div>
+            <label className="block text-xs font-medium text-gray-700">Designation</label>
+            <input
+              type="text"
+              value={designation}
+              onChange={(e) => setDesignation(e.target.value)}
+              className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-sm"
+              placeholder="e.g. Sr. Executive"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-700">Reporting To (Employee ID)</label>
+            <input
+              type="text"
+              value={reportingToId}
+              onChange={(e) => setReportingToId(e.target.value)}
+              className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-sm"
+              placeholder="e.g. EMP1002"
+            />
+          </div>
+
+          {/* Password (only for HR/FINANCE) */}
           {(role === "HR" || role === "FINANCE") && (
-            <div className="md:col-span-2">
+            <div className="md:col-span-3">
               <label className="block text-xs font-medium text-gray-700">Password *</label>
               <input
                 type="password"
@@ -559,10 +615,15 @@ function UpdateUserModal({ data, onClose, onUpdated }) {
   const [phone, setPhone] = useState(data?.number || "");
   const [role, setRole] = useState(data?.role || "HR");
   const [company, setCompany] = useState(data?.company || "");
-  const [grossSalary, setGrossSalary] = useState(String(data?.grossSalary ?? ""));
+  const [grossSalary, setGrossSalary] = useState(String(data?.grossSalary ?? data?.grosssalary ?? ""));
   const [aadhaar, setAadhaar] = useState(String(data?.adhaarnumber ?? ""));
   const [pan, setPan] = useState(String(data?.pancard ?? ""));
   const [address, setAddress] = useState(String(data?.address ?? ""));
+
+  // NEW
+  const [designation, setDesignation] = useState(String(data?.designation ?? ""));
+  const [reportingToId, setReportingToId] = useState(String(data?.reporting_to_id ?? ""));
+
   const [submitting, setSubmitting] = useState(false);
 
   const validate = () => {
@@ -596,12 +657,14 @@ function UpdateUserModal({ data, onClose, onUpdated }) {
         email,
         role,
         doj,
-        phone,
+        number: phone,                 // API expects 'number'
         company,
-        grossSalary: String(grossSalary).trim(),
+        grosssalary: String(grossSalary).trim(), // API expects 'grosssalary'
         adhaarnumber: String(aadhaar).replace(/\D/g, ""),
         pancard: String(pan).toUpperCase(),
         address: String(address).trim(),
+        designation: String(designation).trim() || null,
+        reporting_to_id: String(reportingToId).trim() || null,
       };
 
       const res = await fetch(`/api/users`, {
@@ -622,14 +685,12 @@ function UpdateUserModal({ data, onClose, onUpdated }) {
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center" aria-modal="true" role="dialog">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} aria-hidden="true" />
-      {/* Wider + compact */}
       <div className="relative w-full md:max-w-7xl bg-white border border-gray-200 rounded-t-2xl md:rounded-2xl shadow-xl p-6 m-0 md:m-4">
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-base font-semibold text-gray-900">Update Employee</h3>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-700" aria-label="Close" title="Close">✕</button>
         </div>
 
-        {/* Compact form: 3 columns */}
         <form onSubmit={onSubmit} className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {/* Row 1 */}
           <div>
@@ -730,7 +791,7 @@ function UpdateUserModal({ data, onClose, onUpdated }) {
             />
           </div>
 
-          {/* Row 4: Aadhaar + Address (Address takes 2 cols) */}
+          {/* Row 4 */}
           <div>
             <label className="block text-xs font-medium text-gray-700">Aadhaar *</label>
             <input
@@ -743,7 +804,31 @@ function UpdateUserModal({ data, onClose, onUpdated }) {
               required
             />
           </div>
-          <div className="md:col-span-2">
+
+          {/* NEW Row 5: Designation + Reporting To */}
+          <div>
+            <label className="block text-xs font-medium text-gray-700">Designation</label>
+            <input
+              type="text"
+              value={designation}
+              onChange={(e) => setDesignation(e.target.value)}
+              className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-sm"
+              placeholder="e.g. Sr. Executive"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-700">Reporting To (Employee ID)</label>
+            <input
+              type="text"
+              value={reportingToId}
+              onChange={(e) => setReportingToId(e.target.value)}
+              className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-sm"
+              placeholder="e.g. EMP1002"
+            />
+          </div>
+
+          {/* Address (2 cols) */}
+          <div className="md:col-span-3">
             <label className="block text-xs font-medium text-gray-700">Address *</label>
             <textarea
               value={address}

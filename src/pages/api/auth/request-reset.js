@@ -4,7 +4,7 @@ import pool from "@/lib/db";
 import { sendMail } from "@/lib/o365";
 
 const BASE_URL = (process.env.APP_URL || "http://localhost:3000").replace(/\/+$/, "");
-const TTL_MIN = parseInt(process.env.RESET_TOKEN_TTL_MINUTES || "15", 10);
+const TTL_MIN = Math.max(1, parseInt(process.env.RESET_TOKEN_TTL_MINUTES || "15", 10)); // ensure >= 1
 const SECRET = process.env.RESET_TOKEN_SECRET;
 const DEBUG = process.env.DEBUG_RESET === "1";
 
@@ -44,7 +44,8 @@ export default async function handler(req, res) {
 
   const generic = {
     ok: true,
-    message: "If an account exists for what you entered, we've sent a reset link. It will expire in ~15 minutes.",
+    message:
+      "If an account exists for what you entered, we've sent a reset link. It will expire in ~15 minutes.",
   };
 
   try {
@@ -60,24 +61,44 @@ export default async function handler(req, res) {
       return res.status(200).json(generic);
     }
 
-    // Pick table based on where the reset was initiated from
+    // 1) Look up by audience
     const sql = audience === "admin" ? SQL_FIND_ADMIN : SQL_FIND_EMP;
-    const { rows } = await pool.query(sql, [id]);
-    const user = rows?.[0];
+    const r1 = await pool.query(sql, [id]);
+    let user = r1?.rows?.[0];
+
+    // 2) If admin and no email found, fallback to EmployeeTable to fetch an email
+    if (audience === "admin" && (!user || !user.email)) {
+      const r2 = await pool.query(SQL_FIND_EMP, [id]);
+      const emp = r2?.rows?.[0];
+      if (emp?.email) {
+        user = {
+          employeeid: user?.employeeid || emp.employeeid,
+          name: user?.name || emp.name,
+          email: emp.email,
+        };
+        if (DEBUG) console.log("[request-reset] Admin fallback email from EmployeeTable");
+      }
+    }
 
     if (DEBUG) {
       console.log("[request-reset] Lookup", {
+        toPath,
         audience,
         input: id,
         found: !!user,
         employeeid: user?.employeeid,
-        email: user?.email ? "(redacted)" : null,
+        hasEmail: !!user?.email,
       });
     }
 
     if (user?.email) {
-      // Build token – include audience so complete endpoint knows which table to update
-      const payload = { sub: user.employeeid || id, email: user.email, typ: "pwreset", aud: audience };
+      // Note: use 'audience' (not reserved 'aud') to avoid JWT audience checks later.
+      const payload = {
+        sub: user.employeeid || id,   // prefer employeeid; if user typed email, we still have id fallback
+        email: user.email,
+        typ: "pwreset",
+        audience,                     // 'admin' or 'employee'
+      };
       const token = jwt.sign(payload, SECRET, { expiresIn: `${TTL_MIN}m` });
       const link = `${BASE_URL}/reset-password?token=${encodeURIComponent(token)}&to=${encodeURIComponent(toPath)}`;
 

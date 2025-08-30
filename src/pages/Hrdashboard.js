@@ -7,7 +7,7 @@ import Link from "next/link";
 import AppHeader from "../components/AppHeader";
 
 const ROLES = ["ADMIN", "HR", "FINANCE", "EMPLOYEE"];
-const COMPANY_OPTIONS = ["ASF", "AGB", "ASF-FACTORY", "ANM"];
+const COMPANY_OPTIONS = ["ASF", "AGB", "ASF-FACTORY", "ANM","AVION","SRI CHAKRA"];
 
 function todayIso() {
   const d = new Date();
@@ -176,7 +176,7 @@ export default function Hrdashboard() {
     try {
       if (typeof window !== "undefined") {
         localStorage.removeItem("hr_auth");
-+       localStorage.removeItem("hr_role");
+        localStorage.removeItem("hr_role");
         localStorage.removeItem("auth");
         localStorage.removeItem("remember");
       }
@@ -580,8 +580,8 @@ export default function Hrdashboard() {
                     <th className="px-3 py-2 border-b">DOJ</th>
                     <th className="px-3 py-2 border-b">Phone</th>
                     <th className="px-3 py-2 border-b">Company</th>
-                    <th className="px-3 py-2 border-b">Aadhaar</th>
-                    <th className="px-3 py-2 border-b">PAN</th>
+               <th className="px-3 py-2 border-b">Reporting To</th>
+    <th className="px-3 py-2 border-b">Designation</th>
                     <th className="px-3 py-2 border-b">Address</th>
                     <th className="px-3 py-2 border-b text-right">Actions</th>
                   </tr>
@@ -628,8 +628,8 @@ export default function Hrdashboard() {
                         <td className="px-3 py-2 border-t">{u.doj || "-"}</td>
                         <td className="px-3 py-2 border-t">{u.number || "-"}</td>
                         <td className="px-3 py-2 border-t">{u.company || "-"}</td>
-                        <td className="px-3 py-2 border-t">{u.adhaarnumber || "-"}</td>
-                        <td className="px-3 py-2 border-t">{u.pancard || "-"}</td>
+                        <td className="px-3 py-2 border-t">{u.reporting_to_id || "-"}</td>
+                        <td className="px-3 py-2 border-t">{u.designation || "-"}</td>
                         <td className="px-3 py-2 border-t">{u.address || "-"}</td>
                         <td className="px-3 py-2 border-t text-right">
                           <div className="inline-flex items-center gap-2">
@@ -638,14 +638,14 @@ export default function Hrdashboard() {
                                 setEditEmployee(u);
                                 setShowEdit(true);
                               }}
-                              className="inline-flex items-center px-2.5 py-1.5 rounded-md bg-blue-50 text-blue-700 hover:bg-blue-100"
+                              className="inline-flex items-center px-2.5 py-1.5 rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
                               title="Edit employee"
                             >
                               Update
                             </button>
                             <button
                               onClick={() => onDelete(u.employeeid)}
-                              className="inline-flex items-center px-2.5 py-1.5 rounded-md bg-red-50 text-red-700 hover:bg-red-100"
+                              className="inline-flex items-center px-2.5 py-1.5 rounded-md bg-red-600 text-white hover:bg-red-700"
                               title="Delete employee"
                             >
                               Delete
@@ -997,11 +997,16 @@ function CreateEmployeeModal({ onClose, onCreated }) {
   const [role, setRole] = useState("EMPLOYEE");
   const [doj, setDoj] = useState("");
   const [phone, setPhone] = useState("");
-  const [company, setCompany] = useState(""); // dropdown now
+  const [company, setCompany] = useState(""); // dropdown
   const [gross, setGross] = useState("");
   const [aadhaar, setAadhaar] = useState("");
   const [pan, setPan] = useState("");
   const [address, setAddress] = useState("");
+  // NEW FIELDS
+  const [designation, setDesignation] = useState("");
+  const [reportingToId, setReportingToId] = useState("");
+  // Conditional password for HR/FINANCE
+  const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   const validate = () => {
@@ -1015,7 +1020,8 @@ function CreateEmployeeModal({ onClose, onCreated }) {
     if (aadhaarDigits.length !== 12) return "Aadhaar must be exactly 12 digits.";
     const panNorm = String(pan || "").toUpperCase();
     if (!/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(panNorm)) return "PAN format is invalid (e.g., ABCDE1234F).";
-     return null;
+    if ((role === "HR" || role === "FINANCE") && !password.trim()) return "Password is required for HR/FINANCE.";
+    return null;
   };
 
   const onSubmit = async (e) => {
@@ -1034,13 +1040,18 @@ function CreateEmployeeModal({ onClose, onCreated }) {
         email,
         role,
         doj,
-        phone,
+        number: phone,                       // API accepts phone or number
         company,
-        grossSalary: String(gross).trim(), // <-- IMPORTANT: use grossSalary (API expects this)
+        grosssalary: String(gross).trim(),   // DB/API key
         adhaarnumber: String(aadhaar).replace(/\D/g, ""),
         pancard: String(pan).toUpperCase(),
         address,
+        // NEW
+        designation: String(designation).trim() || null,
+        reporting_to_id: String(reportingToId).trim() || null,
       };
+      if (role === "HR" || role === "FINANCE") body.password = password;
+
       const res = await fetch("/api/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1193,16 +1204,50 @@ function CreateEmployeeModal({ onClose, onCreated }) {
                 placeholder="ABCDE1234F"
               />
             </div>
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700">Address</label>
-              <textarea
-                rows={2}
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Designation</label>
+              <input
+                type="text"
+                value={designation}
+                onChange={(e) => setDesignation(e.target.value)}
                 className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
-                placeholder="Flat / Street / City / State / PIN"
+                placeholder="e.g. Sr. Executive"
               />
             </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Reporting To (Employee ID)</label>
+              <input
+                type="text"
+                value={reportingToId}
+                onChange={(e) => setReportingToId(e.target.value)}
+                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+                placeholder="e.g. EMP1002"
+              />
+            </div>
+          </div>
+
+          {(role === "HR" || role === "FINANCE") && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Password (required for HR/FINANCE)</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+                placeholder="Set a password"
+              />
+            </div>
+          )}
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Address</label>
+            <textarea
+              rows={2}
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+              placeholder="Flat / Street / City / State / PIN"
+            />
           </div>
 
           <div className="pt-2 flex items-center justify-end gap-3">
@@ -1237,6 +1282,11 @@ function EditEmployeeModal({ employee, onClose, onUpdated }) {
   const [aadhaar, setAadhaar] = useState(employee?.adhaarnumber || "");
   const [pan, setPan] = useState(employee?.pancard || "");
   const [address, setAddress] = useState(employee?.address || "");
+  // NEW: designation, reporting_to_id, grosssalary
+  const [designation, setDesignation] = useState(employee?.designation || "");
+  const [reportingToId, setReportingToId] = useState(employee?.reporting_to_id || "");
+  const [gross, setGross] = useState(String(employee?.grosssalary ?? employee?.grossSalary ?? ""));
+
   const [submitting, setSubmitting] = useState(false);
 
   const validate = () => {
@@ -1244,11 +1294,12 @@ function EditEmployeeModal({ employee, onClose, onUpdated }) {
     if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return "Valid email is required.";
     if (!role) return "Role is required.";
     if (!company.trim()) return "Company is required.";
-    const aadhaarDigits = String(aadhaar || "").replace(/\D/g, "");
-    if (aadhaarDigits && aadhaarDigits.length !== 12) return "Aadhaar must be exactly 12 digits.";
+    const aDigits = String(aadhaar || "").replace(/\D/g, "");
+    if (aDigits && aDigits.length !== 12) return "Aadhaar must be exactly 12 digits.";
     const panNorm = String(pan || "").toUpperCase();
     if (panNorm && !/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(panNorm)) return "PAN format is invalid (e.g., ABCDE1234F).";
-     return null;
+    if (gross !== "" && isNaN(Number(gross))) return "Gross salary must be a number.";
+    return null;
   };
 
   const onSubmit = async (e) => {
@@ -1267,12 +1318,16 @@ function EditEmployeeModal({ employee, onClose, onUpdated }) {
         email,
         role,
         doj,
-        phone,
-        company, // dropdown value
+        number: phone,                        // API accepts phone or number
+        company,
         adhaarnumber: String(aadhaar).replace(/\D/g, ""),
         pancard: String(pan).toUpperCase(),
         address,
+        // NEW
+        designation: String(designation).trim() || null,
+        reporting_to_id: String(reportingToId).trim() || null,
       };
+      if (String(gross).trim() !== "") body.grosssalary = String(gross).trim();
 
       const res = await fetch("/api/users", {
         method: "PUT",
@@ -1306,7 +1361,6 @@ function EditEmployeeModal({ employee, onClose, onUpdated }) {
         </div>
 
         <form onSubmit={onSubmit} className="grid grid-cols-1 gap-5">
-          {/* spread fields wider */}
           <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-5">
             <div>
               <label className="block text-sm font-medium text-gray-700">Full name</label>
@@ -1363,7 +1417,6 @@ function EditEmployeeModal({ employee, onClose, onUpdated }) {
               />
             </div>
 
-            {/* Company DROPDOWN */}
             <div>
               <label className="block text-sm font-medium text-gray-700">Company</label>
               <select
@@ -1404,6 +1457,42 @@ function EditEmployeeModal({ employee, onClose, onUpdated }) {
             </div>
           </div>
 
+          {/* NEW ROW: Designation / Reporting / Gross Salary */}
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-5">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Designation</label>
+              <input
+                type="text"
+                value={designation}
+                onChange={(e) => setDesignation(e.target.value)}
+                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+                placeholder="e.g. Sr. Executive"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Reporting To (Employee ID)</label>
+              <input
+                type="text"
+                value={reportingToId}
+                onChange={(e) => setReportingToId(e.target.value)}
+                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+                placeholder="e.g. EMP1002"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Gross Salary</label>
+              <input
+                type="number"
+                step="0.01"
+                value={gross}
+                onChange={(e) => setGross(e.target.value)}
+                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+                placeholder="e.g. 30000"
+              />
+            </div>
+            <div className="hidden lg:block" />
+          </div>
+
           <div className="grid grid-cols-1 lg:grid-cols-4 md:grid-cols-3 gap-5">
             <div className="lg:col-span-2 md:col-span-2">
               <label className="block text-sm font-medium text-gray-700">Address</label>
@@ -1415,7 +1504,6 @@ function EditEmployeeModal({ employee, onClose, onUpdated }) {
                 placeholder="Flat / Street / City / State / PIN"
               />
             </div>
-            {/* empty placeholders to balance layout on large screens */}
             <div className="hidden lg:block" />
             <div className="hidden lg:block" />
           </div>
@@ -1588,7 +1676,7 @@ function ProfileModal({ user, onClose, onSaved }) {
     if (aadhaarDigits && aadhaarDigits.length !== 12) return "Aadhaar must be exactly 12 digits.";
     const panNorm = String(pan || "").toUpperCase();
     if (panNorm && !/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(panNorm)) return "PAN format is invalid (e.g., ABCDE1234F).";
-     return null;
+    return null;
   };
 
   const onSubmit = async (e) => {
@@ -1606,7 +1694,7 @@ function ProfileModal({ user, onClose, onSaved }) {
         email,
         role,
         doj,
-        phone,
+        number: phone,
         company,
         adhaarnumber: String(aadhaar).replace(/\D/g, ""),
         pancard: String(pan).toUpperCase(),

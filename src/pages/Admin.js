@@ -88,9 +88,9 @@ export default function Admin() {
       />
 
       <main className="min-h-[calc(100vh-57px)] bg-gray-50">
-        <div className="mx-auto px-4 py-6 space-y-6">
+        <div className="mx-auto  py-6 space-y-6">
           {/* Hero */}
-          <section className="rounded-2xl border border-gray-200 bg-white shadow-sm p-6">
+          <section className="rounded-2xl border m-4 border-gray-200 bg-white shadow-sm p-6">
             <h1 className="text-xl font-semibold text-gray-900">
               {greeting}{adminName ? `, ${adminName}` : ""} 👋
             </h1>
@@ -100,8 +100,8 @@ export default function Admin() {
           </section>
 
           {/* Employees (anchor target for header link) */}
-          <section id="users-card" className="rounded-2xl border border-gray-200 bg-white shadow-sm p-4 md:p-6">
-            <UsersTable />
+          <section id="users-card" className=" bg-white shadow-sm p-4 md:p-6">
+          <UsersTable />
           </section>
         </div>
       </main>

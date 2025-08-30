@@ -6,20 +6,22 @@ import Swal from "sweetalert2";
 import AppHeader from "@/components/AppHeader";
 import ProfileModal from "@/components/ProfileModal";
 
+// replace your COLS with this:
 const COLS = [
   { key: "employeeid", label: "Employee ID" },
   { key: "name", label: "Name" },
   { key: "role", label: "Role" },
   { key: "email", label: "Email" },
   { key: "company", label: "Company" },
+  { key: "designation", label: "Designation" },
+  { key: "reporting_to_id", label: "Reporting To" },
   { key: "resigneddate", label: "Resigned Date" },
   { key: "doj", label: "DOJ" },
   { key: "number", label: "Phone" },
   { key: "grosssalary", label: "Gross Salary" },
-  { key: "adhaarnumber", label: "Aadhaar" },
-  { key: "pancard", label: "PAN" },
   { key: "address", label: "Address" },
 ];
+
 
 const PAGE_SIZES = [10, 20, 50, 100];
 
@@ -276,7 +278,7 @@ export default function ExEmployeesPage() {
                         <td className="px-3 py-2 border-t text-right">
                           <button
                             onClick={() => openEdit(r)}
-                            className="inline-flex items-center px-2.5 py-1.5 rounded-md bg-blue-50 text-blue-700 hover:bg-blue-100"
+                          className="inline-flex items-center px-2.5 py-1.5 rounded-md bg-[#C1272D] text-white hover:bg-[#a02125]"
                           >
                             Edit
                           </button>
@@ -386,9 +388,11 @@ function EditExEmployeeModal({ row, onClose, onSaved }) {
   const [doj, setDoj] = useState(row?.doj || "");
   const [number, setNumber] = useState(row?.number ?? "");
   const [grosssalary, setGrosssalary] = useState(row?.grosssalary || "");
-  const [adhaarnumber, setAdhaarnumber] = useState(row?.adhaarnumber ?? "");
-  const [pancard, setPancard] = useState(row?.pancard || "");
   const [address, setAddress] = useState(row?.address || "");
+
+  // NEW
+  const [designation, setDesignation] = useState(row?.designation || "");
+  const [reportingToId, setReportingToId] = useState(row?.reporting_to_id || "");
 
   const validate = () => {
     if (!row?.employeeid) return "Missing employeeid";
@@ -413,10 +417,12 @@ function EditExEmployeeModal({ row, onClose, onSaved }) {
         doj,
         number: number === "" ? null : Number(number),
         grosssalary,
-        adhaarnumber: adhaarnumber === "" ? null : Number(adhaarnumber),
-        pancard,
         address,
+        // NEW
+        designation: designation || null,
+        reporting_to_id: reportingToId || null,
       };
+
       const res = await fetch("/api/ex-employees", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -500,24 +506,26 @@ function EditExEmployeeModal({ row, onClose, onSaved }) {
             </div>
           </div>
 
+          {/* NEW ROW: Designation / Reporting To */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             <div>
-              <label className="block text-sm font-medium text-gray-700">DOJ</label>
+              <label className="block text-sm font-medium text-gray-700">Designation</label>
               <input
                 type="text"
-                value={doj || ""}
-                onChange={(e) => setDoj(e.target.value)}
+                value={designation}
+                onChange={(e) => setDesignation(e.target.value)}
                 className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
-                placeholder="YYYY-MM-DD or text"
+                placeholder="e.g. Sr. Executive"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700">Phone</label>
+              <label className="block text-sm font-medium text-gray-700">Reporting To (Employee ID)</label>
               <input
-                type="number"
-                value={number}
-                onChange={(e) => setNumber(e.target.value)}
+                type="text"
+                value={reportingToId}
+                onChange={(e) => setReportingToId(e.target.value)}
                 className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+                placeholder="e.g. EMP1002"
               />
             </div>
             <div>
@@ -533,20 +541,20 @@ function EditExEmployeeModal({ row, onClose, onSaved }) {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             <div>
-              <label className="block text-sm font-medium text-gray-700">Aadhaar</label>
-              <input
-                type="number"
-                value={adhaarnumber}
-                onChange={(e) => setAdhaarnumber(e.target.value)}
-                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
-              />
+              <label className="block text-sm font-medium text-gray-700">DOJ</label>
+            <input
+    type="date"
+    value={/^\d{4}-\d{2}-\d{2}$/.test(doj || "") ? doj : ""}
+    onChange={(e) => setDoj(e.target.value)}
+    className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+  />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700">PAN</label>
+              <label className="block text-sm font-medium text-gray-700">Phone</label>
               <input
-                type="text"
-                value={pancard || ""}
-                onChange={(e) => setPancard(e.target.value.toUpperCase())}
+                type="number"
+                value={number}
+                onChange={(e) => setNumber(e.target.value)}
                 className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
               />
             </div>
@@ -572,8 +580,7 @@ function EditExEmployeeModal({ row, onClose, onSaved }) {
             <button
               type="submit"
               disabled={submitting}
-              className="inline-flex items-center justify-center rounded-lg bg-blue-600 text-white font-medium px-4 py-2 hover:bg-blue-700 disabled:opacity-60"
-            >
+className="inline-flex items-center justify-center rounded-lg bg-[#C1272D] text-white font-medium px-4 py-2 hover:bg-[#a02125] disabled:opacity-60"            >
               {submitting ? "Saving…" : "Save Changes"}
             </button>
           </div>
@@ -582,3 +589,4 @@ function EditExEmployeeModal({ row, onClose, onSaved }) {
     </div>
   );
 }
+

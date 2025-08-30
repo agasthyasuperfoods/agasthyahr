@@ -310,12 +310,11 @@ export default function Employees({ initialDate }) {
           ) : (
             <div className="space-y-6 md:space-y-8">
               {groups.map(([company, items]) => (
-                <CompanyCard
-                  key={company}
-                  company={company}
-                  items={items}
-                  onEdit={(row) => setEditRow({ ...row })}
-                />
+            <CompanyCard
+  key={company}
+  company={company}
+  items={items}
+/>
               ))}
             </div>
           )}
@@ -399,7 +398,6 @@ function CompanyCard({ company, items, onEdit }) {
               <Th>Work (h:mm)</Th>
               <Th>Status</Th>
               <Th className="min-w-[320px]">Remarks</Th>
-              <Th className="w-28 text-right">Actions</Th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -420,15 +418,7 @@ function CompanyCard({ company, items, onEdit }) {
                   <StatusPill status={r.status} />
                 </Td>
                 <Td className="align-top">{safe(r.remarks)}</Td>
-                <Td className="align-top text-right">
-                  <button
-                    onClick={() => onEdit?.(r)}
-                    className="inline-flex items-center px-2.5 py-1.5 rounded-md bg-blue-50 text-blue-700 hover:bg-blue-100"
-                    title="Edit attendance"
-                  >
-                    Update
-                  </button>
-                </Td>
+          
               </tr>
             ))}
           </tbody>

@@ -203,6 +203,10 @@ function EmployeeEditModal({ user, onClose, onSaved }) {
   const [address, setAddress] = useState(user?.address || "");
   const [saving, setSaving] = useState(false);
 
+  // NEW
+  const [designation, setDesignation] = useState(user?.designation || "");
+  const [reportingToId, setReportingToId] = useState(user?.reporting_to_id || "");
+
   const save = async () => {
     try {
       setSaving(true);
@@ -212,12 +216,15 @@ function EmployeeEditModal({ user, onClose, onSaved }) {
         email,
         role,
         doj: doj || null,
-        phone: phone || null,
+        number: phone || null,                    // << use "number" for API consistency
         company,
         grosssalary: grosssalary === "" ? null : String(grosssalary),
         adhaarnumber: adhaarnumber || null,
         pancard: pancard || null,
         address: address || null,
+        // NEW
+        designation: designation || null,
+        reporting_to_id: reportingToId || null,
       };
       const res = await fetch(`/api/users?id=${encodeURIComponent(user.employeeid)}`, {
         method: "PUT",
@@ -250,13 +257,21 @@ function EmployeeEditModal({ user, onClose, onSaved }) {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div><label className="block text-sm text-gray-700 mb-1">Name</label><input value={name} onChange={(e)=>setName(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" /></div>
           <div><label className="block text-sm text-gray-700 mb-1">Email</label><input value={email} onChange={(e)=>setEmail(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" /></div>
+
           <div><label className="block text-sm text-gray-700 mb-1">Role</label><input value={role} onChange={(e)=>setRole(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" /></div>
           <div><label className="block text-sm text-gray-700 mb-1">Company</label><input value={company} onChange={(e)=>setCompany(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" /></div>
+
+          {/* NEW FIELDS */}
+          <div><label className="block text-sm text-gray-700 mb-1">Designation</label><input value={designation} onChange={(e)=>setDesignation(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" placeholder="e.g. Sr. Executive" /></div>
+          <div><label className="block text-sm text-gray-700 mb-1">Reporting To (Employee ID)</label><input value={reportingToId} onChange={(e)=>setReportingToId(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" placeholder="e.g. EMP1002" /></div>
+
           <div><label className="block text-sm text-gray-700 mb-1">Phone</label><input value={phone} onChange={(e)=>setPhone(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" /></div>
           <div><label className="block text-sm text-gray-700 mb-1">Date of Joining</label><input type="date" value={doj} onChange={(e)=>setDoj(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" /></div>
+
           <div><label className="block text-sm text-gray-700 mb-1">Gross Salary</label><input value={grosssalary ?? ""} onChange={(e)=>setGrosssalary(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" /></div>
           <div><label className="block text-sm text-gray-700 mb-1">Aadhaar</label><input value={adhaarnumber} onChange={(e)=>setAadhaar(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" /></div>
           <div><label className="block text-sm text-gray-700 mb-1">PAN</label><input value={pancard} onChange={(e)=>setPAN(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" /></div>
+
           <div className="md:col-span-2"><label className="block text-sm text-gray-700 mb-1">Address</label><textarea rows={2} value={address} onChange={(e)=>setAddress(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" /></div>
         </div>
 
@@ -878,11 +893,14 @@ export default function Employee() {
                   <Field label="Role" value={selected.role} />
                   <Field label="Company" value={selected.company} />
                   <Field label="Phone" value={selected.number} />
+                  <Field label="Designation" value={selected.designation} />
+<Field label="Reporting To" value={selected.reporting_to_id} />
                   <Field label="Date of Joining" value={selected.doj} formatter={fmt.date} />
-                  <Field label="Aadhaar" value={selected.adhaarnumber} />
-                  <Field label="PAN" value={selected.pancard} />
-                  <Field label="Address" value={selected.address} wide />
-                  <Field label="Gross Salary" value={selected.grosssalary || selected.grossSalary} />
+  <Field label="Gross Salary" value={selected.grosssalary || selected.grossSalary} />
+                    <Field label="PAN" value={selected.pancard} />
+                      <Field label="Address" value={selected.address} />
+
+
                 </div>
               </div>
 
