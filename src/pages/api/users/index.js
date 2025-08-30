@@ -1,3 +1,4 @@
+// /src/pages/api/users.js
 import pool from "@/lib/db";
 
 const COLMAP = {
@@ -12,6 +13,9 @@ const COLMAP = {
   adhaarnumber: "adhaarnumber",
   pancard: "pancard",
   address: "address",
+  // NEW FIELDS
+  designation: "designation",
+  reporting_to_id: "reporting_to_id",
 };
 
 function selectList(existingDbCols) {
@@ -38,6 +42,7 @@ function asInt(v, def) {
 }
 
 export default async function handler(req, res) {
+  /* ------------------------------ GET /api/users ------------------------------ */
   if (req.method === "GET") {
     try {
       const existingDbCols = await getExistingDbColumns();
@@ -46,6 +51,7 @@ export default async function handler(req, res) {
         return res.status(500).json({ error: "No known columns found in EmployeeTable" });
       }
 
+      // Count only
       if (String(req.query?.count || "") === "1") {
         const where = [];
         const params = [];
@@ -62,6 +68,7 @@ export default async function handler(req, res) {
         return res.status(200).json({ count: Number(rows[0]?.cnt || 0) });
       }
 
+      // Suggestions endpoint
       if (String(req.query?.suggest || "") === "1") {
         const qStr = String(req.query?.q || "").trim();
         const limit = asInt(req.query?.limit, 8);
@@ -103,6 +110,7 @@ export default async function handler(req, res) {
         return res.status(200).json({ data: rows });
       }
 
+      // List with filters
       const roleFilter = req.query?.role;
       const idFilter = req.query?.id;
       const emailFilter = req.query?.email;
@@ -150,12 +158,13 @@ export default async function handler(req, res) {
     }
   }
 
+  /* ----------------------------- POST /api/users ----------------------------- */
   if (req.method === "POST") {
     try {
       const existingDbCols = await getExistingDbColumns();
       const body = req.body || {};
 
-      // NORMALIZE keys accepted from client
+      // Normalize keys from client
       const grosssalary = body.grosssalary ?? body.grossSalary ?? null;
       const phone = body.phone ?? body.number ?? null;
 
@@ -170,6 +179,9 @@ export default async function handler(req, res) {
         pancard,
         address,
         password,
+        // NEW from client
+        designation,
+        reporting_to_id,
       } = body;
 
       if (!employeeid || String(employeeid).trim() === "") {
@@ -218,6 +230,7 @@ export default async function handler(req, res) {
       const values = [];
       let idx = 1;
 
+      // Base fields
       for (const [api, val] of [
         ["employeeid", String(employeeid).trim()],
         ["name", name],
@@ -234,6 +247,7 @@ export default async function handler(req, res) {
         }
       }
 
+      // Optional/typed fields
       if (existingDbCols.has(COLMAP.role))        { fields.push(`"${COLMAP.role}"`);        placeholders.push(`$${idx++}`);          values.push(role); }
       if (existingDbCols.has(COLMAP.grosssalary)) { fields.push(`"${COLMAP.grosssalary}"`); placeholders.push(`$${idx++}::numeric`); values.push(String(grosssalary).trim()); }
       if (existingDbCols.has(COLMAP.adhaarnumber)){ fields.push(`"${COLMAP.adhaarnumber}"`); placeholders.push(`$${idx++}`);          values.push(aadhaarDigits); }
@@ -241,6 +255,18 @@ export default async function handler(req, res) {
       if (existingDbCols.has(COLMAP.address))     { fields.push(`"${COLMAP.address}"`);     placeholders.push(`$${idx++}`);          values.push(addressVal); }
       if (existingDbCols.has("password") && password) {
         fields.push(`"password"`); placeholders.push(`$${idx++}`); values.push(String(password));
+      }
+
+      // NEW: designation, reporting_to_id
+      if (existingDbCols.has(COLMAP.designation)) {
+        fields.push(`"${COLMAP.designation}"`);
+        placeholders.push(`$${idx++}`);
+        values.push(body.designation ?? null);
+      }
+      if (existingDbCols.has(COLMAP.reporting_to_id)) {
+        fields.push(`"${COLMAP.reporting_to_id}"`);
+        placeholders.push(`$${idx++}`);
+        values.push(body.reporting_to_id ?? null);
       }
 
       if (fields.length === 0) return res.status(500).json({ error: "No known columns found in EmployeeTable" });
@@ -262,12 +288,13 @@ export default async function handler(req, res) {
     }
   }
 
+  /* ------------------------------ PUT /api/users ----------------------------- */
   if (req.method === "PUT") {
     try {
       const existingDbCols = await getExistingDbColumns();
       const body = req.body || {};
 
-      // NORMALIZE keys accepted from client
+      // Normalize keys from client
       const grosssalary = body.grosssalary ?? body.grossSalary ?? null;
       const phone = body.phone ?? body.number ?? null;
 
@@ -285,6 +312,9 @@ export default async function handler(req, res) {
         adhaarnumber,
         pancard,
         address,
+        // NEW:
+        designation,
+        reporting_to_id,
       } = body;
 
       const fields = [];
@@ -312,6 +342,16 @@ export default async function handler(req, res) {
       }
       if (address !== undefined && existingDbCols.has(COLMAP.address))  { fields.push(`"${COLMAP.address}" = $${idx++}`); values.push(String(address || "").trim() || null); }
 
+      // NEW: designation, reporting_to_id
+      if (designation !== undefined && existingDbCols.has(COLMAP.designation)) {
+        fields.push(`"${COLMAP.designation}" = $${idx++}`);
+        values.push(designation);
+      }
+      if (reporting_to_id !== undefined && existingDbCols.has(COLMAP.reporting_to_id)) {
+        fields.push(`"${COLMAP.reporting_to_id}" = $${idx++}`);
+        values.push(reporting_to_id);
+      }
+
       if (fields.length === 0) return res.status(400).json({ error: "No fields to update" });
 
       const returning = selectList(existingDbCols).join(", ");
@@ -332,6 +372,7 @@ export default async function handler(req, res) {
     }
   }
 
+  /* ---------------------------- DELETE /api/users ---------------------------- */
   if (req.method === "DELETE") {
     try {
       const idFromQuery = req.query?.id;
