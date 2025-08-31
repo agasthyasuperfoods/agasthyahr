@@ -34,6 +34,38 @@ function getAuthIdentity() {
   };
 }
 
+/* ------------ doc helpers (DB → UI) ------------ */
+function categorizeDoc(title = "", type = "") {
+  const s = `${title} ${type}`.toLowerCase();
+  if (/(reliev|exit|separation)/.test(s)) return "Exit";              // Relieving letter
+  if (/(experience)/.test(s)) return "Exit";                          // Experience letter
+  if (/(offer|intent)/.test(s)) return "Onboarding";                  // Offer/Letter of Intent
+  if (/(increment|hike|revision)/.test(s)) return "Other";            // Increment letter
+  if (/(policy|handbook)/.test(s)) return "Policies";
+  if (/(agreement|contract|vendor)/.test(s)) return "Agreements";
+  if (/(compliance|pf|esi|statut|tax)/.test(s)) return "Compliance";
+  return "Other";
+}
+
+function normalizeDoc(row, i = 0) {
+  const id = row.id ?? `ROW-${i}`;
+  const title = row.name ?? `Untitled ${id}`;
+  const inferredType = (row.type || (row.url?.split(".").pop() || "")).toUpperCase();
+  return {
+    id: String(id),
+    title,
+    folder: categorizeDoc(title, inferredType),
+    tags: [inferredType.toLowerCase()].filter(Boolean),
+    type: inferredType || "FILE",
+    size: 0.1, // unknown size; placeholder (MB)
+    updatedAt: row.updated_at || row.updatedAt || new Date().toISOString(),
+    owner: "HR",
+    status: "Active",
+    version: "1.0",
+    url: row.url || "#",
+  };
+}
+
 // ======================================
 // HR → Documents (Docs + Payroll Data)
 // ======================================
@@ -122,13 +154,31 @@ export default function DocumentsPage() {
   };
 
   // ----- Documents state -----
-  const [docs, setDocs] = useState(MOCK_DOCS);
+  const [docs, setDocs] = useState([]); // start empty; fill from API then fallback
   const [query, setQuery] = useState("");
   const [folder, setFolder] = useState("All");
   const [view, setView] = useState("grid"); // 'grid' | 'list'
   const [selectedMap, setSelectedMap] = useState({});
   const [showUpload, setShowUpload] = useState(false);
   const [shareDoc, setShareDoc] = useState(null);
+
+  // Load docs from API (fallback to mocks if API not ready)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/documents");
+        const j = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(j?.error || "Failed to load documents");
+        const rows = Array.isArray(j?.data) ? j.data : Array.isArray(j) ? j : [];
+        const mapped = rows.map((r, i) => normalizeDoc(r, i));
+        if (!cancelled) setDocs(mapped);
+      } catch {
+        if (!cancelled) setDocs(MOCK_DOCS);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   // ----- Payroll state -----
   const [payrollMonth, setPayrollMonth] = useState(ym());
@@ -139,6 +189,29 @@ export default function DocumentsPage() {
   const openDoc = (doc) => {
     const url = doc?.url || "#";
     window.open(url, "_blank", "noopener,noreferrer");
+  };
+
+  // NEW: One-tap direct share (copies link). Falls back to modal if clipboard fails
+  const handleShare = async (doc) => {
+    const direct = doc?.url || (typeof window !== "undefined" ? `${window.location.origin}/share/${doc?.id}` : "");
+    if (!direct || direct === "#") {
+      setShareDoc(doc);
+      return;
+    }
+    try {
+      await navigator.clipboard?.writeText(direct);
+      Swal.fire({
+        icon: "success",
+        title: "Link copied",
+        text: "Direct document link copied to clipboard.",
+        timer: 1600,
+        showConfirmButton: false,
+        position: "top-end",
+        toast: true,
+      });
+    } catch {
+      setShareDoc(doc);
+    }
   };
 
   // Filtered docs (never show docs for Payroll)
@@ -206,7 +279,7 @@ export default function DocumentsPage() {
     a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
   };
 
-  // Upload dropzone
+  // Upload dropzone (client-only demo)
   const Dropzone = ({ onClose }) => {
     const ref = useRef(null);
     useEffect(() => {
@@ -281,7 +354,7 @@ export default function DocumentsPage() {
             </div>
             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
               <button className="p-2 rounded-lg hover:bg-gray-100" title="Download" onClick={() => openDoc(d)}><Download className="h-4 w-4"/></button>
-              <button className="p-2 rounded-lg hover:bg-gray-100" title="Share link" onClick={() => setShareDoc(d)}><Link2 className="h-4 w-4"/></button>
+              <button className="p-2 rounded-lg hover:bg-gray-100" title="Share link" onClick={() => handleShare(d)}><Link2 className="h-4 w-4"/></button>
             </div>
           </div>
         </div>
@@ -328,7 +401,7 @@ export default function DocumentsPage() {
               <td className="px-3 py-2 border-t text-right">
                 <div className="inline-flex items-center gap-1">
                   <button className="p-1.5 rounded-md hover:bg-gray-100" title="Download" onClick={()=>openDoc(d)}><Download className="h-4 w-4"/></button>
-                  <button className="p-1.5 rounded-md hover:bg-gray-100" title="Share" onClick={()=>setShareDoc(d)}><Link2 className="h-4 w-4"/></button>
+                  <button className="p-1.5 rounded-md hover:bg-gray-100" title="Share" onClick={()=>handleShare(d)}><Link2 className="h-4 w-4"/></button>
                 </div>
               </td>
             </tr>
@@ -346,7 +419,7 @@ export default function DocumentsPage() {
 
   const ShareModal = ({ doc, onClose }) => {
     if (!doc) return null;
-    const shareUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/share/${doc.id}`;
+    const directUrl = doc.url && doc.url !== "#" ? doc.url : (typeof window !== "undefined" ? `${window.location.origin}/share/${doc.id}` : "");
     return (
       <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center">
         <div className="absolute inset-0 bg-black/40" onClick={onClose} />
@@ -355,10 +428,25 @@ export default function DocumentsPage() {
             <h3 className="text-lg font-semibold text-gray-900">Share document</h3>
             <button onClick={onClose} className="text-gray-500 hover:text-gray-700"><XIcon className="h-5 w-5"/></button>
           </div>
-          <div className="text-sm text-gray-700">Generate an internal link (access controlled by roles).</div>
+          <div className="text-sm text-gray-700">Direct link to this document.</div>
           <div className="mt-3 flex items-center gap-2">
-            <input readOnly value={shareUrl} className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm"/>
-            <button className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm hover:bg-gray-50" onClick={()=>{navigator.clipboard?.writeText(shareUrl);}}>Copy</button>
+            <input readOnly value={directUrl} className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm"/>
+            <button
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm hover:bg-gray-50"
+              onClick={async()=>{
+                try { await navigator.clipboard?.writeText(directUrl); Swal.fire({icon:"success", title:"Link copied", timer:1300, showConfirmButton:false, position:"top-end", toast:true}); } catch {}
+              }}
+            >
+              Copy
+            </button>
+            <a
+              href={directUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 rounded-lg bg-gray-900 text-white px-3 py-2 text-sm hover:bg-gray-800"
+            >
+              Open
+            </a>
           </div>
         </div>
       </div>
@@ -597,7 +685,7 @@ function ProfileModal({ user, onClose, onSaved }) {
     if (aadhaarDigits && aadhaarDigits.length !== 12) return "Aadhaar must be exactly 12 digits.";
     const panNorm = String(pan || "").toUpperCase();
     if (panNorm && !/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(panNorm)) return "PAN format is invalid (e.g., ABCDE1234F).";
-    // Address is optional — no validation
+    // Address optional
     return null;
   };
 
@@ -617,10 +705,11 @@ function ProfileModal({ user, onClose, onSaved }) {
         role,
         doj,
         phone,
+        number: phone, // include both keys for compatibility
         company,
         adhaarnumber: String(aadhaar).replace(/\D/g, ""),
         pancard: String(pan).toUpperCase(),
-        address: String(address).trim() || null, // optional, normalized
+        address: String(address).trim() || null,
       };
       const res = await fetch(`/api/users?id=${encodeURIComponent(user.employeeid)}`, {
         method: "PUT",
