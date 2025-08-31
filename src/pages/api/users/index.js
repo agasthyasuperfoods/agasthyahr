@@ -13,7 +13,6 @@ const COLMAP = {
   adhaarnumber: "adhaarnumber",
   pancard: "pancard",
   address: "address",
-  // NEW FIELDS
   designation: "designation",
   reporting_to_id: "reporting_to_id",
 };
@@ -42,7 +41,7 @@ function asInt(v, def) {
 }
 
 export default async function handler(req, res) {
-  /* ------------------------------ GET /api/users ------------------------------ */
+  /* ------------------------------ GET ------------------------------ */
   if (req.method === "GET") {
     try {
       const existingDbCols = await getExistingDbColumns();
@@ -51,39 +50,21 @@ export default async function handler(req, res) {
         return res.status(500).json({ error: "No known columns found in EmployeeTable" });
       }
 
-      // Count only
+      // Count
       if (String(req.query?.count || "") === "1") {
-        const where = [];
-        const params = [];
-        if (req.query?.role && existingDbCols.has(COLMAP.role)) {
-          params.push(String(req.query.role).trim());
-          where.push(`"${COLMAP.role}" = $${params.length}`);
-        }
-        const qCount = `
-          SELECT COUNT(*)::bigint AS cnt
-          FROM public."EmployeeTable"
-          ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
-        `;
-        const { rows } = await pool.query(qCount, params);
+        const { rows } = await pool.query(`SELECT COUNT(*)::bigint AS cnt FROM public."EmployeeTable"`);
         return res.status(200).json({ count: Number(rows[0]?.cnt || 0) });
       }
 
-      // Suggestions endpoint
+      // Suggestions
       if (String(req.query?.suggest || "") === "1") {
         const qStr = String(req.query?.q || "").trim();
         const limit = asInt(req.query?.limit, 8);
         if (!qStr) return res.status(200).json({ data: [] });
 
-        const fieldsToReturn = [];
-        for (const key of ["employeeid", "name", "email", "company", "role"]) {
-          const db = COLMAP[key];
-          if (existingDbCols.has(db)) fieldsToReturn.push(`"${db}" AS "${key}"`);
-        }
-        if (fieldsToReturn.length === 0) fieldsToReturn.push(...cols);
-
         const like = `%${qStr.toLowerCase()}%`;
-        const params = [];
         const ors = [];
+        const params = [];
 
         if (existingDbCols.has(COLMAP.employeeid)) { params.push(like); ors.push(`LOWER("${COLMAP.employeeid}") LIKE $${params.length}`); }
         if (existingDbCols.has(COLMAP.name))       { params.push(like); ors.push(`LOWER("${COLMAP.name}") LIKE $${params.length}`); }
@@ -91,193 +72,99 @@ export default async function handler(req, res) {
 
         if (!ors.length) return res.status(200).json({ data: [] });
 
-        const prefix = `${qStr.toLowerCase()}%`;
-        const orderParts = [];
-        if (existingDbCols.has(COLMAP.name))       { params.push(prefix); orderParts.push(`(LOWER("${COLMAP.name}") LIKE $${params.length}) DESC`); }
-        if (existingDbCols.has(COLMAP.employeeid)) { params.push(prefix); orderParts.push(`(LOWER("${COLMAP.employeeid}") LIKE $${params.length}) DESC`); }
-        if (existingDbCols.has(COLMAP.email))      { params.push(prefix); orderParts.push(`(LOWER("${COLMAP.email}") LIKE $${params.length}) DESC`); }
-        orderParts.push(`"${existingDbCols.has(COLMAP.employeeid) ? COLMAP.employeeid : (existingDbCols.has(COLMAP.name) ? COLMAP.name : (existingDbCols.has(COLMAP.email) ? COLMAP.email : "1"))}" ASC`);
-
         params.push(limit);
-        const qSuggest = `
-          SELECT ${fieldsToReturn.join(", ")}
-          FROM public."EmployeeTable"
-          WHERE (${ors.join(" OR ")})
-          ORDER BY ${orderParts.join(", ")}
-          LIMIT $${params.length}
-        `;
-        const { rows } = await pool.query(qSuggest, params);
+        const { rows } = await pool.query(
+          `SELECT ${cols.join(", ")} FROM public."EmployeeTable"
+           WHERE (${ors.join(" OR ")})
+           ORDER BY "employeeid" ASC
+           LIMIT $${params.length}`, params
+        );
         return res.status(200).json({ data: rows });
       }
 
-      // List with filters
-      const roleFilter = req.query?.role;
-      const idFilter = req.query?.id;
-      const emailFilter = req.query?.email;
-      const nameFilter = req.query?.name;
-
-      const limit = asInt(req.query?.limit, 100);
-      const offset = asInt(req.query?.offset, 0);
-
+      // Filters
       const where = [];
       const params = [];
 
-      if (idFilter && existingDbCols.has(COLMAP.employeeid)) {
-        params.push(String(idFilter).trim());
+      if (req.query?.id) {
+        params.push(String(req.query.id).trim());
         where.push(`"${COLMAP.employeeid}" = $${params.length}`);
       }
-      if (emailFilter && existingDbCols.has(COLMAP.email)) {
-        params.push(String(emailFilter).trim());
-        where.push(`"${COLMAP.email}" = $${params.length}`);
+      if (req.query?.email) {
+        params.push(String(req.query.email).trim());
+        where.push(`LOWER("${COLMAP.email}") = LOWER($${params.length})`);
       }
-      if (nameFilter && existingDbCols.has(COLMAP.name)) {
-        params.push(String(nameFilter).trim());
-        where.push(`"${COLMAP.name}" = $${params.length}`);
-      }
-      if (roleFilter && existingDbCols.has(COLMAP.role)) {
-        params.push(String(roleFilter).trim());
-        where.push(`"${COLMAP.role}" = $${params.length}`);
+      if (req.query?.name) {
+        params.push(`%${String(req.query.name).trim()}%`);
+        where.push(`"${COLMAP.name}" ILIKE $${params.length}`);
       }
 
-      params.push(limit);
-      params.push(offset);
+      params.push(asInt(req.query?.limit, 100));
+      params.push(asInt(req.query?.offset, 0));
 
-      const q = `
-        SELECT ${cols.join(", ")}
-        FROM public."EmployeeTable"
-        ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
-        ORDER BY "${existingDbCols.has(COLMAP.employeeid) ? COLMAP.employeeid : COLMAP.name}" ASC
-        LIMIT $${params.length - 1}
-        OFFSET $${params.length}
-      `;
-      const result = await pool.query(q, params);
-      return res.status(200).json({ data: result.rows, limit, offset });
+      const { rows } = await pool.query(
+        `SELECT ${cols.join(", ")} FROM public."EmployeeTable"
+         ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
+         ORDER BY "employeeid" ASC
+         LIMIT $${params.length - 1} OFFSET $${params.length}`,
+        params
+      );
+      return res.status(200).json({ data: rows });
     } catch (e) {
       console.error("GET /api/users failed:", e);
       return res.status(500).json({ error: "Failed to load users" });
     }
   }
 
-  /* ----------------------------- POST /api/users ----------------------------- */
+  /* ----------------------------- POST ----------------------------- */
   if (req.method === "POST") {
     try {
       const existingDbCols = await getExistingDbColumns();
       const body = req.body || {};
 
-      // Normalize keys from client
-      const grosssalary = body.grosssalary ?? body.grossSalary ?? null;
-      const phone = body.phone ?? body.number ?? null;
-
       const {
-        employeeid,
-        name,
-        email,
-        role,
-        doj,
-        company,
-        adhaarnumber,
-        pancard,
-        address,
-        password,
-        // NEW from client
-        designation,
-        reporting_to_id,
+        employeeid, name, email, role, doj, company,
+        adhaarnumber, pancard, address, password,
+        designation, reporting_to_id, grosssalary, number
       } = body;
 
-      if (!employeeid || String(employeeid).trim() === "") {
-        return res.status(400).json({ error: "Invalid or missing employee id" });
+      if (!employeeid || !name || !email || !company) {
+        return res.status(400).json({ error: "Missing required fields" });
       }
-      if (!name || !email || !company) {
-        return res.status(400).json({ error: "Missing required fields (name/email/company)" });
-      }
-      if (existingDbCols.has(COLMAP.role) && !role) {
-        return res.status(400).json({ error: "Missing role" });
-      }
-      if (existingDbCols.has(COLMAP.grosssalary)) {
-        if (grosssalary === undefined || grosssalary === null || String(grosssalary).trim() === "") {
-          return res.status(400).json({ error: "Missing grosssalary" });
-        }
-      }
-      if (existingDbCols.has("password") && (role === "HR" || role === "FINANCE")) {
-        if (!password || String(password).trim() === "") {
-          return res.status(400).json({ error: "Password is required for HR/FINANCE user" });
-        }
-      }
-
-      let aadhaarDigits = null;
-      if (existingDbCols.has(COLMAP.adhaarnumber)) {
-        aadhaarDigits = String(adhaarnumber || "").replace(/\D/g, "");
-        if (aadhaarDigits.length !== 12) return res.status(400).json({ error: "Aadhaar must be exactly 12 digits" });
-      }
-
-      let panNorm = null;
-      if (existingDbCols.has(COLMAP.pancard)) {
-        panNorm = String(pancard || "").toUpperCase();
-        if (!/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(panNorm)) {
-          return res.status(400).json({ error: "PAN format is invalid (e.g., ABCDE1234F)" });
-        }
-      }
-
-      let addressVal = null;
-      if (existingDbCols.has(COLMAP.address)) {
-        addressVal = String(address || "").trim();
-      }
-
-      const digitsOnlyPhone = phone ? String(phone).replace(/\D/g, "") : null;
 
       const fields = [];
       const placeholders = [];
       const values = [];
       let idx = 1;
 
-      // Base fields
       for (const [api, val] of [
         ["employeeid", String(employeeid).trim()],
         ["name", name],
         ["email", email],
         ["doj", doj || null],
-        ["number", digitsOnlyPhone],
+        ["number", number || null],
         ["company", company],
+        ["role", role],
+        ["grosssalary", grosssalary],
+        ["adhaarnumber", adhaarnumber],
+        ["pancard", pancard],
+        ["address", address],
+        ["designation", designation],
+        ["reporting_to_id", reporting_to_id],
+        ["password", password]
       ]) {
-        const db = COLMAP[api];
-        if (existingDbCols.has(db)) {
+        const db = COLMAP[api] || api;
+        if (val !== undefined && existingDbCols.has(db)) {
           fields.push(`"${db}"`);
-          if (api === "doj") { placeholders.push(`$${idx++}::date`); values.push(val); }
-          else { placeholders.push(`$${idx++}`); values.push(val); }
+          placeholders.push(`$${idx++}`);
+          values.push(val);
         }
       }
 
-      // Optional/typed fields
-      if (existingDbCols.has(COLMAP.role))        { fields.push(`"${COLMAP.role}"`);        placeholders.push(`$${idx++}`);          values.push(role); }
-      if (existingDbCols.has(COLMAP.grosssalary)) { fields.push(`"${COLMAP.grosssalary}"`); placeholders.push(`$${idx++}::numeric`); values.push(String(grosssalary).trim()); }
-      if (existingDbCols.has(COLMAP.adhaarnumber)){ fields.push(`"${COLMAP.adhaarnumber}"`); placeholders.push(`$${idx++}`);          values.push(aadhaarDigits); }
-      if (existingDbCols.has(COLMAP.pancard))     { fields.push(`"${COLMAP.pancard}"`);     placeholders.push(`$${idx++}`);          values.push(panNorm); }
-      if (existingDbCols.has(COLMAP.address))     { fields.push(`"${COLMAP.address}"`);     placeholders.push(`$${idx++}`);          values.push(addressVal); }
-      if (existingDbCols.has("password") && password) {
-        fields.push(`"password"`); placeholders.push(`$${idx++}`); values.push(String(password));
-      }
-
-      // NEW: designation, reporting_to_id
-      if (existingDbCols.has(COLMAP.designation)) {
-        fields.push(`"${COLMAP.designation}"`);
-        placeholders.push(`$${idx++}`);
-        values.push(body.designation ?? null);
-      }
-      if (existingDbCols.has(COLMAP.reporting_to_id)) {
-        fields.push(`"${COLMAP.reporting_to_id}"`);
-        placeholders.push(`$${idx++}`);
-        values.push(body.reporting_to_id ?? null);
-      }
-
-      if (fields.length === 0) return res.status(500).json({ error: "No known columns found in EmployeeTable" });
-
       const returning = selectList(existingDbCols).join(", ");
       const q = `
-        INSERT INTO public."EmployeeTable"
-          (${fields.join(", ")})
-        OVERRIDING SYSTEM VALUE
-        VALUES
-          (${placeholders.join(", ")})
+        INSERT INTO public."EmployeeTable" (${fields.join(", ")})
+        VALUES (${placeholders.join(", ")})
         RETURNING ${returning}
       `;
       const result = await pool.query(q, values);
@@ -288,83 +175,38 @@ export default async function handler(req, res) {
     }
   }
 
-  /* ------------------------------ PUT /api/users ----------------------------- */
+  /* ------------------------------ PUT ------------------------------ */
   if (req.method === "PUT") {
     try {
       const existingDbCols = await getExistingDbColumns();
       const body = req.body || {};
-
-      // Normalize keys from client
-      const grosssalary = body.grosssalary ?? body.grossSalary ?? null;
-      const phone = body.phone ?? body.number ?? null;
-
-      const idFromQuery = req.query?.id;
-      const idFromBody = body?.employeeid;
-      const employeeId = String((idFromQuery ?? idFromBody) || "").trim();
+      const employeeId = String(req.query?.id || body?.employeeid || "").trim();
       if (!employeeId) return res.status(400).json({ error: "Invalid employee id" });
-
-      const {
-        name,
-        email,
-        role,
-        doj,
-        company,
-        adhaarnumber,
-        pancard,
-        address,
-        // NEW:
-        designation,
-        reporting_to_id,
-      } = body;
 
       const fields = [];
       const values = [];
       let idx = 1;
 
-      if (name !== undefined && existingDbCols.has(COLMAP.name))        { fields.push(`"${COLMAP.name}" = $${idx++}`); values.push(name); }
-      if (email !== undefined && existingDbCols.has(COLMAP.email))      { fields.push(`"${COLMAP.email}" = $${idx++}`); values.push(email); }
-      if (role !== undefined && existingDbCols.has(COLMAP.role))        { fields.push(`"${COLMAP.role}" = $${idx++}`); values.push(role); }
-      if (doj !== undefined && existingDbCols.has(COLMAP.doj))          { fields.push(`"${COLMAP.doj}" = $${idx++}::date`); values.push(doj || null); }
-      if (phone !== undefined && existingDbCols.has(COLMAP.number))     { const digits = phone ? String(phone).replace(/\D/g, "") : null; fields.push(`"${COLMAP.number}" = $${idx++}`); values.push(digits); }
-      if (company !== undefined && existingDbCols.has(COLMAP.company))  { fields.push(`"${COLMAP.company}" = $${idx++}`); values.push(company); }
-      if (grosssalary !== undefined && grosssalary !== null && String(grosssalary).trim() !== "" && existingDbCols.has(COLMAP.grosssalary)) {
-        fields.push(`"${COLMAP.grosssalary}" = $${idx++}::numeric`); values.push(String(grosssalary).trim());
-      }
-      if (adhaarnumber !== undefined && existingDbCols.has(COLMAP.adhaarnumber)) {
-        const aadhaarDigits = String(adhaarnumber || "").replace(/\D/g, "");
-        if (aadhaarDigits && aadhaarDigits.length !== 12) return res.status(400).json({ error: "Aadhaar must be exactly 12 digits" });
-        fields.push(`"${COLMAP.adhaarnumber}" = $${idx++}`); values.push(aadhaarDigits || null);
-      }
-      if (pancard !== undefined && existingDbCols.has(COLMAP.pancard)) {
-        const panNorm = String(pancard || "").toUpperCase();
-        if (panNorm && !/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(panNorm)) return res.status(400).json({ error: "PAN format is invalid (e.g., ABCDE1234F)" });
-        fields.push(`"${COLMAP.pancard}" = $${idx++}`); values.push(panNorm || null);
-      }
-      if (address !== undefined && existingDbCols.has(COLMAP.address))  { fields.push(`"${COLMAP.address}" = $${idx++}`); values.push(String(address || "").trim() || null); }
-
-      // NEW: designation, reporting_to_id
-      if (designation !== undefined && existingDbCols.has(COLMAP.designation)) {
-        fields.push(`"${COLMAP.designation}" = $${idx++}`);
-        values.push(designation);
-      }
-      if (reporting_to_id !== undefined && existingDbCols.has(COLMAP.reporting_to_id)) {
-        fields.push(`"${COLMAP.reporting_to_id}" = $${idx++}`);
-        values.push(reporting_to_id);
+      for (const [api, val] of Object.entries(body)) {
+        const db = COLMAP[api];
+        if (db && existingDbCols.has(db)) {
+          fields.push(`"${db}" = $${idx++}`);
+          values.push(val);
+        }
       }
 
-      if (fields.length === 0) return res.status(400).json({ error: "No fields to update" });
+      if (!fields.length) return res.status(400).json({ error: "No fields to update" });
 
+      values.push(employeeId);
       const returning = selectList(existingDbCols).join(", ");
       const q = `
         UPDATE public."EmployeeTable"
         SET ${fields.join(", ")}
-        WHERE "${COLMAP.employeeid}" = $${idx}
+        WHERE "employeeid" = $${idx}
         RETURNING ${returning}
       `;
-      values.push(employeeId);
-
       const result = await pool.query(q, values);
-      if (result.rowCount === 0) return res.status(404).json({ error: "User not found" });
+      if (!result.rowCount) return res.status(404).json({ error: "User not found" });
       return res.status(200).json({ data: result.rows[0] });
     } catch (e) {
       console.error("PUT /api/users failed:", e);
@@ -372,20 +214,17 @@ export default async function handler(req, res) {
     }
   }
 
-  /* ---------------------------- DELETE /api/users ---------------------------- */
+  /* ---------------------------- DELETE ---------------------------- */
   if (req.method === "DELETE") {
     try {
-      const idFromQuery = req.query?.id;
-      const idFromBody = req.body?.id ?? req.body?.employeeid;
-      const employeeId = String((idFromQuery ?? idFromBody) || "").trim();
+      const employeeId = String(req.query?.id || req.body?.id || req.body?.employeeid || "").trim();
       if (!employeeId) return res.status(400).json({ error: "Invalid employee id" });
 
       const result = await pool.query(
-        `DELETE FROM public."EmployeeTable" WHERE "${COLMAP.employeeid}" = $1`,
+        `DELETE FROM public."EmployeeTable" WHERE "employeeid" = $1`,
         [employeeId]
       );
-      if (result.rowCount === 0) return res.status(404).json({ error: "User not found" });
-
+      if (!result.rowCount) return res.status(404).json({ error: "User not found" });
       return res.status(200).json({ ok: true });
     } catch (e) {
       console.error("DELETE /api/users failed:", e);

@@ -1,13 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import Head from "next/head";
-import Image from "next/image";
 import { useRouter } from "next/router";
 import Swal from "sweetalert2";
-import Link from "next/link";
 import AppHeader from "../components/AppHeader";
 
 const ROLES = ["ADMIN", "HR", "FINANCE", "EMPLOYEE"];
-const COMPANY_OPTIONS = ["ASF", "AGB", "ASF-FACTORY", "ANM","AVION","SRI CHAKRA"];
+const COMPANY_OPTIONS = ["ASF", "AGB", "ASF-FACTORY", "ANM", "AVION", "SRI CHAKRA"];
 
 function todayIso() {
   const d = new Date();
@@ -51,7 +49,6 @@ const idVariants = (raw) => {
 export default function Hrdashboard() {
   const router = useRouter();
   const [ready, setReady] = useState(false);
-  const [nameReady, setNameReady] = useState(false);
 
   // Attendance: date + file + parse preview
   const [uploadDate, setUploadDate] = useState(todayIso());
@@ -85,8 +82,6 @@ export default function Hrdashboard() {
   const [usersError, setUsersError] = useState("");
 
   const [hrName, setHrName] = useState("");
-  const [showProfile, setShowProfile] = useState(false);
-  const [profileUser, setProfileUser] = useState(null);
 
   // Search + pagination (Employees table)
   const [searchQuery, setSearchQuery] = useState("");
@@ -119,7 +114,6 @@ export default function Hrdashboard() {
   useEffect(() => {
     if (!ready) return;
 
-    setNameReady(false);
     let cancelled = false;
 
     (async () => {
@@ -149,8 +143,6 @@ export default function Hrdashboard() {
         if (!cancelled) setHrName(me?.name || "HR");
       } catch {
         if (!cancelled) setHrName("HR");
-      } finally {
-        if (!cancelled) setNameReady(true);
       }
     })();
 
@@ -321,40 +313,14 @@ export default function Hrdashboard() {
     }
   };
 
-  // Open profile modal
-  const openProfile = async () => {
-    try {
-      const { id, email } = getAuthIdentity();
-      let me = null;
-
-      if (id) {
-        const r = await fetch(`/api/users?id=${encodeURIComponent(id)}`);
-        const j = await r.json().catch(() => ({}));
-        if (r.ok && Array.isArray(j?.data) && j.data.length) me = j.data[0];
-      }
-
-      if (!me && email) {
-        const r = await fetch(`/api/users?email=${encodeURIComponent(email)}`);
-        const j = await r.json().catch(() => ({}));
-        if (r.ok && Array.isArray(j?.data) && j.data.length) me = j.data[0];
-      }
-
-      if (!me) throw new Error("Your profile could not be found");
-
-      setProfileUser(me);
-      setShowProfile(true);
-    } catch (e) {
-      Swal.fire({ icon: "error", title: "Profile", text: e.message || "Unable to load profile" });
-    }
-  };
-
   // Employees search + pagination
   const filteredUsers = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     if (!q) return users;
     return users.filter((u) =>
-      [u.employeeid, u.name, u.email, u.role, u.company, u.number]
-        .some((v) => String(v || "").toLowerCase().includes(q))
+      [u.employeeid, u.name, u.email, u.role, u.company, u.number].some((v) =>
+        String(v || "").toLowerCase().includes(q)
+      )
     );
   }, [users, searchQuery]);
 
@@ -410,8 +376,13 @@ export default function Hrdashboard() {
         <AppHeader
           currentPath={router.pathname}
           hrName={hrName}
-          onProfileClick={openProfile}
           onLogout={logout}
+          // profile is handled inside AppHeader now:
+          onProfileSaved={(updated) => {
+            if (updated?.name) setHrName(updated.name);
+            // optional: refresh users if needed
+            // loadUsers();
+          }}
         />
 
         {/* Page content */}
@@ -467,9 +438,7 @@ export default function Hrdashboard() {
                       Existing records found for this date: {existingCount}
                     </div>
                   ) : (
-                    <div className="mt-1 text-xs text-gray-500">
-                      No existing records for this date yet.
-                    </div>
+                    <div className="mt-1 text-xs text-gray-500">No existing records for this date yet.</div>
                   )}
                 </div>
 
@@ -580,8 +549,8 @@ export default function Hrdashboard() {
                     <th className="px-3 py-2 border-b">DOJ</th>
                     <th className="px-3 py-2 border-b">Phone</th>
                     <th className="px-3 py-2 border-b">Company</th>
-               <th className="px-3 py-2 border-b">Reporting To</th>
-    <th className="px-3 py-2 border-b">Designation</th>
+                    <th className="px-3 py-2 border-b">Reporting To</th>
+                    <th className="px-3 py-2 border-b">Designation</th>
                     <th className="px-3 py-2 border-b">Address</th>
                     <th className="px-3 py-2 border-b text-right">Actions</th>
                   </tr>
@@ -596,23 +565,15 @@ export default function Hrdashboard() {
                     </tr>
                   ) : usersError ? (
                     <tr>
-                      <td colSpan={11} className="px-3 py-6 text-center text-red-600">
-                        {usersError}
-                      </td>
+                      <td colSpan={11} className="px-3 py-6 text-center text-red-600">{usersError}</td>
                     </tr>
                   ) : filteredUsers.length === 0 ? (
                     <tr>
                       <td colSpan={11} className="px-3 py-6 text-center text-gray-500">
                         {users.length === 0 ? (
-                          <>
-                            No employees found. Click{" "}
-                            <span className="font-medium">Onboard Employee</span> to add one.
-                          </>
+                          <>No employees found. Click <span className="font-medium">Onboard Employee</span> to add one.</>
                         ) : (
-                          <>
-                            No matches for{" "}
-                            <span className="font-semibold">“{searchQuery}”</span>.
-                          </>
+                          <>No matches for <span className="font-semibold">“{searchQuery}”</span>.</>
                         )}
                       </td>
                     </tr>
@@ -679,9 +640,7 @@ export default function Hrdashboard() {
                   <button
                     key={p}
                     className={`px-3 py-2 text-sm rounded-lg border ${
-                      p === page
-                        ? "border-gray-900 bg-gray-900 text-white"
-                        : "border-gray-300 bg-white hover:bg-gray-50"
+                      p === page ? "border-gray-900 bg-gray-900 text-white" : "border-gray-300 bg-white hover:bg-gray-50"
                     }`}
                     onClick={() => setPage(p)}
                   >
@@ -751,24 +710,6 @@ export default function Hrdashboard() {
                 text: `Attendance for ${toHumanMonth(reportMonth)} sent to Finance.`,
                 confirmButtonColor: "#C1272D",
               });
-            }}
-          />
-        ) : null}
-
-        {showProfile && profileUser ? (
-          <ProfileModal
-            user={profileUser}
-            onClose={() => setShowProfile(false)}
-            onSaved={(updated) => {
-              setShowProfile(false);
-              if (updated?.name) setHrName(updated.name);
-              Swal.fire({
-                icon: "success",
-                title: "Profile updated",
-                text: "Your changes have been saved.",
-                confirmButtonColor: "#C1272D",
-              });
-              loadUsers();
             }}
           />
         ) : null}
@@ -886,11 +827,7 @@ function PreviewDailyModal({ date, rows, onClose, onSaved }) {
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-end md:items-center justify-center"
-      aria-modal="true"
-      role="dialog"
-    >
+    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center" aria-modal="true" role="dialog">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} aria-hidden="true" />
       <div className="relative w-full md:max-w-7xl w-[96vw] bg-white border border-gray-200 rounded-t-2xl md:rounded-2xl shadow-xl m-0 md:m-4 max-h-[88vh] flex flex-col">
         {/* Header */}
@@ -948,9 +885,7 @@ function PreviewDailyModal({ date, rows, onClose, onSaved }) {
                                 value={r[h.key] ?? ""}
                                 onChange={(e) => setCell(i, h.key, e.target.value)}
                                 className="w-full rounded border border-gray-300 px-2 py-1"
-                                placeholder={
-                                  h.key === "intime" || h.key === "outtime" ? "HH:MM or HH:MM:SS" : ""
-                                }
+                                placeholder={h.key === "intime" || h.key === "outtime" ? "HH:MM or HH:MM:SS" : ""}
                               />
                             )}
                           </td>
@@ -988,7 +923,7 @@ function PreviewDailyModal({ date, rows, onClose, onSaved }) {
 }
 
 /* ===========================
-   Create / Edit / Profile
+   Create / Edit
    =========================== */
 function CreateEmployeeModal({ onClose, onCreated }) {
   const [employeeId, setEmployeeId] = useState("");
@@ -1040,9 +975,9 @@ function CreateEmployeeModal({ onClose, onCreated }) {
         email,
         role,
         doj,
-        number: phone,                       // API accepts phone or number
+        number: phone, // API accepts phone or number
         company,
-        grosssalary: String(gross).trim(),   // DB/API key
+        grosssalary: String(gross).trim(), // DB/API key
         adhaarnumber: String(aadhaar).replace(/\D/g, ""),
         pancard: String(pan).toUpperCase(),
         address,
@@ -1068,11 +1003,7 @@ function CreateEmployeeModal({ onClose, onCreated }) {
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-end md:items-center justify-center"
-      aria-modal="true"
-      role="dialog"
-    >
+    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center" aria-modal="true" role="dialog">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} aria-hidden="true" />
       <div className="relative w-full md:max-w-3xl bg-white border border-gray-200 rounded-t-2xl md:rounded-2xl shadow-xl p-6 m-0 md:m-4">
         <div className="flex items-center justify-between mb-4">
@@ -1106,11 +1037,7 @@ function CreateEmployeeModal({ onClose, onCreated }) {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700">Role</label>
-              <select
-                value={role}
-                onChange={(e) => setRole(e.target.value)}
-                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
-              >
+              <select value={role} onChange={(e) => setRole(e.target.value)} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2">
                 {ROLES.map((r) => (
                   <option key={r} value={r}>
                     {r}
@@ -1155,11 +1082,7 @@ function CreateEmployeeModal({ onClose, onCreated }) {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             <div>
               <label className="block text-sm font-medium text-gray-700">Company</label>
-              <select
-                value={company}
-                onChange={(e) => setCompany(e.target.value)}
-                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
-              >
+              <select value={company} onChange={(e) => setCompany(e.target.value)} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2">
                 <option value="" disabled>
                   Select company…
                 </option>
@@ -1318,7 +1241,7 @@ function EditEmployeeModal({ employee, onClose, onUpdated }) {
         email,
         role,
         doj,
-        number: phone,                        // API accepts phone or number
+        number: phone, // API accepts phone or number
         company,
         adhaarnumber: String(aadhaar).replace(/\D/g, ""),
         pancard: String(pan).toUpperCase(),
@@ -1345,11 +1268,7 @@ function EditEmployeeModal({ employee, onClose, onUpdated }) {
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-end md:items-center justify-center"
-      aria-modal="true"
-      role="dialog"
-    >
+    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center" aria-modal="true" role="dialog">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} aria-hidden="true" />
       {/* WIDER MODAL */}
       <div className="relative w-full md:max-w-6xl lg:max-w-7xl w-[96vw] bg-white border border-gray-200 rounded-t-2xl md:rounded-2xl shadow-xl p-6 m-0 md:m-4">
@@ -1373,11 +1292,7 @@ function EditEmployeeModal({ employee, onClose, onUpdated }) {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700">Role</label>
-              <select
-                value={role}
-                onChange={(e) => setRole(e.target.value)}
-                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
-              >
+              <select value={role} onChange={(e) => setRole(e.target.value)} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2">
                 {ROLES.map((r) => (
                   <option key={r} value={r}>
                     {r}
@@ -1419,11 +1334,7 @@ function EditEmployeeModal({ employee, onClose, onUpdated }) {
 
             <div>
               <label className="block text-sm font-medium text-gray-700">Company</label>
-              <select
-                value={company}
-                onChange={(e) => setCompany(e.target.value)}
-                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
-              >
+              <select value={company} onChange={(e) => setCompany(e.target.value)} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2">
                 <option value="" disabled>
                   Select company…
                 </option>
@@ -1582,17 +1493,11 @@ function ReportModal({ month, onClose, onSubmitted }) {
   })();
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-end md:items-center justify-center"
-      aria-modal="true"
-      role="dialog"
-    >
+    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center" aria-modal="true" role="dialog">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} aria-hidden="true" />
       <div className="relative w-full md:max-w-5xl bg-white border border-gray-200 rounded-t-2xl md:rounded-2xl shadow-xl p-6 m-0 md:m-4">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-lg font-semibold text-gray-900">
-            Monthly Attendance • {toHumanMonth(month)}
-          </h3>
+          <h3 className="text-lg font-semibold text-gray-900">Monthly Attendance • {toHumanMonth(month)}</h3>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-700" aria-label="Close" title="Close">
             ✕
           </button>
@@ -1650,211 +1555,6 @@ function ReportModal({ month, onClose, onSubmitted }) {
             Submit to Finance
           </button>
         </div>
-      </div>
-    </div>
-  );
-}
-
-function ProfileModal({ user, onClose, onSaved }) {
-  const [name, setName] = useState(user?.name || "");
-  const [email, setEmail] = useState(user?.email || "");
-  const [role, setRole] = useState(user?.role || "HR");
-  const [doj, setDoj] = useState(user?.doj || "");
-  const [phone, setPhone] = useState(user?.number || "");
-  const [company, setCompany] = useState(user?.company || "");
-  const [aadhaar, setAadhaar] = useState(user?.adhaarnumber || "");
-  const [pan, setPan] = useState(user?.pancard || "");
-  const [address, setAddress] = useState(user?.address || "");
-  const [submitting, setSubmitting] = useState(false);
-
-  const validate = () => {
-    if (!name.trim()) return "Full name is required.";
-    if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return "Valid email is required.";
-    if (!role) return "Role is required.";
-    if (!company.trim()) return "Company is required.";
-    const aadhaarDigits = String(aadhaar || "").replace(/\D/g, "");
-    if (aadhaarDigits && aadhaarDigits.length !== 12) return "Aadhaar must be exactly 12 digits.";
-    const panNorm = String(pan || "").toUpperCase();
-    if (panNorm && !/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(panNorm)) return "PAN format is invalid (e.g., ABCDE1234F).";
-    return null;
-  };
-
-  const onSubmit = async (e) => {
-    e.preventDefault();
-    const err = validate();
-    if (err) {
-      Swal.fire({ icon: "error", title: "Validation error", text: err });
-      return;
-    }
-    try {
-      setSubmitting(true);
-      const body = {
-        employeeid: user.employeeid,
-        name,
-        email,
-        role,
-        doj,
-        number: phone,
-        company,
-        adhaarnumber: String(aadhaar).replace(/\D/g, ""),
-        pancard: String(pan).toUpperCase(),
-        address,
-      };
-      const res = await fetch("/api/users", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json?.error || "Failed to update profile");
-      onSaved?.(json?.data || body);
-    } catch (e) {
-      Swal.fire({ icon: "error", title: "Update failed", text: e.message || "Something went wrong" });
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-end md:items-center justify-center"
-      aria-modal="true"
-      role="dialog"
-    >
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} aria-hidden="true" />
-      <div className="relative w-full md:max-w-3xl bg-white border border-gray-200 rounded-t-2xl md:rounded-2xl shadow-xl p-6 m-0 md:m-4">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-gray-900">My Profile</h3>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-700" aria-label="Close" title="Close">
-            ✕
-          </button>
-        </div>
-
-        <form onSubmit={onSubmit} className="grid grid-cols-1 gap-5">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Employee ID</label>
-              <input
-                type="text"
-                value={user?.employeeid ?? ""}
-                readOnly
-                disabled
-                className="mt-1 block w-full rounded-lg border border-gray-300 bg-gray-100 px-3 py-2 text-gray-700"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Full name</label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Role</label>
-              <select value={role} onChange={(e) => setRole(e.target.value)} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2">
-                {ROLES.map((r) => (
-                  <option key={r} value={r}>
-                    {r}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Email</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Date of Joining</label>
-              <input
-                type="date"
-                value={doj || ""}
-                onChange={(e) => setDoj(e.target.value)}
-                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Phone</label>
-              <input
-                type="tel"
-                value={phone || ""}
-                onChange={(e) => setPhone(e.target.value)}
-                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
-                placeholder="+91 98765 43210"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Company</label>
-              <input
-                type="text"
-                value={company}
-                onChange={(e) => setCompany(e.target.value)}
-                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
-                placeholder="ASF-Factory"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Aadhaar (12 digits)</label>
-              <input
-                type="text"
-                value={aadhaar || ""}
-                onChange={(e) => setAadhaar(e.target.value.replace(/\D/g, "").slice(0, 12))}
-                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
-                placeholder="000000000000"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">PAN</label>
-              <input
-                type="text"
-                value={pan || ""}
-                onChange={(e) => setPan(e.target.value.toUpperCase().slice(0, 10))}
-                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
-                placeholder="ABCDE1234F"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Address</label>
-            <textarea
-              rows={2}
-              value={address || ""}
-              onChange={(e) => setAddress(e.target.value)}
-              className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
-              placeholder="Flat / Street / City / State / PIN"
-            />
-          </div>
-
-          <div className="pt-2 flex items-center justify-end gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={submitting}
-              className="inline-flex items-center justify-center rounded-lg bg-[#C1272D] text-white font-medium px-4 py-2 hover:bg-[#a02125]"
-            >
-              {submitting ? "Saving…" : "Save Changes"}
-            </button>
-          </div>
-        </form>
       </div>
     </div>
   );
