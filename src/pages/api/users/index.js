@@ -1,6 +1,7 @@
 // /src/pages/api/users.js
 import pool from "@/lib/db";
 
+/** Map API field -> DB column (keep exact DB case for quoted identifiers) */
 const COLMAP = {
   employeeid: "employeeid",
   name: "name",
@@ -15,13 +16,22 @@ const COLMAP = {
   address: "address",
   designation: "designation",
   reporting_to_id: "reporting_to_id",
+  // Optional numeric column in your schema:
+  leaves_cf: "Leaves_cf", // <- DB column is "Leaves_cf" (quoted, case-sensitive)
 };
+
+/** Which DB columns are NUMERIC (so "" must become NULL, and values coerced) */
+const NUMERIC_COLS = new Set([
+  "adhaarnumber",
+  "Leaves_cf",
+]);
 
 function selectList(existingDbCols) {
   const cols = [];
   for (const apiName of Object.keys(COLMAP)) {
     const dbName = COLMAP[apiName];
-    if (existingDbCols.has(dbName)) cols.push(`"${dbName}" AS "${apiName}"`);
+    // existingDbCols contains lowercase names; dbName may have case
+    if (existingDbCols.has(dbName.toLowerCase())) cols.push(`"${dbName}" AS "${apiName}"`);
   }
   return cols;
 }
@@ -38,6 +48,46 @@ async function getExistingDbColumns() {
 function asInt(v, def) {
   const n = Number(v);
   return Number.isFinite(n) && n >= 0 ? Math.floor(n) : def;
+}
+
+/** Keep only date portion YYYY-MM-DD */
+function justDate(v) {
+  const s = String(v ?? "");
+  if (!s) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const first = s.split("T")[0].split(" ")[0];
+  return /^\d{4}-\d{2}-\d{2}$/.test(first) ? first : s;
+}
+
+/** Sanitize value per DB column (avoid "" into numeric; strip time from dates; etc.) */
+function sanitizeForDb(dbCol, val) {
+  if (val === undefined) return undefined;          // skip entirely
+  if (val === "") return null;                      // empty string -> NULL for all nullable cols
+
+  // Normalize date-only for 'doj' (VARCHAR in your schema)
+  if (dbCol.toLowerCase() === "doj") {
+    const d = justDate(val);
+    return d || null;
+  }
+
+  // Numeric columns: accept number, numeric-like text, or null
+  if (NUMERIC_COLS.has(dbCol)) {
+    if (val === null) return null;
+    const s = String(val).trim();
+    if (s === "") return null;
+    // keep digits (and optional minus/decimal if you ever need)
+    const cleaned = s.replace(/[^0-9.-]/g, "");
+    if (cleaned === "" || isNaN(Number(cleaned))) return null;
+    // Return as number so Postgres numeric receives a proper numeric param
+    return Number(cleaned);
+  }
+
+  // Text-ish: trim but allow null
+  if (typeof val === "string") {
+    const t = val.trim();
+    return t === "" ? null : t;
+  }
+  return val;
 }
 
 export default async function handler(req, res) {
@@ -66,9 +116,9 @@ export default async function handler(req, res) {
         const ors = [];
         const params = [];
 
-        if (existingDbCols.has(COLMAP.employeeid)) { params.push(like); ors.push(`LOWER("${COLMAP.employeeid}") LIKE $${params.length}`); }
-        if (existingDbCols.has(COLMAP.name))       { params.push(like); ors.push(`LOWER("${COLMAP.name}") LIKE $${params.length}`); }
-        if (existingDbCols.has(COLMAP.email))      { params.push(like); ors.push(`LOWER("${COLMAP.email}") LIKE $${params.length}`); }
+        if (existingDbCols.has(COLMAP.employeeid.toLowerCase())) { params.push(like); ors.push(`LOWER("${COLMAP.employeeid}") LIKE $${params.length}`); }
+        if (existingDbCols.has(COLMAP.name.toLowerCase()))       { params.push(like); ors.push(`LOWER("${COLMAP.name}") LIKE $${params.length}`); }
+        if (existingDbCols.has(COLMAP.email.toLowerCase()))      { params.push(like); ors.push(`LOWER("${COLMAP.email}") LIKE $${params.length}`); }
 
         if (!ors.length) return res.status(200).json({ data: [] });
 
@@ -125,7 +175,8 @@ export default async function handler(req, res) {
       const {
         employeeid, name, email, role, doj, company,
         adhaarnumber, pancard, address, password,
-        designation, reporting_to_id, grosssalary, number
+        designation, reporting_to_id, grosssalary, number,
+        leaves_cf, // optional
       } = body;
 
       if (!employeeid || !name || !email || !company) {
@@ -137,12 +188,12 @@ export default async function handler(req, res) {
       const values = [];
       let idx = 1;
 
-      for (const [api, val] of [
+      const pairs = [
         ["employeeid", String(employeeid).trim()],
         ["name", name],
         ["email", email],
-        ["doj", doj || null],
-        ["number", number || null],
+        ["doj", doj ?? null],
+        ["number", number ?? null],
         ["company", company],
         ["role", role],
         ["grosssalary", grosssalary],
@@ -151,14 +202,18 @@ export default async function handler(req, res) {
         ["address", address],
         ["designation", designation],
         ["reporting_to_id", reporting_to_id],
-        ["password", password]
-      ]) {
-        const db = COLMAP[api] || api;
-        if (val !== undefined && existingDbCols.has(db)) {
-          fields.push(`"${db}"`);
-          placeholders.push(`$${idx++}`);
-          values.push(val);
-        }
+        ["leaves_cf", leaves_cf],       // optional numeric
+        ["password", password],         // not in COLMAP => will be skipped by has() check below
+      ];
+
+      for (const [api, rawVal] of pairs) {
+        const db = COLMAP[api] || api; // keep exact DB case for quoted name
+        if (!existingDbCols.has(db.toLowerCase())) continue;
+        const val = sanitizeForDb(db, rawVal);
+        if (val === undefined) continue; // do not include
+        fields.push(`"${db}"`);
+        placeholders.push(`$${idx++}`);
+        values.push(val);
       }
 
       const returning = selectList(existingDbCols).join(", ");
@@ -187,12 +242,16 @@ export default async function handler(req, res) {
       const values = [];
       let idx = 1;
 
-      for (const [api, val] of Object.entries(body)) {
+      for (const [api, rawVal] of Object.entries(body)) {
         const db = COLMAP[api];
-        if (db && existingDbCols.has(db)) {
-          fields.push(`"${db}" = $${idx++}`);
-          values.push(val);
-        }
+        if (!db) continue;
+        if (!existingDbCols.has(db.toLowerCase())) continue;
+        if (db === "employeeid") continue; // don't update PK
+
+        const val = sanitizeForDb(db, rawVal);
+        if (val === undefined) continue; // skip if not present at all
+        fields.push(`"${db}" = $${idx++}`);
+        values.push(val);
       }
 
       if (!fields.length) return res.status(400).json({ error: "No fields to update" });

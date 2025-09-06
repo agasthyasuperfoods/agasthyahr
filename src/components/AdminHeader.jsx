@@ -40,6 +40,7 @@ export default function AdminHeader({
     { href: "/Admin", label: "Home" },
     { href: "/Payrollsuperfoods", label: "Payroll" },
     { href: "/Reports", label: "Reports" },
+    { href: "/OrganizationChartPage", label: "Organization Chart" },
   ];
 
   const isActive = (href) => currentPath && currentPath.startsWith(href.replace(/#.*$/, ""));

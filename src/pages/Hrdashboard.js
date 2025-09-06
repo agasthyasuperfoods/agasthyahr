@@ -1,8 +1,10 @@
+// src/pages/Hrdashboard.js
 import { useEffect, useMemo, useState } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
 import Swal from "sweetalert2";
 import AppHeader from "../components/AppHeader";
+import { Pencil, Trash2 } from "lucide-react";
 
 const ROLES = ["ADMIN", "HR", "FINANCE", "EMPLOYEE"];
 const COMPANY_OPTIONS = ["ASF", "AGB", "ASF-FACTORY", "ANM", "AVION", "SRI CHAKRA"];
@@ -24,6 +26,11 @@ function toHumanDateDdMmYyyy(yyyyMmDd) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(yyyyMmDd || "")) return "-";
   const [y, m, d] = yyyyMmDd.split("-");
   return `${d}/${m}/${y}`;
+}
+function prevMonthYYYYMM() {
+  const d = new Date();
+  const p = new Date(d.getFullYear(), d.getMonth() - 1, 1);
+  return `${p.getFullYear()}-${String(p.getMonth() + 1).padStart(2, "0")}`;
 }
 
 // normalize: strip spaces + non-alnum + uppercase
@@ -70,12 +77,8 @@ export default function Hrdashboard() {
   const [showEdit, setShowEdit] = useState(false);
   const [editEmployee, setEditEmployee] = useState(null);
 
-  const [showReport, setShowReport] = useState(false);
-  const [reportMonth, setReportMonth] = useState(() => {
-    const d = new Date();
-    const m = String(d.getMonth() + 1).padStart(2, "0");
-    return `${d.getFullYear()}-${m}`;
-  });
+  // DEFAULT TO PREVIOUS MONTH
+  const [reportMonth, setReportMonth] = useState(() => prevMonthYYYYMM());
 
   const [users, setUsers] = useState([]);
   const [usersLoading, setUsersLoading] = useState(true);
@@ -110,12 +113,19 @@ export default function Hrdashboard() {
     return { idToName: n, idToCompany: c };
   }, [users]);
 
-  // Load HR name (fetch-first)
+  // Helper: resolve manager name from reporting_to_id
+  const resolveManagerName = (rawId) => {
+    if (!rawId) return "";
+    for (const k of idVariants(rawId)) {
+      if (idToName[k]) return idToName[k];
+    }
+    return "";
+  };
+
+  // Load HR name
   useEffect(() => {
     if (!ready) return;
-
     let cancelled = false;
-
     (async () => {
       try {
         const { id, email } = getAuthIdentity();
@@ -123,29 +133,22 @@ export default function Hrdashboard() {
           setHrName("HR");
           return;
         }
-
         let me = null;
-
-        // Prefer lookup by ID
         if (id) {
           const r = await fetch(`/api/users?id=${encodeURIComponent(id)}`);
           const j = await r.json().catch(() => ({}));
           if (r.ok && Array.isArray(j?.data) && j.data.length) me = j.data[0];
         }
-
-        // Fallback to email
         if (!me && email) {
           const r = await fetch(`/api/users?email=${encodeURIComponent(email)}`);
           const j = await r.json().catch(() => ({}));
           if (r.ok && Array.isArray(j?.data) && j.data.length) me = j.data[0];
         }
-
         if (!cancelled) setHrName(me?.name || "HR");
       } catch {
         if (!cancelled) setHrName("HR");
       }
     })();
-
     return () => {
       cancelled = true;
     };
@@ -377,18 +380,15 @@ export default function Hrdashboard() {
           currentPath={router.pathname}
           hrName={hrName}
           onLogout={logout}
-          // profile is handled inside AppHeader now:
           onProfileSaved={(updated) => {
             if (updated?.name) setHrName(updated.name);
-            // optional: refresh users if needed
-            // loadUsers();
           }}
         />
 
         {/* Page content */}
-        <div className="p-4 md:p-6 space-y-8">
+        <div className="  space-y-8">
           {/* Intro */}
-          <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-6">
+          <div className="bg-white border border-gray-200 shadow-sm p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-2">{`Welcome, ${hrName || "HR"}`}</h2>
             <p className="text-sm text-gray-600">
               Manage employees and attendance. Generate monthly sheets for Finance.
@@ -472,7 +472,7 @@ export default function Hrdashboard() {
                 </button>
               </div>
 
-              {/* Monthly Review */}
+              {/* Monthly Review (navigate to separate page) */}
               <div className="rounded-xl border border-gray-200 p-4">
                 <h4 className="text-sm font-semibold text-gray-900 mb-3">Monthly Review</h4>
                 <div className="flex items-center gap-3">
@@ -486,7 +486,7 @@ export default function Hrdashboard() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => setShowReport(true)}
+                  onClick={() => router.push(`/AttendanceSummary?company=ASF&month=${reportMonth}`)}
                   className="mt-3 inline-flex items-center rounded-lg bg-gray-800 px-3 py-2 text-sm font-medium text-white hover:bg-gray-700"
                 >
                   View & Submit
@@ -496,7 +496,7 @@ export default function Hrdashboard() {
           </section>
 
           {/* Employees table */}
-          <section className="bg-white border border-gray-200 rounded-2xl shadow-sm p-6">
+          <section className="bg-white border border-gray-200  shadow-sm p-3  ">
             <div className="mb-4">
               <h3 className="text-base font-semibold text-gray-900">Employees</h3>
               <p className="text-xs text-gray-500">Create / edit / remove from EmployeeTable</p>
@@ -538,131 +538,152 @@ export default function Hrdashboard() {
               </div>
             </div>
 
-            <div className="overflow-x-auto border border-gray-200 rounded-xl">
-              <table className="min-w-[1100px] w-full text-sm">
-                <thead className="bg-gray-50">
-                  <tr className="text-left text-gray-600">
-                    <th className="px-3 py-2 border-b">Employee ID</th>
-                    <th className="px-3 py-2 border-b">Full name</th>
-                    <th className="px-3 py-2 border-b">Email</th>
-                    <th className="px-3 py-2 border-b">Role</th>
-                    <th className="px-3 py-2 border-b">DOJ</th>
-                    <th className="px-3 py-2 border-b">Phone</th>
-                    <th className="px-3 py-2 border-b">Company</th>
-                    <th className="px-3 py-2 border-b">Reporting To</th>
-                    <th className="px-3 py-2 border-b">Designation</th>
-                    <th className="px-3 py-2 border-b">Address</th>
-                    <th className="px-3 py-2 border-b text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {usersLoading ? (
-                    <tr>
-                      <td colSpan={11} className="px-3 py-6 text-center text-gray-500">
-                        <span className="inline-block h-5 w-5 mr-2 animate-spin rounded-full border-2 border-gray-300 border-t-transparent" />
-                        Loading employees…
-                      </td>
-                    </tr>
-                  ) : usersError ? (
-                    <tr>
-                      <td colSpan={11} className="px-3 py-6 text-center text-red-600">{usersError}</td>
-                    </tr>
-                  ) : filteredUsers.length === 0 ? (
-                    <tr>
-                      <td colSpan={11} className="px-3 py-6 text-center text-gray-500">
-                        {users.length === 0 ? (
-                          <>No employees found. Click <span className="font-medium">Onboard Employee</span> to add one.</>
-                        ) : (
-                          <>No matches for <span className="font-semibold">“{searchQuery}”</span>.</>
-                        )}
-                      </td>
-                    </tr>
-                  ) : (
-                    pagedUsers.map((u, i) => (
-                      <tr key={u.employeeid || i} className="odd:bg-white even:bg-gray-50 align-top">
-                        <td className="px-3 py-2 border-t">{u.employeeid ?? "-"}</td>
-                        <td className="px-3 py-2 border-t">{u.name || "-"}</td>
-                        <td className="px-3 py-2 border-t">{u.email || "-"}</td>
-                        <td className="px-3 py-2 border-t">
-                          <span className="rounded bg-gray-100 px-2 py-0.5">{u.role || "-"}</span>
-                        </td>
-                        <td className="px-3 py-2 border-t">{u.doj || "-"}</td>
-                        <td className="px-3 py-2 border-t">{u.number || "-"}</td>
-                        <td className="px-3 py-2 border-t">{u.company || "-"}</td>
-                        <td className="px-3 py-2 border-t">{u.reporting_to_id || "-"}</td>
-                        <td className="px-3 py-2 border-t">{u.designation || "-"}</td>
-                        <td className="px-3 py-2 border-t">{u.address || "-"}</td>
-                        <td className="px-3 py-2 border-t text-right">
-                          <div className="inline-flex items-center gap-2">
-                            <button
-                              onClick={() => {
-                                setEditEmployee(u);
-                                setShowEdit(true);
-                              }}
-                              className="inline-flex items-center px-2.5 py-1.5 rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
-                              title="Edit employee"
-                            >
-                              Update
-                            </button>
-                            <button
-                              onClick={() => onDelete(u.employeeid)}
-                              className="inline-flex items-center px-2.5 py-1.5 rounded-md bg-red-600 text-white hover:bg-red-700"
-                              title="Delete employee"
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
+            {/* Scrollable table with sticky header + sticky bottom pagination */}
+           {/* Scrollable table with sticky header; footer outside scroll */}
+<div className="overflow-x-auto border border-gray-200 rounded-xl bg-white">
+  {/* Scroll area */}
+  <div className="relative max-h-[80vh] overflow-auto">
+    <table className="min-w-[1100px] w-full text-sm">
+      <thead className="bg-gray-50 sticky top-0 z-10">
+        <tr className="text-left text-gray-600">
+          <th className="px-3 py-2 border-b">Employee ID</th>
+          <th className="px-3 py-2 border-b">Full name</th>
+          <th className="px-3 py-2 border-b">Email</th>
+          <th className="px-3 py-2 border-b">Role</th>
+          <th className="px-3 py-2 border-b">DOJ</th>
+          <th className="px-3 py-2 border-b">Phone</th>
+          <th className="px-3 py-2 border-b">Company</th>
+          <th className="px-3 py-2 border-b">Reporting To</th>
+          <th className="px-3 py-2 border-b">Designation</th>
+          <th className="px-3 py-2 border-b">Address</th>
+          <th className="px-3 py-2 border-b text-right">Actions</th>
+        </tr>
+      </thead>
 
-            {/* Pagination footer */}
-            <div className="mt-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <div className="text-sm text-gray-600">
-                Showing <span className="font-medium">{rangeStart}</span>–<span className="font-medium">{rangeEnd}</span> of{" "}
-                <span className="font-medium">{total}</span>
-              </div>
+      <tbody>
+        {usersLoading ? (
+          <tr>
+            <td colSpan={11} className="px-3 py-6 text-center text-gray-500">
+              <span className="inline-block h-5 w-5 mr-2 animate-spin rounded-full border-2 border-gray-300 border-t-transparent" />
+              Loading employees…
+            </td>
+          </tr>
+        ) : usersError ? (
+          <tr>
+            <td colSpan={11} className="px-3 py-6 text-center text-red-600">{usersError}</td>
+          </tr>
+        ) : filteredUsers.length === 0 ? (
+          <tr>
+            <td colSpan={11} className="px-3 py-6 text-center text-gray-500">
+              {users.length === 0 ? (
+                <>No employees found. Click <span className="font-medium">Onboard Employee</span> to add one.</>
+              ) : (
+                <>No matches for <span className="font-semibold">“{searchQuery}”</span>.</>
+              )}
+            </td>
+          </tr>
+        ) : (
+          pagedUsers.map((u, i) => (
+            <tr key={u.employeeid || i} className="odd:bg-white even:bg-gray-50 align-top">
+              <td className="px-3 py-2 border-t">{u.employeeid ?? "-"}</td>
+              <td className="px-3 py-2 border-t">{u.name || "-"}</td>
+              <td className="px-3 py-2 border-t">{u.email || "-"}</td>
+              <td className="px-3 py-2 border-t">
+                <span className="rounded bg-gray-100 px-2 py-0.5">{u.role || "-"}</span>
+              </td>
+              <td className="px-3 py-2 border-t">{u.doj || "-"}</td>
+              <td className="px-3 py-2 border-t">{u.number || "-"}</td>
+              <td className="px-3 py-2 border-t">{u.company || "-"}</td>
 
-              <div className="flex items-center gap-1">
-                <button
-                  className="px-3 py-2 text-sm rounded-lg border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-50"
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page <= 1}
-                >
-                  Prev
-                </button>
+              {/* Reporting To: show NAME first (big), ID below (small) */}
+              <td className="px-3 py-2 border-t whitespace-nowrap">
+                <div className="text-gray-900">{resolveManagerName(u.reporting_to_id) || "—"}</div>
+                <div className="text-[11px] text-gray-500">{u.reporting_to_id || "-"}</div>
+              </td>
 
-                {pageNumbers.map((p) => (
+              <td className="px-3 py-2 border-t">{u.designation || "-"}</td>
+              <td className="px-3 py-2 border-t">{u.address || "-"}</td>
+              <td className="px-3 py-2 border-t text-right">
+                <div className="inline-flex items-center gap-1.5">
                   <button
-                    key={p}
-                    className={`px-3 py-2 text-sm rounded-lg border ${
-                      p === page ? "border-gray-900 bg-gray-900 text-white" : "border-gray-300 bg-white hover:bg-gray-50"
-                    }`}
-                    onClick={() => setPage(p)}
+                    onClick={() => {
+                      setEditEmployee(u);
+                      setShowEdit(true);
+                    }}
+                    className="p-2 rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+                    title="Edit employee"
+                    aria-label="Edit employee"
                   >
-                    {p}
+                    <Pencil className="h-4 w-4" />
+                    <span className="sr-only">Edit</span>
                   </button>
-                ))}
 
-                <button
-                  className="px-3 py-2 text-sm rounded-lg border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-50"
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={page >= totalPages}
-                >
-                  Next
-                </button>
-              </div>
-            </div>
+                  <button
+                    onClick={() => onDelete(u.employeeid)}
+                    className="p-2 rounded-md border border-red-200 bg-red-50 text-red-600 hover:bg-red-100"
+                    title="Delete employee"
+                    aria-label="Delete employee"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    <span className="sr-only">Delete</span>
+                  </button>
+                </div>
+              </td>
+            </tr>
+          ))
+        )}
+      </tbody>
+    </table>
+  </div>
+
+  {/* Footer (fixed at the bottom of the table card, outside scroll) */}
+  <div className="border-t bg-white px-3 py-2">
+    <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+      <div className="text-sm text-gray-600">
+        Showing <span className="font-medium">{rangeStart}</span>–<span className="font-medium">{rangeEnd}</span> of{" "}
+        <span className="font-medium">{total}</span>
+      </div>
+
+      <div className="flex items-center gap-1">
+        <button
+          className="px-3 py-2 text-sm rounded-lg border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-50"
+          onClick={() => setPage((p) => Math.max(1, p - 1))}
+          disabled={page <= 1}
+        >
+          Prev
+        </button>
+
+        {pageNumbers.map((p) => (
+          <button
+            key={p}
+            className={`px-3 py-2 text-sm rounded-lg border ${
+              p === page ? "border-gray-900 bg-gray-900 text-white" : "border-gray-300 bg-white hover:bg-gray-50"
+            }`}
+            onClick={() => setPage(p)}
+          >
+            {p}
+          </button>
+        ))}
+
+        <button
+          className="px-3 py-2 text-sm rounded-lg border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-50"
+          onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+          disabled={page >= totalPages}
+        >
+          Next
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
           </section>
         </div>
 
         {/* Modals */}
         {showCreate ? (
           <CreateEmployeeModal
+            idToName={idToName}
             onClose={() => setShowCreate(false)}
             onCreated={() => {
               setShowCreate(false);
@@ -679,6 +700,7 @@ export default function Hrdashboard() {
 
         {showEdit && editEmployee ? (
           <EditEmployeeModal
+            idToName={idToName}
             employee={editEmployee}
             onClose={() => {
               setShowEdit(false);
@@ -694,22 +716,6 @@ export default function Hrdashboard() {
                 confirmButtonColor: "#C1272D",
               });
               loadUsers();
-            }}
-          />
-        ) : null}
-
-        {showReport ? (
-          <ReportModal
-            month={reportMonth}
-            onClose={() => setShowReport(false)}
-            onSubmitted={() => {
-              setShowReport(false);
-              Swal.fire({
-                icon: "success",
-                title: "Submitted",
-                text: `Attendance for ${toHumanMonth(reportMonth)} sent to Finance.`,
-                confirmButtonColor: "#C1272D",
-              });
             }}
           />
         ) : null}
@@ -925,7 +931,7 @@ function PreviewDailyModal({ date, rows, onClose, onSaved }) {
 /* ===========================
    Create / Edit
    =========================== */
-function CreateEmployeeModal({ onClose, onCreated }) {
+function CreateEmployeeModal({ idToName, onClose, onCreated }) {
   const [employeeId, setEmployeeId] = useState("");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -943,6 +949,13 @@ function CreateEmployeeModal({ onClose, onCreated }) {
   // Conditional password for HR/FINANCE
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  const managerName = useMemo(() => {
+    for (const k of idVariants(reportingToId)) {
+      if (idToName?.[k]) return idToName[k];
+    }
+    return "";
+  }, [reportingToId, idToName]);
 
   const validate = () => {
     if (!employeeId) return "Employee ID is required.";
@@ -975,13 +988,12 @@ function CreateEmployeeModal({ onClose, onCreated }) {
         email,
         role,
         doj,
-        number: phone, // API accepts phone or number
+        number: phone,
         company,
-        grosssalary: String(gross).trim(), // DB/API key
+        grosssalary: String(gross).trim(),
         adhaarnumber: String(aadhaar).replace(/\D/g, ""),
         pancard: String(pan).toUpperCase(),
         address,
-        // NEW
         designation: String(designation).trim() || null,
         reporting_to_id: String(reportingToId).trim() || null,
       };
@@ -1005,7 +1017,7 @@ function CreateEmployeeModal({ onClose, onCreated }) {
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center" aria-modal="true" role="dialog">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} aria-hidden="true" />
-      <div className="relative w-full md:max-w-3xl bg-white border border-gray-200 rounded-t-2xl md:rounded-2xl shadow-xl p-6 m-0 md:m-4">
+      <div className="relative w-full md:max-w-3xl bg-white border border-gray-200 rounded-2xl shadow-xl p-6 m-0 md:m-4">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-gray-900">Create Employee</h3>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-700" aria-label="Close" title="Close">
@@ -1146,6 +1158,9 @@ function CreateEmployeeModal({ onClose, onCreated }) {
                 className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
                 placeholder="e.g. EMP1002"
               />
+              <div className="mt-1 text-xs text-gray-600">
+                {reportingToId ? (managerName ? `Manager: ${managerName}` : "No match found") : ""}
+              </div>
             </div>
           </div>
 
@@ -1195,7 +1210,7 @@ function CreateEmployeeModal({ onClose, onCreated }) {
   );
 }
 
-function EditEmployeeModal({ employee, onClose, onUpdated }) {
+function EditEmployeeModal({ idToName, employee, onClose, onUpdated }) {
   const [name, setName] = useState(employee?.name || "");
   const [email, setEmail] = useState(employee?.email || "");
   const [role, setRole] = useState(employee?.role || "EMPLOYEE");
@@ -1211,6 +1226,13 @@ function EditEmployeeModal({ employee, onClose, onUpdated }) {
   const [gross, setGross] = useState(String(employee?.grosssalary ?? employee?.grossSalary ?? ""));
 
   const [submitting, setSubmitting] = useState(false);
+
+  const managerName = useMemo(() => {
+    for (const k of idVariants(reportingToId)) {
+      if (idToName?.[k]) return idToName[k];
+    }
+    return "";
+  }, [reportingToId, idToName]);
 
   const validate = () => {
     if (!name.trim()) return "Full name is required.";
@@ -1241,12 +1263,11 @@ function EditEmployeeModal({ employee, onClose, onUpdated }) {
         email,
         role,
         doj,
-        number: phone, // API accepts phone or number
+        number: phone,
         company,
         adhaarnumber: String(aadhaar).replace(/\D/g, ""),
         pancard: String(pan).toUpperCase(),
         address,
-        // NEW
         designation: String(designation).trim() || null,
         reporting_to_id: String(reportingToId).trim() || null,
       };
@@ -1271,7 +1292,7 @@ function EditEmployeeModal({ employee, onClose, onUpdated }) {
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center" aria-modal="true" role="dialog">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} aria-hidden="true" />
       {/* WIDER MODAL */}
-      <div className="relative w-full md:max-w-6xl lg:max-w-7xl w-[96vw] bg-white border border-gray-200 rounded-t-2xl md:rounded-2xl shadow-xl p-6 m-0 md:m-4">
+      <div className="relative w-full md:max-w-6xl lg:max-w-7xl w-[96vw] bg-white border border-gray-200 rounded-2xl md:rounded-2xl shadow-xl p-6 m-0 md:m-4">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-gray-900">Edit Employee #{employee?.employeeid}</h3>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-700" aria-label="Close" title="Close">
@@ -1389,6 +1410,9 @@ function EditEmployeeModal({ employee, onClose, onUpdated }) {
                 className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
                 placeholder="e.g. EMP1002"
               />
+              <div className="mt-1 text-xs text-gray-600">
+                {reportingToId ? (managerName ? `Manager: ${managerName}` : "No match found") : ""}
+              </div>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700">Gross Salary</label>
@@ -1436,125 +1460,6 @@ function EditEmployeeModal({ employee, onClose, onUpdated }) {
             </button>
           </div>
         </form>
-      </div>
-    </div>
-  );
-}
-
-function ReportModal({ month, onClose, onSubmitted }) {
-  const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState("");
-  const [rows, setRows] = useState([]);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        setLoading(true);
-        setErr("");
-        const res = await fetch(`/api/attendance/report?month=${encodeURIComponent(month)}`);
-        const j = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(j?.error || "Failed to load report");
-        setRows(Array.isArray(j?.rows) ? j.rows : []);
-      } catch (e) {
-        setErr(e.message || "Failed to load report");
-        setRows([]);
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [month]);
-
-  const submit = async () => {
-    try {
-      const res = await fetch("/api/attendance/submit", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ month }),
-      });
-      const j = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(j?.error || "Submit failed");
-      onSubmitted?.();
-    } catch (e) {
-      Swal.fire({ icon: "error", title: "Submit failed", text: e.message || "Something went wrong" });
-    }
-  };
-
-  const headers = (() => {
-    const s = new Set();
-    rows.forEach((r) => Object.keys(r || {}).forEach((k) => s.add(k)));
-    const arr = Array.from(s);
-    arr.sort((a, b) => {
-      const w = (k) => (k === "employeeid" ? 0 : k === "name" ? 1 : 2);
-      const wa = w(a),
-        wb = w(b);
-      return wa !== wb ? wa - wb : a.localeCompare(b);
-    });
-    return arr;
-  })();
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center" aria-modal="true" role="dialog">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} aria-hidden="true" />
-      <div className="relative w-full md:max-w-5xl bg-white border border-gray-200 rounded-t-2xl md:rounded-2xl shadow-xl p-6 m-0 md:m-4">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-lg font-semibold text-gray-900">Monthly Attendance • {toHumanMonth(month)}</h3>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-700" aria-label="Close" title="Close">
-            ✕
-          </button>
-        </div>
-
-        {loading ? (
-          <div className="py-10 text-center text-gray-500">
-            <span className="inline-block h-5 w-5 mr-2 animate-spin rounded-full border-2 border-gray-300 border-t-transparent" />
-            Loading report…
-          </div>
-        ) : err ? (
-          <div className="py-8 text-center text-red-600">{err}</div>
-        ) : rows.length === 0 ? (
-          <div className="py-8 text-center text-gray-600">No data for this month.</div>
-        ) : (
-          <div className="overflow-x-auto border border-gray-200 rounded-xl">
-            <table className="min-w-[900px] w-full text-sm">
-              <thead className="bg-gray-50">
-                <tr className="text-left text-gray-600">
-                  {headers.map((h) => (
-                    <th key={h} className="px-3 py-2 border-b capitalize">
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r, idx) => (
-                  <tr key={idx} className="odd:bg-white even:bg-gray-50">
-                    {headers.map((h) => (
-                      <td key={h} className="px-3 py-2 border-t">
-                        {r?.[h] ?? "-"}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        <div className="mt-4 flex items-center justify-end gap-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-          >
-            Close
-          </button>
-          <button
-            type="button"
-            onClick={submit}
-            className="inline-flex items-center rounded-lg bg-[#C1272D] px-4 py-2 text-sm font-medium text-white hover:bg-[#a02125]"
-          >
-            Submit to Finance
-          </button>
-        </div>
       </div>
     </div>
   );

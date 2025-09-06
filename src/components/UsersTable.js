@@ -7,6 +7,26 @@ const ROLES = ["HR", "FINANCE", "EMPLOYEE"];
 const DEFAULT_PAGE_SIZE = 10;
 const PAGE_SIZES = [10, 20, 50, 100];
 
+// normalize: strip spaces + non-alnum + uppercase
+const normId = (s) =>
+  String(s ?? "")
+    .trim()
+    .replace(/\s+/g, "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "");
+
+// variants: base, digits-only, digits-without-leading-zeros
+const idVariants = (raw) => {
+  const base = normId(raw);
+  const digits = base.replace(/[^0-9]/g, "");
+  const noZeros = digits.replace(/^0+/, "") || (digits ? "0" : "");
+  const set = new Set();
+  if (base) set.add(base);
+  if (digits) set.add(digits);
+  if (noZeros) set.add(noZeros);
+  return Array.from(set);
+};
+
 export default function UsersTable() {
   // Server data
   const [users, setUsers] = useState([]);
@@ -35,13 +55,11 @@ export default function UsersTable() {
       }
       const j = await res.json();
 
-      // Normalize shape + casing differences safely
       const raw = Array.isArray(j?.data) ? j.data : (Array.isArray(j) ? j : []);
       const normalized = raw.map((u) => ({
         employeeid: u.employeeid ?? u.id ?? "",
         name: u.name ?? "",
         email: u.email ?? "",
-        // role is intentionally not shown in the table now
         role: u.role ?? "",
         doj: u.doj ?? "",
         number: u.number ?? "",
@@ -52,7 +70,6 @@ export default function UsersTable() {
         pancard: u.pancard ?? u.pan ?? "",
         address: u.address ?? "",
 
-        // NEW
         designation: u.designation ?? "",
         reporting_to_id: u.reporting_to_id ?? u.reportingToId ?? "",
       }));
@@ -68,6 +85,25 @@ export default function UsersTable() {
   useEffect(() => {
     loadUsers();
   }, []);
+
+  // Build ID -> Name map for quick “manager name” lookup
+  const idToName = useMemo(() => {
+    const map = {};
+    for (const u of users) {
+      for (const k of idVariants(u.employeeid)) {
+        if (u.name && !map[k]) map[k] = u.name;
+      }
+    }
+    return map;
+  }, [users]);
+
+  const resolveManagerName = (rawId) => {
+    if (!rawId) return "";
+    for (const k of idVariants(rawId)) {
+      if (idToName[k]) return idToName[k];
+    }
+    return "";
+  };
 
   // Local filtering
   const filtered = useMemo(() => {
@@ -94,19 +130,17 @@ export default function UsersTable() {
   const total = filtered.length;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
-  useEffect(() => {
-    setPage(1);
-  }, [users]);
-
-  useEffect(() => {
-    if (page > totalPages) setPage(1);
-  }, [totalPages, page]);
+  useEffect(() => { setPage(1); }, [users]);
+  useEffect(() => { if (page > totalPages) setPage(1); }, [totalPages, page]);
 
   const pageSlice = useMemo(() => {
     const start = (page - 1) * pageSize;
     const end = start + pageSize;
     return filtered.slice(start, end);
   }, [filtered, page, pageSize]);
+
+  const rangeFrom = total === 0 ? 0 : (page - 1) * pageSize + 1;
+  const rangeTo = Math.min(total, page * pageSize);
 
   // Handlers
   const onCreate = () => setShowCreate(true);
@@ -195,104 +229,119 @@ export default function UsersTable() {
         </div>
       </div>
 
-      {/* Table wrapper ensures full visibility with horizontal scroll */}
-      <div className="relative overflow-x-auto border border-gray-200 rounded-xl">
-        <table className="min-w-[1200px] w-full text-xs">
-          <thead className="bg-gray-50 sticky top-0 z-10">
-            <tr className="text-left text-gray-600">
-              <th className="px-3 py-2 border-b whitespace-nowrap">Employee ID</th>
-              <th className="px-3 py-2 border-b whitespace-nowrap">Full name</th>
-              <th className="px-3 py-2 border-b whitespace-nowrap">Email</th>
-              {/* Role removed from table */}
-              <th className="px-3 py-2 border-b whitespace-nowrap">Designation</th>
-              <th className="px-3 py-2 border-b whitespace-nowrap">Reporting To (Emp ID)</th>
-              <th className="px-3 py-2 border-b whitespace-nowrap">DOJ</th>
-              <th className="px-3 py-2 border-b whitespace-nowrap">Phone</th>
-              <th className="px-3 py-2 border-b whitespace-nowrap">Company</th>
-              <th className="px-3 py-2 border-b whitespace-nowrap">Gross Salary</th>
-              <th className="px-3 py-2 border-b whitespace-nowrap">Aadhaar</th>
-              <th className="px-3 py-2 border-b whitespace-nowrap">PAN</th>
-              <th className="px-3 py-2 border-b whitespace-nowrap">Address</th>
-              <th className="px-3 py-2 border-b text-right whitespace-nowrap">Actions</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {loading ? (
-              <tr>
-                <td colSpan={13} className="px-3 py-6 text-center text-gray-500">
-                  <span className="inline-block h-5 w-5 mr-2 animate-spin rounded-full border-2 border-gray-300 border-t-transparent" />
-                  Loading users…
-                </td>
-              </tr>
-            ) : error ? (
-              <tr>
-                <td colSpan={13} className="px-3 py-6 text-center text-red-600">{error}</td>
-              </tr>
-            ) : filtered.length === 0 ? (
-              <tr>
-                <td colSpan={13} className="px-3 py-6 text-center text-gray-500">No matching users. Try adjusting your search.</td>
-              </tr>
-            ) : (
-              pageSlice.map((u, i) => (
-                <tr key={String(u.employeeid || i)} className="odd:bg-white even:bg-gray-50">
-                  <td className="px-3 py-2 border-t whitespace-nowrap">{u.employeeid ?? "-"}</td>
-                  <td className="px-3 py-2 border-t whitespace-nowrap">{u.name || "-"}</td>
-                  <td className="px-3 py-2 border-t whitespace-nowrap">{u.email || "-"}</td>
-                  {/* Role column removed */}
-                  <td className="px-3 py-2 border-t whitespace-nowrap">{u.designation || "-"}</td>
-                  <td className="px-3 py-2 border-t whitespace-nowrap">{u.reporting_to_id || "-"}</td>
-                  <td className="px-3 py-2 border-t whitespace-nowrap">{u.doj || "-"}</td>
-                  <td className="px-3 py-2 border-t whitespace-nowrap">{u.number || "-"}</td>
-                  <td className="px-3 py-2 border-t whitespace-nowrap">{u.company || "-"}</td>
-                  <td className="px-3 py-2 border-t whitespace-nowrap">{u.grossSalary ?? u.grosssalary ?? "-"}</td>
-                  <td className="px-3 py-2 border-t whitespace-nowrap">{u.adhaarnumber ?? u.aadhaar ?? u.adhar ?? "-"}</td>
-                  <td className="px-3 py-2 border-t whitespace-nowrap">{u.pancard ?? u.pan ?? "-"}</td>
-                  <td className="px-3 py-2 border-t">
-                    <div className="max-w-[240px] truncate">{u.address ?? "-"}</div>
-                  </td>
-                  <td className="px-3 py-2 border-t text-right">
-  <div className="inline-flex items-center gap-2">
-    {/* EDIT — neutral (no blue) */}
-    <button
-      onClick={() => onUpdate(u)}
-      className="inline-flex items-center justify-center p-2 rounded-full border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
-      title="Update user"
-      aria-label="Update user"
-    >
-      <Pencil className="h-4 w-4" />
-    </button>
-
-    {/* DELETE — keep red (as you said it's fine) */}
-    <button
-      onClick={() => onDelete(u.employeeid, u.name)}
-      className="inline-flex items-center justify-center p-2 rounded-full bg-red-600 text-white hover:bg-red-700"
-      title="Delete user"
-      aria-label="Delete user"
-    >
-      <Trash2 className="h-4 w-4" />
-    </button>
-  </div>
-</td>
-
+      {/* Fixed header + fixed bottom footer (footer at bottom of container) */}
+      <div className="overflow-x-auto border border-gray-200 rounded-xl bg-white">
+        <div className="flex flex-col max-h-[60vh]">
+          {/* Scroll area */}
+          <div className="relative overflow-y-auto">
+            <table className="min-w-[1200px] w-full text-xs">
+              <thead className="bg-gray-50 sticky top-0 z-10">
+                <tr className="text-left text-gray-600">
+                  <th className="px-3 py-2 border-b whitespace-nowrap">Employee ID</th>
+                  <th className="px-3 py-2 border-b whitespace-nowrap">Full name</th>
+                  <th className="px-3 py-2 border-b whitespace-nowrap">Email</th>
+                  {/* Role removed from table */}
+                  <th className="px-3 py-2 border-b whitespace-nowrap">Designation</th>
+                  {/* RENAMED */}
+                  <th className="px-3 py-2 border-b whitespace-nowrap">Reporting To</th>
+                  <th className="px-3 py-2 border-b whitespace-nowrap">DOJ</th>
+                  <th className="px-3 py-2 border-b whitespace-nowrap">Phone</th>
+                  <th className="px-3 py-2 border-b whitespace-nowrap">Company</th>
+                  <th className="px-3 py-2 border-b whitespace-nowrap">Gross Salary</th>
+                  <th className="px-3 py-2 border-b whitespace-nowrap">Aadhaar</th>
+                  <th className="px-3 py-2 border-b whitespace-nowrap">PAN</th>
+                  <th className="px-3 py-2 border-b whitespace-nowrap">Address</th>
+                  <th className="px-3 py-2 border-b text-right whitespace-nowrap">Actions</th>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+              </thead>
 
-      {/* Pagination Footer */}
-      <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-        <div className="text-xs text-gray-600">
-          Showing {filtered.length === 0 ? 0 : (page - 1) * pageSize + 1}–{Math.min(page * pageSize, filtered.length)} of {filtered.length}
-        </div>
-        <div className="flex items-center gap-2">
-          <button onClick={() => setPage(1)} disabled={page === 1} className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-white disabled:opacity-50">« First</button>
-          <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1} className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-white disabled:opacity-50">‹ Prev</button>
-          <span className="text-sm text-gray-700 px-2">Page {page} of {totalPages}</span>
-          <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-white disabled:opacity-50">Next ›</button>
-          <button onClick={() => setPage(totalPages)} disabled={page === totalPages} className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-white disabled:opacity-50">Last »</button>
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td colSpan={13} className="px-3 py-6 text-center text-gray-500">
+                      <span className="inline-block h-5 w-5 mr-2 animate-spin rounded-full border-2 border-gray-300 border-t-transparent" />
+                      Loading users…
+                    </td>
+                  </tr>
+                ) : error ? (
+                  <tr>
+                    <td colSpan={13} className="px-3 py-6 text-center text-red-600">{error}</td>
+                  </tr>
+                ) : filtered.length === 0 ? (
+                  <tr>
+                    <td colSpan={13} className="px-3 py-6 text-center text-gray-500">No matching users. Try adjusting your search.</td>
+                  </tr>
+                ) : (
+                  pageSlice.map((u, i) => {
+                    const managerName = resolveManagerName(u.reporting_to_id) || "—";
+                    return (
+                      <tr key={String(u.employeeid || i)} className="odd:bg-white even:bg-gray-50 align-top">
+                        <td className="px-3 py-2 border-t whitespace-nowrap">{u.employeeid ?? "-"}</td>
+                        <td className="px-3 py-2 border-t whitespace-nowrap">{u.name || "-"}</td>
+                        <td className="px-3 py-2 border-t whitespace-nowrap">{u.email || "-"}</td>
+                        {/* Role column removed */}
+                        <td className="px-3 py-2 border-t whitespace-nowrap">{u.designation || "-"}</td>
+                        {/* REVERSED: name first (big), id below (small) */}
+                        <td className="px-3 py-2 border-t whitespace-nowrap">
+                          <div className="text-gray-900">{managerName}</div>
+                          <div className="text-[11px] text-gray-500">{u.reporting_to_id || "-"}</div>
+                        </td>
+                        <td className="px-3 py-2 border-t whitespace-nowrap">{u.doj || "-"}</td>
+                        <td className="px-3 py-2 border-t whitespace-nowrap">{u.number || "-"}</td>
+                        <td className="px-3 py-2 border-t whitespace-nowrap">{u.company || "-"}</td>
+                        <td className="px-3 py-2 border-t whitespace-nowrap">{u.grossSalary ?? u.grosssalary ?? "-"}</td>
+                        <td className="px-3 py-2 border-t whitespace-nowrap">{u.adhaarnumber ?? u.aadhaar ?? u.adhar ?? "-"}</td>
+                        <td className="px-3 py-2 border-t whitespace-nowrap">{u.pancard ?? u.pan ?? "-"}</td>
+                        <td className="px-3 py-2 border-t">
+                          <div className="max-w-[240px] truncate">{u.address ?? "-"}</div>
+                        </td>
+                        <td className="px-3 py-2 border-t text-right">
+                          <div className="inline-flex items-center gap-2">
+                            {/* EDIT — neutral */}
+                            <button
+                              onClick={() => onUpdate(u)}
+                              className="inline-flex items-center justify-center p-2 rounded-full border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+                              title="Update user"
+                              aria-label="Update user"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </button>
+
+                            {/* DELETE — red */}
+                            <button
+                              onClick={() => onDelete(u.employeeid, u.name)}
+                              className="inline-flex items-center justify-center p-2 rounded-full bg-red-600 text-white hover:bg-red-700"
+                              title="Delete user"
+                              aria-label="Delete user"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Footer (fixed at bottom of the table container, not overlapping content) */}
+          <div className="border-t bg-white px-3 py-2">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="text-xs text-gray-600">
+                Showing <span className="font-medium">{rangeFrom}</span>–<span className="font-medium">{rangeTo}</span> of{" "}
+                <span className="font-medium">{total}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setPage(1)} disabled={page === 1} className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-white disabled:opacity-50">« First</button>
+                <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1} className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-white disabled:opacity-50">‹ Prev</button>
+                <span className="text-sm text-gray-700 px-2">Page {page} of {totalPages}</span>
+                <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-white disabled:opacity-50">Next ›</button>
+                <button onClick={() => setPage(totalPages)} disabled={page === totalPages} className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-white disabled:opacity-50">Last »</button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -382,16 +431,24 @@ function CreateUserModal({ onClose, onCreated }) {
 
     try {
       setSubmitting(true);
+
+      // sanitize numeric-ish fields
+      const phoneDigits = String(phone || "").replace(/\D/g, "");
+      const numberVal = phoneDigits ? Number(phoneDigits) : null;
+
+      const aadhaarDigits = String(aadhaar || "").replace(/\D/g, "");
+      const aadhaarVal = aadhaarDigits ? Number(aadhaarDigits) : null;
+
       const body = {
         employeeid: String(employeeId).trim(),
         name,
         email,
         role,
         doj,
-        number: phone,                // API expects 'number'
+        number: numberVal,
         company,
-        grosssalary: String(grossSalary).trim(), // API expects 'grosssalary'
-        adhaarnumber: String(aadhaar).replace(/\D/g, ""),
+        grosssalary: String(grossSalary).trim(),
+        adhaarnumber: aadhaarVal,
         pancard: String(pan).toUpperCase(),
         address: String(address).trim(),
         designation: String(designation).trim() || null,
@@ -417,7 +474,7 @@ function CreateUserModal({ onClose, onCreated }) {
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center" aria-modal="true" role="dialog">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} aria-hidden="true" />
-      <div className="relative w-full md:max-w-7xl bg-white border border-gray-200 rounded-t-2xl md:rounded-2xl shadow-xl p-6 m-0 md:m-4">
+      <div className="relative w/full md:max-w-7xl bg-white border border-gray-200 rounded-t-2xl md:rounded-2xl shadow-xl p-6 m-0 md:m-4">
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-base font-semibold text-gray-900">Onboard Employee</h3>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-700" aria-label="Close" title="Close">✕</button>
@@ -561,7 +618,6 @@ function CreateUserModal({ onClose, onCreated }) {
             />
           </div>
 
-          {/* Password (only for HR/FINANCE) */}
           {(role === "HR" || role === "FINANCE") && (
             <div className="md:col-span-3">
               <label className="block text-xs font-medium text-gray-700">Password *</label>
@@ -651,16 +707,24 @@ function UpdateUserModal({ data, onClose, onUpdated }) {
     }
     try {
       setSubmitting(true);
+
+      // sanitize numeric-ish fields
+      const phoneDigits = String(phone || "").replace(/\D/g, "");
+      const numberVal = phoneDigits ? Number(phoneDigits) : null;
+
+      const aadhaarDigits = String(aadhaar || "").replace(/\D/g, "");
+      const aadhaarVal = aadhaarDigits ? Number(aadhaarDigits) : null;
+
       const body = {
         employeeid: data.employeeid,
         name,
         email,
         role,
         doj,
-        number: phone,                 // API expects 'number'
+        number: numberVal,
         company,
-        grosssalary: String(grossSalary).trim(), // API expects 'grosssalary'
-        adhaarnumber: String(aadhaar).replace(/\D/g, ""),
+        grosssalary: String(grossSalary).trim(),
+        adhaarnumber: aadhaarVal,
         pancard: String(pan).toUpperCase(),
         address: String(address).trim(),
         designation: String(designation).trim() || null,

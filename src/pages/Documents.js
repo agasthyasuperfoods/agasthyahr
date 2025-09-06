@@ -1,12 +1,11 @@
 // src/pages/Documents.js
-import React, { useMemo, useRef, useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
 import Swal from "sweetalert2";
 import AppHeader from "@/components/AppHeader";
 import {
   FileText,
-  Upload,
   Search as SearchIcon,
   ShieldCheck,
   Download,
@@ -24,26 +23,33 @@ const ROLES = ["ADMIN", "HR", "FINANCE", "EMPLOYEE"];
 function classNames(...a) { return a.filter(Boolean).join(" "); }
 function formatSize(mb) { return mb >= 1024 ? `${(mb / 1024).toFixed(1)} GB` : `${mb.toFixed(1)} MB`; }
 function formatWhen(iso) { const d = new Date(iso); return Number.isNaN(d.getTime()) ? "—" : d.toLocaleString(); }
-function ym(d=new Date()){const y=d.getFullYear();const m=String(d.getMonth()+1).padStart(2,'0');return `${y}-${m}`;}
 function getAuthIdentity() {
   if (typeof window === "undefined") return { id: null, email: null };
   const ls = window.localStorage;
-  return {
-    id: ls.getItem("hr_employeeid") || null,
-    email: ls.getItem("hr_email") || null,
-  };
+  return { id: ls.getItem("hr_employeeid") || null, email: ls.getItem("hr_email") || null };
 }
 
 /* ------------ doc helpers (DB → UI) ------------ */
 function categorizeDoc(title = "", type = "") {
   const s = `${title} ${type}`.toLowerCase();
-  if (/(reliev|exit|separation)/.test(s)) return "Exit";              // Relieving letter
-  if (/(experience)/.test(s)) return "Exit";                          // Experience letter
-  if (/(offer|intent)/.test(s)) return "Onboarding";                  // Offer/Letter of Intent
-  if (/(increment|hike|revision)/.test(s)) return "Other";            // Increment letter
-  if (/(policy|handbook)/.test(s)) return "Policies";
-  if (/(agreement|contract|vendor)/.test(s)) return "Agreements";
-  if (/(compliance|pf|esi|statut|tax)/.test(s)) return "Compliance";
+
+  // Letterheads → own tab
+  if (/(letter\s*head|letter-head)/.test(s)) return "Letterheads";
+
+  // Put these into Employee Documents
+  if (/(confirmation|probation|warning|show cause|disciplinary|charge ?sheet|salary certificate|employment certificate|employment verification|resume|cv|aadhaar|aadhar|pan|id proof|address proof|bank|cheque|uann?|esi card|pf)/.test(s)) {
+    return "Employee Documents";
+  }
+
+  // Letters / company docs
+  if (/(offer|appointment|joining|letter of intent)/.test(s)) return "Onboarding";
+  if (/(increment|hike|revision|salary revision|compensation revision)/.test(s)) return "Increment/Revision";
+  if (/(promotion|transfer)/.test(s)) return "Promotion/Transfer";
+  if (/(reliev|exit|separation|experience letter)/.test(s)) return "Exit";
+  if (/(policy|handbook|posh|leave policy|attendance policy|travel policy|wfh)/.test(s)) return "Policies";
+  if (/(agreement|contract|nda|vendor|service agreement)/.test(s)) return "Agreements";
+  if (/(compliance|pf|esi|statut|tax|professional tax|gst|challan|return|register)/.test(s)) return "Compliance";
+
   return "Other";
 }
 
@@ -67,33 +73,33 @@ function normalizeDoc(row, i = 0) {
 }
 
 // ======================================
-// HR → Documents (Docs + Payroll Data)
+// HR → Documents (no upload, no select)
 // ======================================
 
 const MOCK_DOCS = [
   { id: "D-0001", title: "HR Policy Handbook v3.2", folder: "Policies", tags: ["policy", "employee"], type: "PDF", size: 2.4, updatedAt: "2025-08-20T10:00:00Z", owner: "HR", status: "Active", version: "3.2", url: "#" },
   { id: "D-0002", title: "Offer Letter Template", folder: "Onboarding", tags: ["offer", "template"], type: "DOCX", size: 0.3, updatedAt: "2025-08-22T08:15:00Z", owner: "HR", status: "Active", version: "1.0", url: "#" },
+  { id: "D-0003", title: "Salary Increment Letter Template", folder: "Increment/Revision", tags: ["increment", "template"], type: "DOCX", size: 0.25, updatedAt: "2025-08-23T14:30:00Z", owner: "HR", status: "Active", version: "1.1", url: "#" },
+  { id: "D-0007", title: "Employee Documents – Sample ID Proof Packet", folder: "Employee Documents", tags: ["employee","id"], type: "PDF", size: 0.5, updatedAt: "2025-08-25T12:00:00Z", owner: "HR", status: "Active", version: "1.0", url: "#" },
+  { id: "D-0010", title: "ASF Letterhead (PDF)", folder: "Letterheads", tags: ["letterhead"], type: "PDF", size: 0.2, updatedAt: "2025-08-26T10:45:00Z", owner: "HR", status: "Active", version: "1.0", url: "#" },
   { id: "D-0004", title: "PF & ESI – Compliance Checklist", folder: "Compliance", tags: ["compliance", "PF", "ESI"], type: "PDF", size: 0.9, updatedAt: "2025-08-24T11:00:00Z", owner: "HR", status: "Active", version: "2.1", url: "#" },
   { id: "D-0005", title: "Vendor Agreement – 2025 Template", folder: "Agreements", tags: ["agreement", "vendor"], type: "DOCX", size: 0.6, updatedAt: "2025-08-11T09:30:00Z", owner: "Legal", status: "Active", version: "1.4", url: "#" },
   { id: "D-0006", title: "Exit Kit Template", folder: "Exit", tags: ["exit", "template"], type: "PDF", size: 0.7, updatedAt: "2025-08-10T09:00:00Z", owner: "HR", status: "Active", version: "1.0", url: "#" },
 ];
 
 const FOLDERS = [
-  { key: "All", label: "All Documents", icon: FileText },
-  { key: "Policies", label: "Policies", icon: ShieldCheck },
-  { key: "Onboarding", label: "Onboarding", icon: CheckCircle2 },
-  { key: "Payroll", label: "Payroll", icon: FileText },
-  { key: "Compliance", label: "Compliance", icon: ShieldCheck },
-  { key: "Agreements", label: "Agreements", icon: FileText },
-  { key: "Exit", label: "Exit", icon: Archive },
-  { key: "Other", label: "Other", icon: FileText },
-];
-
-// Payroll demo seed (only if API not wired yet)
-const MOCK_PAYROLL = [
-  { employeeid: "EMP1001", name: "A. Kumar", dept: "Eng", gross: 60000, deductions: 5000, net: 55000, status: "Paid", paid_on: "2025-08-02" },
-  { employeeid: "EMP1042", name: "S. Reddy", dept: "Sales", gross: 42000, deductions: 3000, net: 39000, status: "Paid", paid_on: "2025-08-02" },
-  { employeeid: "EMP0874", name: "P. Singh", dept: "Ops", gross: 38000, deductions: 2800, net: 35200, status: "Pending", paid_on: null },
+  { key: "All",                 label: "All Documents",                    icon: FileText },
+  { key: "Employee Documents",  label: "Employee Documents",               icon: FileText },
+  { key: "Onboarding",          label: "Onboarding (Offer/Appointment)",   icon: CheckCircle2 },
+  { key: "Increment/Revision",  label: "Increment / Revision",             icon: FileText },
+  { key: "Promotion/Transfer",  label: "Promotion / Transfer",             icon: FileText },
+  { key: "Exit",                label: "Exit (Relieving/Experience)",      icon: Archive },
+  { key: "Policies",            label: "Policies",                         icon: ShieldCheck },
+  // NEW: Letterheads tab
+  { key: "Letterheads",         label: "Letterheads",                      icon: FileText },
+  { key: "Compliance",          label: "Compliance",                       icon: ShieldCheck },
+  { key: "Agreements",          label: "Agreements",                       icon: FileText },
+  { key: "Other",               label: "Other",                            icon: FileText },
 ];
 
 export default function DocumentsPage() {
@@ -158,8 +164,6 @@ export default function DocumentsPage() {
   const [query, setQuery] = useState("");
   const [folder, setFolder] = useState("All");
   const [view, setView] = useState("grid"); // 'grid' | 'list'
-  const [selectedMap, setSelectedMap] = useState({});
-  const [showUpload, setShowUpload] = useState(false);
   const [shareDoc, setShareDoc] = useState(null);
 
   // Load docs from API (fallback to mocks if API not ready)
@@ -180,18 +184,23 @@ export default function DocumentsPage() {
     return () => { cancelled = true; };
   }, []);
 
-  // ----- Payroll state -----
-  const [payrollMonth, setPayrollMonth] = useState(ym());
-  const [payrollRows, setPayrollRows] = useState([]);
-  const [payrollLoading, setPayrollLoading] = useState(false);
-  const [payrollError, setPayrollError] = useState("");
+  // Filtered docs
+  const filtered = useMemo(() => {
+    let arr = [...docs];
+    if (folder !== "All") arr = arr.filter((d) => d.folder === folder);
+    if (query.trim()) {
+      const q = query.trim().toLowerCase();
+      arr = arr.filter((d) => [d.title, d.id, d.tags?.join(" "), d.folder].join(" ").toLowerCase().includes(q));
+    }
+    arr.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+    return arr;
+  }, [docs, folder, query]);
 
   const openDoc = (doc) => {
     const url = doc?.url || "#";
     window.open(url, "_blank", "noopener,noreferrer");
   };
 
-  // NEW: One-tap direct share (copies link). Falls back to modal if clipboard fails
   const handleShare = async (doc) => {
     const direct = doc?.url || (typeof window !== "undefined" ? `${window.location.origin}/share/${doc?.id}` : "");
     if (!direct || direct === "#") {
@@ -214,122 +223,9 @@ export default function DocumentsPage() {
     }
   };
 
-  // Filtered docs (never show docs for Payroll)
-  const filtered = useMemo(() => {
-    let arr = [...docs];
-    if (folder !== "All") arr = arr.filter((d) => d.folder === folder);
-    if (folder === "Payroll") return [];
-    if (query.trim()) {
-      const q = query.trim().toLowerCase();
-      arr = arr.filter((d) => [d.title, d.id, d.tags?.join(" "), d.folder].join(" ").toLowerCase().includes(q));
-    }
-    arr.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
-    return arr;
-  }, [docs, folder, query]);
-
-  const selectedIds = useMemo(() => Object.keys(selectedMap).filter((k) => selectedMap[k]), [selectedMap]);
-  const anySelected = folder !== "Payroll" && selectedIds.length > 0;
-  const toggleOne = (id) => setSelectedMap((m) => ({ ...m, [id]: !m[id] }));
-
-  // Payroll fetch
-  useEffect(() => {
-    if (folder !== "Payroll") return;
-    let cancelled = false;
-    (async () => {
-      try {
-        setPayrollLoading(true); setPayrollError("");
-        const res = await fetch(`/api/payroll?month=${encodeURIComponent(payrollMonth)}`);
-        if (!res.ok) throw new Error("Failed to load payroll");
-        const j = await res.json().catch(()=>({}));
-        const rows = Array.isArray(j?.data) ? j.data : Array.isArray(j) ? j : [];
-        if (!cancelled) setPayrollRows(rows);
-      } catch (e) {
-        if (!cancelled) { setPayrollError(e?.message || "Failed to load payroll"); setPayrollRows(MOCK_PAYROLL); }
-      } finally {
-        if (!cancelled) setPayrollLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [folder, payrollMonth]);
-
-  // Payroll CSV download (API-first, then client CSV)
-  const downloadPayroll = async () => {
-    const filename = `payroll_${payrollMonth}.csv`;
-    try {
-      const res = await fetch(`/api/payroll/export?month=${encodeURIComponent(payrollMonth)}`);
-      if (res.ok) {
-        const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
-        return;
-      }
-    } catch {}
-    const rows = payrollRows || [];
-    const headers = ["employeeid","name","dept","gross","deductions","net","status","paid_on"];
-    const esc = (v) => {
-      if (v == null) return "";
-      const s = String(v).replace(/"/g,'""');
-      return /[",\n]/.test(s) ? `"${s}"` : s;
-    };
-    const csv = [headers.join(",")].concat(rows.map(r => headers.map(h => esc(r[h])).join(","))).join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
-  };
-
-  // Upload dropzone (client-only demo)
-  const Dropzone = ({ onClose }) => {
-    const ref = useRef(null);
-    useEffect(() => {
-      const el = ref.current; if (!el) return;
-      const stop = (e) => { e.preventDefault(); e.stopPropagation(); };
-      ["dragenter","dragover","dragleave","drop"].forEach((ev) => el.addEventListener(ev, stop));
-      return () => ["dragenter","dragover","dragleave","drop"].forEach((ev) => el.removeEventListener(ev, stop));
-    }, []);
-    const onFiles = (files) => {
-      const list = Array.from(files || []); if (!list.length) return;
-      const now = new Date().toISOString();
-      const mapped = list.map((f, i) => ({
-        id: `TMP-${Date.now()}-${i}`,
-        title: f.name,
-        folder: folder === "All" ? "Other" : folder,
-        tags: [],
-        type: (f.name.split(".").pop()||"FILE").toUpperCase(),
-        size: Math.max(0.1, f.size/(1024*1024)),
-        updatedAt: now,
-        owner: "HR",
-        status: "Active",
-        version: "1.0",
-        url: "#",
-      }));
-      setDocs((prev) => [...mapped, ...prev]);
-      onClose?.();
-    };
-    return (
-      <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center">
-        <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-        <div ref={ref} className="relative w-full sm:max-w-[95vw] md:max-w-3xl max-h-[90vh] overflow-y-auto bg-white border border-gray-200 rounded-2xl shadow-xl p-6 m-0 md:m-4">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-lg font-semibold text-gray-900">Upload documents</h3>
-            <button onClick={onClose} className="text-gray-500 hover:text-gray-700"><XIcon className="h-5 w-5"/></button>
-          </div>
-          <div className="rounded-xl border-2 border-dashed border-gray-300 p-8 text-center relative">
-            <Upload className="h-10 w-10 inline-block" />
-            <div className="mt-2 text-sm text-gray-700">Drag & drop files here, or click to browse</div>
-            <input type="file" multiple className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e)=>onFiles(e.target.files)} />
-          </div>
-          <div className="mt-4 text-xs text-gray-500">Accepted: PDF, DOCX, XLSX, CSV, PNG/JPG. Max 25MB/file.</div>
-        </div>
-      </div>
-    );
-  };
-
   const DocCard = ({ d }) => (
     <div className="group rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden cursor-pointer" onClick={() => openDoc(d)}>
       <div className="flex items-start gap-3 p-3">
-        <input type="checkbox" className="mt-1" checked={!!selectedMap[d.id]} onChange={(e) => { e.stopPropagation(); toggleOne(d.id); }} />
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
@@ -367,7 +263,6 @@ export default function DocumentsPage() {
       <table className="min-w-[900px] w-full text-sm">
         <thead className="bg-gray-50 text-gray-600">
           <tr className="text-left">
-            <th className="px-3 py-2 border-b">Select</th>
             <th className="px-3 py-2 border-b">Title</th>
             <th className="px-3 py-2 border-b">Folder</th>
             <th className="px-3 py-2 border-b">Type</th>
@@ -380,7 +275,6 @@ export default function DocumentsPage() {
         <tbody>
           {filtered.map((d) => (
             <tr key={d.id} className="odd:bg-white even:bg-gray-50 align-top">
-              <td className="px-3 py-2 border-t"><input type="checkbox" checked={!!selectedMap[d.id]} onChange={()=>toggleOne(d.id)} /></td>
               <td className="px-3 py-2 border-t">
                 <button className="font-medium text-gray-900 whitespace-normal break-words text-left hover:underline" onClick={() => openDoc(d)}>{d.title}</button>
                 <div className="text-xs text-gray-500 whitespace-normal break-words">v{d.version} • {d.tags?.join(" ")}</div>
@@ -406,6 +300,9 @@ export default function DocumentsPage() {
               </td>
             </tr>
           ))}
+          {!filtered.length && (
+            <tr><td colSpan={7} className="px-3 py-6 text-center text-gray-500">No documents match your filters.</td></tr>
+          )}
         </tbody>
       </table>
     </div>
@@ -453,7 +350,7 @@ export default function DocumentsPage() {
     );
   };
 
-  // Toolbar: search + folder picker + view toggle + upload
+  // Toolbar
   const Toolbar = () => (
     <div className="flex flex-wrap items-center gap-2">
       <div className="relative flex-1 min-w-[220px]">
@@ -463,35 +360,22 @@ export default function DocumentsPage() {
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search by title, ID, tag..."
           className="w-full rounded-xl border border-gray-300 pl-9 pr-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-200"
-          disabled={folder === "Payroll"}
         />
       </div>
-      <select value={folder} onChange={(e) => setFolder(e.target.value)} className="rounded-lg border border-gray-300 px-2 py-2 text-sm">
-        {FOLDERS.map((f) => (<option key={f.key} value={f.key}>{f.label}</option>))}
-      </select>
-      {folder !== "Payroll" && (
-        <div className="rounded-xl border border-gray-200 bg-white p-1">
-          <button
-            onClick={() => setView("grid")}
-            className={classNames("px-3 py-1.5 text-sm rounded-lg", view === "grid" ? "bg-gray-900 text-white" : "hover:bg-gray-50")}
-          >
-            Grid
-          </button>
-          <button
-            onClick={() => setView("list")}
-            className={classNames("px-3 py-1.5 text-sm rounded-lg", view === "list" ? "bg-gray-900 text-white" : "hover:bg-gray-50")}
-          >
-            List
-          </button>
-        </div>
-      )}
-      <button
-        onClick={() => setShowUpload(true)}
-        className="inline-flex items-center gap-2 rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-60"
-        disabled={folder === "Payroll"}
-      >
-        <Upload className="h-4 w-4"/> Upload
-      </button>
+      <div className="rounded-xl border border-gray-200 bg-white p-1">
+        <button
+          onClick={() => setView("grid")}
+          className={classNames("px-3 py-1.5 text-sm rounded-lg", view === "grid" ? "bg-gray-900 text-white" : "hover:bg-gray-50")}
+        >
+          Grid
+        </button>
+        <button
+          onClick={() => setView("list")}
+          className={classNames("px-3 py-1.5 text-sm rounded-lg", view === "list" ? "bg-gray-900 text-white" : "hover:bg-gray-50")}
+        >
+          List
+        </button>
+      </div>
     </div>
   );
 
@@ -511,74 +395,6 @@ export default function DocumentsPage() {
           ))}
         </div>
       </div>
-    </div>
-  );
-
-  const BulkBar = () => (
-    <div className="sticky top-[70px] z-20 bg-white border border-gray-200 rounded-xl shadow-sm px-3 py-2 flex items-center justify-between">
-      <div className="text-sm text-gray-700"><span className="font-semibold">{selectedIds.length}</span> selected</div>
-      <div className="flex items-center gap-2">
-        <button className="px-2.5 py-1.5 rounded-md bg-gray-900 text-white hover:bg-gray-800 text-sm">Download</button>
-        <button className="px-2.5 py-1.5 rounded-md bg-red-600 text-white hover:bg-red-700 text-sm">Delete</button>
-      </div>
-    </div>
-  );
-
-  const PayrollPanel = () => (
-    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h3 className="text-base font-semibold text-gray-900">Payroll</h3>
-          <p className="text-xs text-gray-600">Month-wise payroll fetched from the database.</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <label className="text-xs text-gray-600">Month</label>
-          <input type="month" value={payrollMonth} onChange={(e)=>setPayrollMonth(e.target.value)} className="rounded-lg border border-gray-300 px-2 py-1 text-sm" />
-          <button onClick={downloadPayroll} disabled={payrollLoading} className="inline-flex items-center gap-2 rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-60">
-            <Download className="h-4 w-4"/> Download CSV
-          </button>
-        </div>
-      </div>
-
-      <div className="mt-4 overflow-x-auto border border-gray-200 rounded-xl">
-        <table className="min-w-[900px] w-full text-sm">
-          <thead className="bg-gray-50 text-gray-600">
-            <tr className="text-left">
-              <th className="px-3 py-2 border-b">Employee ID</th>
-              <th className="px-3 py-2 border-b">Name</th>
-              <th className="px-3 py-2 border-b">Dept</th>
-              <th className="px-3 py-2 border-b">Gross</th>
-              <th className="px-3 py-2 border-b">Deductions</th>
-              <th className="px-3 py-2 border-b">Net</th>
-              <th className="px-3 py-2 border-b">Status</th>
-              <th className="px-3 py-2 border-b">Paid On</th>
-            </tr>
-          </thead>
-          <tbody>
-            {payrollLoading ? (
-              <tr><td colSpan={8} className="px-3 py-6 text-center text-gray-500">Loading…</td></tr>
-            ) : (payrollRows.length ? payrollRows : []).map((r, idx) => (
-              <tr key={r.employeeid || idx} className="odd:bg-white even:bg-gray-50">
-                <td className="px-3 py-2 border-t">{r.employeeid}</td>
-                <td className="px-3 py-2 border-t">{r.name}</td>
-                <td className="px-3 py-2 border-t">{r.dept || "-"}</td>
-                <td className="px-3 py-2 border-t">{Number(r.gross||0).toLocaleString()}</td>
-                <td className="px-3 py-2 border-t">{Number(r.deductions||0).toLocaleString()}</td>
-                <td className="px-3 py-2 border-t font-medium">{Number(r.net||0).toLocaleString()}</td>
-                <td className="px-3 py-2 border-t">{r.status || "-"}</td>
-                <td className="px-3 py-2 border-t">{r.paid_on || "-"}</td>
-              </tr>
-            ))}
-            {!payrollLoading && !payrollRows.length ? (
-              <tr><td colSpan={8} className="px-3 py-6 text-center text-gray-500">No payroll records for {payrollMonth}.</td></tr>
-            ) : null}
-          </tbody>
-        </table>
-      </div>
-
-      {payrollError ? (
-        <div className="mt-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">{payrollError} • Showing demo data.</div>
-      ) : null}
     </div>
   );
 
@@ -602,7 +418,7 @@ export default function DocumentsPage() {
           <div className="mb-5 flex items-center justify-between">
             <div>
               <h1 className="text-lg md:text-xl font-semibold text-gray-900">Documents</h1>
-              <p className="text-sm text-gray-600">A simple, centralized repository for HR files — plus month-wise payroll data.</p>
+              <p className="text-sm text-gray-600">Centralized repository for HR files.</p>
             </div>
           </div>
 
@@ -620,24 +436,13 @@ export default function DocumentsPage() {
               </div>
 
               <div className="mt-4">
-                {folder === "Payroll" ? (
-                  <PayrollPanel />
-                ) : (
-                  <>
-                    {anySelected && <BulkBar />}
-                    {view === "grid" ? <GridView /> : <ListView />}
-                    {!filtered.length && (
-                      <div className="mt-8 text-center text-sm text-gray-600">No documents match your filters.</div>
-                    )}
-                  </>
-                )}
+                {view === "grid" ? <GridView /> : <ListView />}
               </div>
             </section>
           </div>
         </div>
       </main>
 
-      {showUpload && <Dropzone onClose={()=>setShowUpload(false)} />}
       {shareDoc && <ShareModal doc={shareDoc} onClose={()=>setShareDoc(null)} />}
 
       {/* Profile Modal */}
@@ -685,7 +490,6 @@ function ProfileModal({ user, onClose, onSaved }) {
     if (aadhaarDigits && aadhaarDigits.length !== 12) return "Aadhaar must be exactly 12 digits.";
     const panNorm = String(pan || "").toUpperCase();
     if (panNorm && !/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(panNorm)) return "PAN format is invalid (e.g., ABCDE1234F).";
-    // Address optional
     return null;
   };
 
@@ -705,7 +509,7 @@ function ProfileModal({ user, onClose, onSaved }) {
         role,
         doj,
         phone,
-        number: phone, // include both keys for compatibility
+        number: phone,
         company,
         adhaarnumber: String(aadhaar).replace(/\D/g, ""),
         pancard: String(pan).toUpperCase(),
@@ -727,7 +531,7 @@ function ProfileModal({ user, onClose, onSaved }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center" aria-modal="true" role="dialog">
+    <div className="fixed inset-0 z-50 flex items	end md:items-center justify-center" aria-modal="true" role="dialog">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} aria-hidden="true" />
       <div className="relative w-full md:max-w-3xl bg-white border border-gray-200 rounded-t-2xl md:rounded-2xl shadow-xl p-6 m-0 md:m-4">
         <div className="flex items-center justify-between mb-4">
