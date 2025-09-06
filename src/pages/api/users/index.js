@@ -1,7 +1,6 @@
-// /src/pages/api/users.js
 import pool from "@/lib/db";
 
-/** Map API field -> DB column (keep exact DB case for quoted identifiers) */
+/** Map API field -> DB column */
 const COLMAP = {
   employeeid: "employeeid",
   name: "name",
@@ -16,21 +15,16 @@ const COLMAP = {
   address: "address",
   designation: "designation",
   reporting_to_id: "reporting_to_id",
-  // Optional numeric column in your schema:
-  leaves_cf: "Leaves_cf", // <- DB column is "Leaves_cf" (quoted, case-sensitive)
+  leaves_cf: "Leaves_cf",
+  probation: "probation",
 };
 
-/** Which DB columns are NUMERIC (so "" must become NULL, and values coerced) */
-const NUMERIC_COLS = new Set([
-  "adhaarnumber",
-  "Leaves_cf",
-]);
+const NUMERIC_COLS = new Set(["adhaarnumber", "Leaves_cf"]);
 
 function selectList(existingDbCols) {
   const cols = [];
   for (const apiName of Object.keys(COLMAP)) {
     const dbName = COLMAP[apiName];
-    // existingDbCols contains lowercase names; dbName may have case
     if (existingDbCols.has(dbName.toLowerCase())) cols.push(`"${dbName}" AS "${apiName}"`);
   }
   return cols;
@@ -50,7 +44,6 @@ function asInt(v, def) {
   return Number.isFinite(n) && n >= 0 ? Math.floor(n) : def;
 }
 
-/** Keep only date portion YYYY-MM-DD */
 function justDate(v) {
   const s = String(v ?? "");
   if (!s) return null;
@@ -59,30 +52,32 @@ function justDate(v) {
   return /^\d{4}-\d{2}-\d{2}$/.test(first) ? first : s;
 }
 
-/** Sanitize value per DB column (avoid "" into numeric; strip time from dates; etc.) */
 function sanitizeForDb(dbCol, val) {
-  if (val === undefined) return undefined;          // skip entirely
-  if (val === "") return null;                      // empty string -> NULL for all nullable cols
+  if (val === undefined) return undefined;
+  if (val === "") return null;
 
-  // Normalize date-only for 'doj' (VARCHAR in your schema)
-  if (dbCol.toLowerCase() === "doj") {
+  const lc = dbCol.toLowerCase();
+
+  if (lc === "doj") {
     const d = justDate(val);
     return d || null;
   }
 
-  // Numeric columns: accept number, numeric-like text, or null
+  if (lc === "company") {
+    if (val == null) return null;
+    const t = String(val).trim().toUpperCase();
+    return t || null;
+  }
+
   if (NUMERIC_COLS.has(dbCol)) {
     if (val === null) return null;
     const s = String(val).trim();
     if (s === "") return null;
-    // keep digits (and optional minus/decimal if you ever need)
     const cleaned = s.replace(/[^0-9.-]/g, "");
     if (cleaned === "" || isNaN(Number(cleaned))) return null;
-    // Return as number so Postgres numeric receives a proper numeric param
     return Number(cleaned);
   }
 
-  // Text-ish: trim but allow null
   if (typeof val === "string") {
     const t = val.trim();
     return t === "" ? null : t;
@@ -100,13 +95,11 @@ export default async function handler(req, res) {
         return res.status(500).json({ error: "No known columns found in EmployeeTable" });
       }
 
-      // Count
       if (String(req.query?.count || "") === "1") {
         const { rows } = await pool.query(`SELECT COUNT(*)::bigint AS cnt FROM public."EmployeeTable"`);
         return res.status(200).json({ count: Number(rows[0]?.cnt || 0) });
       }
 
-      // Suggestions
       if (String(req.query?.suggest || "") === "1") {
         const qStr = String(req.query?.q || "").trim();
         const limit = asInt(req.query?.limit, 8);
@@ -132,7 +125,6 @@ export default async function handler(req, res) {
         return res.status(200).json({ data: rows });
       }
 
-      // Filters
       const where = [];
       const params = [];
 
@@ -148,8 +140,13 @@ export default async function handler(req, res) {
         params.push(`%${String(req.query.name).trim()}%`);
         where.push(`"${COLMAP.name}" ILIKE $${params.length}`);
       }
+      // Company filter (case/space-insensitive)
+      if (req.query?.company) {
+        params.push(String(req.query.company).trim());
+        where.push(`BTRIM(LOWER("${COLMAP.company}")) = BTRIM(LOWER($${params.length}))`);
+      }
 
-      params.push(asInt(req.query?.limit, 100));
+      params.push(asInt(req.query?.limit, 200));
       params.push(asInt(req.query?.offset, 0));
 
       const { rows } = await pool.query(
@@ -176,7 +173,7 @@ export default async function handler(req, res) {
         employeeid, name, email, role, doj, company,
         adhaarnumber, pancard, address, password,
         designation, reporting_to_id, grosssalary, number,
-        leaves_cf, // optional
+        leaves_cf, probation,
       } = body;
 
       if (!employeeid || !name || !email || !company) {
@@ -194,7 +191,7 @@ export default async function handler(req, res) {
         ["email", email],
         ["doj", doj ?? null],
         ["number", number ?? null],
-        ["company", company],
+        ["company", company], // sanitizeForDb() will UPPER + TRIM
         ["role", role],
         ["grosssalary", grosssalary],
         ["adhaarnumber", adhaarnumber],
@@ -202,15 +199,16 @@ export default async function handler(req, res) {
         ["address", address],
         ["designation", designation],
         ["reporting_to_id", reporting_to_id],
-        ["leaves_cf", leaves_cf],       // optional numeric
-        ["password", password],         // not in COLMAP => will be skipped by has() check below
+        ["leaves_cf", leaves_cf],
+        ["probation", probation],
+        ["password", password],
       ];
 
       for (const [api, rawVal] of pairs) {
-        const db = COLMAP[api] || api; // keep exact DB case for quoted name
+        const db = COLMAP[api] || api;
         if (!existingDbCols.has(db.toLowerCase())) continue;
         const val = sanitizeForDb(db, rawVal);
-        if (val === undefined) continue; // do not include
+        if (val === undefined) continue;
         fields.push(`"${db}"`);
         placeholders.push(`$${idx++}`);
         values.push(val);
@@ -246,10 +244,10 @@ export default async function handler(req, res) {
         const db = COLMAP[api];
         if (!db) continue;
         if (!existingDbCols.has(db.toLowerCase())) continue;
-        if (db === "employeeid") continue; // don't update PK
+        if (db === "employeeid") continue;
 
-        const val = sanitizeForDb(db, rawVal);
-        if (val === undefined) continue; // skip if not present at all
+        const val = sanitizeForDb(db, rawVal); // company gets UPPER+TRIM here
+        if (val === undefined) continue;
         fields.push(`"${db}" = $${idx++}`);
         values.push(val);
       }
