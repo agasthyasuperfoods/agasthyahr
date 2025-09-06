@@ -6,7 +6,7 @@ import Swal from "sweetalert2";
 import AppHeader from "@/components/AppHeader";
 import ProfileModal from "@/components/ProfileModal";
 
-// replace your COLS with this:
+// Columns
 const COLS = [
   { key: "employeeid", label: "Employee ID" },
   { key: "name", label: "Name" },
@@ -22,8 +22,26 @@ const COLS = [
   { key: "address", label: "Address" },
 ];
 
-
 const PAGE_SIZES = [10, 20, 50, 100];
+
+// ---------- ID helpers (normalize & variants) ----------
+const normId = (s) =>
+  String(s ?? "")
+    .trim()
+    .replace(/\s+/g, "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "");
+
+const idVariants = (raw) => {
+  const base = normId(raw);
+  const digits = base.replace(/[^0-9]/g, "");
+  const noZeros = digits.replace(/^0+/, "") || (digits ? "0" : "");
+  const set = new Set();
+  if (base) set.add(base);
+  if (digits) set.add(digits);
+  if (noZeros) set.add(noZeros);
+  return Array.from(set);
+};
 
 function getAuthIdentity() {
   if (typeof window === "undefined") return { id: null, email: null };
@@ -116,13 +134,44 @@ export default function ExEmployeesPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [editRow, setEditRow] = useState(null);
 
+  // Build ID->Name map from active employees for manager lookup
+  const [idToName, setIdToName] = useState({});
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch("/api/users");
+        const j = await r.json().catch(() => ({}));
+        const data = Array.isArray(j?.data) ? j.data : [];
+        const map = {};
+        for (const u of data) {
+          for (const key of idVariants(u.employeeid)) {
+            if (u.name && !map[key]) map[key] = u.name;
+          }
+        }
+        if (!cancelled) setIdToName(map);
+      } catch {
+        if (!cancelled) setIdToName({});
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const resolveManagerName = (rawId) => {
+    if (!rawId) return "";
+    for (const k of idVariants(rawId)) {
+      if (idToName[k]) return idToName[k];
+    }
+    return "";
+  };
+
   // Debounce search
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQ(q.trim()), 400);
     return () => clearTimeout(t);
   }, [q]);
 
-  // Fetch data
+  // Fetch ex-employees
   useEffect(() => {
     (async () => {
       try {
@@ -222,128 +271,149 @@ export default function ExEmployeesPage() {
             </div>
           </div>
 
-          {/* Table */}
+          {/* Table with sticky header + sticky bottom pager (inside the scroll area) */}
           <div className="bg-white border border-gray-200 rounded-2xl shadow-sm">
-            <div className="overflow-x-auto rounded-2xl">
-              <table className="min-w-[1250px] w-full text-sm">
-                <thead className="bg-gray-50 sticky top-0 z-10">
-                  <tr className="text-left text-gray-600">
-                    {COLS.map((c) => {
-                      const active = sortBy === c.key;
-                      return (
-                        <th
-                          key={c.key}
-                          className="px-3 py-2 border-b whitespace-nowrap cursor-pointer select-none"
-                          onClick={() => toggleSort(c.key)}
-                          title={`Sort by ${c.label}`}
-                        >
-                          <span className="inline-flex items-center gap-1">
-                            {c.label}
-                            <span className={`text-xs ${active ? "opacity-100" : "opacity-30"}`}>
-                              {active ? (sortDir === "asc" ? "▲" : "▼") : "↕"}
-                            </span>
-                          </span>
-                        </th>
-                      );
-                    })}
-                    <th className="px-3 py-2 border-b text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {loading ? (
-                    <tr>
-                      <td colSpan={COLS.length + 1} className="px-3 py-8 text-center text-gray-500">
-                        <span className="inline-block h-5 w-5 mr-2 animate-spin rounded-full border-2 border-gray-300 border-t-transparent" />
-                        Loading…
-                      </td>
-                    </tr>
-                  ) : err ? (
-                    <tr>
-                      <td colSpan={COLS.length + 1} className="px-3 py-8 text-center text-red-600">
-                        {err}
-                      </td>
-                    </tr>
-                  ) : rows.length === 0 ? (
-                    <tr>
-                      <td colSpan={COLS.length + 1} className="px-3 py-8 text-center text-gray-600">
-                        No results.
-                      </td>
-                    </tr>
-                  ) : (
-                    rows.map((r, idx) => (
-                      <tr key={r.employeeid || idx} className="odd:bg-white even:bg-gray-50 align-top">
-                        {COLS.map((c) => (
-                          <td key={c.key} className="px-3 py-2 border-t">{r?.[c.key] ?? "-"}</td>
-                        ))}
-                        <td className="px-3 py-2 border-t text-right">
-                          <button
-                            onClick={() => openEdit(r)}
-                          className="inline-flex items-center px-2.5 py-1.5 rounded-md bg-[#C1272D] text-white hover:bg-[#a02125]"
+            <div className="overflow-x-auto rounded-2xl border border-transparent">
+              {/* Scroll container */}
+              <div className="relative max-h-[72vh] overflow-auto">
+                <table className="min-w-[1250px] w-full text-sm">
+                  <thead className="bg-gray-50 sticky top-0 z-10">
+                    <tr className="text-left text-gray-600">
+                      {COLS.map((c) => {
+                        const active = sortBy === c.key;
+                        return (
+                          <th
+                            key={c.key}
+                            className="px-3 py-2 border-b whitespace-nowrap cursor-pointer select-none"
+                            onClick={() => toggleSort(c.key)}
+                            title={`Sort by ${c.label}`}
                           >
-                            Edit
-                          </button>
+                            <span className="inline-flex items-center gap-1">
+                              {c.label}
+                              <span className={`text-xs ${active ? "opacity-100" : "opacity-30"}`}>
+                                {active ? (sortDir === "asc" ? "▲" : "▼") : "↕"}
+                              </span>
+                            </span>
+                          </th>
+                        );
+                      })}
+                      <th className="px-3 py-2 border-b text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {loading ? (
+                      <tr>
+                        <td colSpan={COLS.length + 1} className="px-3 py-8 text-center text-gray-500">
+                          <span className="inline-block h-5 w-5 mr-2 animate-spin rounded-full border-2 border-gray-300 border-t-transparent" />
+                          Loading…
                         </td>
                       </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
+                    ) : err ? (
+                      <tr>
+                        <td colSpan={COLS.length + 1} className="px-3 py-8 text-center text-red-600">
+                          {err}
+                        </td>
+                      </tr>
+                    ) : rows.length === 0 ? (
+                      <tr>
+                        <td colSpan={COLS.length + 1} className="px-3 py-8 text-center text-gray-600">
+                          No results.
+                        </td>
+                      </tr>
+                    ) : (
+                      rows.map((r, idx) => (
+                        <tr key={r.employeeid || idx} className="odd:bg-white even:bg-gray-50 align-top">
+                          {COLS.map((c) => {
+                            if (c.key === "reporting_to_id") {
+                              const mgrName = resolveManagerName(r?.reporting_to_id);
+                              return (
+                                <td key={c.key} className="px-3 py-2 border-t">
+                                  {r?.reporting_to_id || "-"}
+                                  {r?.reporting_to_id ? (
+                                    <div className="text-xs text-gray-500">{mgrName || "—"}</div>
+                                  ) : null}
+                                </td>
+                              );
+                            }
+                            return (
+                              <td key={c.key} className="px-3 py-2 border-t">
+                                {r?.[c.key] ?? "-"}
+                              </td>
+                            );
+                          })}
+                          <td className="px-3 py-2 border-t text-right">
+                            <button
+                              onClick={() => openEdit(r)}
+                              className="inline-flex items-center px-2.5 py-1.5 rounded-md bg-[#C1272D] text-white hover:bg-[#a02125]"
+                            >
+                              Edit
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
 
-            {/* Pager */}
-            <div className="p-3 flex flex-col md:flex-row items-center justify-between gap-3">
-              <div className="text-xs text-gray-600">
-                Showing <span className="font-medium">{pagerInfo.from}</span> – <span className="font-medium">{pagerInfo.to}</span> of{" "}
-                <span className="font-medium">{total}</span>
-              </div>
+                {/* Sticky bottom pager INSIDE the scroll area */}
+                <div className="sticky bottom-0 z-20 border-t bg-white/95 backdrop-blur supports-backdrop-blur:bg-white/80 px-3 py-2">
+                  <div className="flex flex-col md:flex-row items-center justify-between gap-3">
+                    <div className="text-xs text-gray-600">
+                      Showing <span className="font-medium">{pagerInfo.from}</span> – <span className="font-medium">{pagerInfo.to}</span> of{" "}
+                      <span className="font-medium">{total}</span>
+                    </div>
 
-              <div className="flex items-center gap-2">
-                <button
-                  disabled={page <= 1 || loading}
-                  onClick={() => setPage(1)}
-                  className="px-2 py-1 rounded border text-sm disabled:opacity-50"
-                  title="First"
-                >
-                  «
-                </button>
-                <button
-                  disabled={page <= 1 || loading}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  className="px-2 py-1 rounded border text-sm disabled:opacity-50"
-                  title="Previous"
-                >
-                  ‹
-                </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        disabled={page <= 1 || loading}
+                        onClick={() => setPage(1)}
+                        className="px-2 py-1 rounded border text-sm disabled:opacity-50"
+                        title="First"
+                      >
+                        «
+                      </button>
+                      <button
+                        disabled={page <= 1 || loading}
+                        onClick={() => setPage((p) => Math.max(1, p - 1))}
+                        className="px-2 py-1 rounded border text-sm disabled:opacity-50"
+                        title="Previous"
+                      >
+                        ‹
+                      </button>
 
-                <input
-                  type="number"
-                  min={1}
-                  max={totalPages}
-                  value={page}
-                  onChange={(e) => {
-                    const val = Math.max(1, Math.min(totalPages, parseInt(e.target.value || "1", 10)));
-                    setPage(val);
-                  }}
-                  className="w-16 text-center rounded border px-2 py-1 text-sm"
-                />
-                <span className="text-sm text-gray-600">/ {totalPages}</span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={totalPages}
+                        value={page}
+                        onChange={(e) => {
+                          const val = Math.max(1, Math.min(totalPages, parseInt(e.target.value || "1", 10)));
+                          setPage(val);
+                        }}
+                        className="w-16 text-center rounded border px-2 py-1 text-sm"
+                      />
+                      <span className="text-sm text-gray-600">/ {totalPages}</span>
 
-                <button
-                  disabled={page >= totalPages || loading}
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  className="px-2 py-1 rounded border text-sm disabled:opacity-50"
-                  title="Next"
-                >
-                  ›
-                </button>
-                <button
-                  disabled={page >= totalPages || loading}
-                  onClick={() => setPage(totalPages)}
-                  className="px-2 py-1 rounded border text-sm disabled:opacity-50"
-                  title="Last"
-                >
-                  »
-                </button>
+                      <button
+                        disabled={page >= totalPages || loading}
+                        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                        className="px-2 py-1 rounded border text-sm disabled:opacity-50"
+                        title="Next"
+                      >
+                        ›
+                      </button>
+                      <button
+                        disabled={page >= totalPages || loading}
+                        onClick={() => setPage(totalPages)}
+                        className="px-2 py-1 rounded border text-sm disabled:opacity-50"
+                        title="Last"
+                      >
+                        »
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                {/* End sticky pager */}
               </div>
             </div>
           </div>
@@ -351,7 +421,12 @@ export default function ExEmployeesPage() {
       </main>
 
       {editOpen && editRow ? (
-        <EditExEmployeeModal row={editRow} onClose={() => setEditOpen(false)} onSaved={onSaved} />
+        <EditExEmployeeModal
+          idToName={idToName}
+          row={editRow}
+          onClose={() => setEditOpen(false)}
+          onSaved={onSaved}
+        />
       ) : null}
 
       {showProfile && profileUser ? (
@@ -377,14 +452,14 @@ export default function ExEmployeesPage() {
 /* -----------------------------
    Edit Modal (wide)
 ------------------------------ */
-function EditExEmployeeModal({ row, onClose, onSaved }) {
+function EditExEmployeeModal({ idToName, row, onClose, onSaved }) {
   const [submitting, setSubmitting] = useState(false);
 
   const [name, setName] = useState(row?.name || "");
   const [role, setRole] = useState(row?.role || "");
   const [email, setEmail] = useState(row?.email || "");
   const [company, setCompany] = useState(row?.company || "");
-  const [resigneddate, setResigneddate] = useState(row?.resigneddate || ""); // VARCHAR
+  const [resigneddate, setResigneddate] = useState(row?.resigneddate || ""); // YYYY-MM-DD string (VARCHAR)
   const [doj, setDoj] = useState(row?.doj || "");
   const [number, setNumber] = useState(row?.number ?? "");
   const [grosssalary, setGrosssalary] = useState(row?.grosssalary || "");
@@ -393,6 +468,13 @@ function EditExEmployeeModal({ row, onClose, onSaved }) {
   // NEW
   const [designation, setDesignation] = useState(row?.designation || "");
   const [reportingToId, setReportingToId] = useState(row?.reporting_to_id || "");
+
+  const managerName = useMemo(() => {
+    for (const k of idVariants(reportingToId)) {
+      if (idToName?.[k]) return idToName[k];
+    }
+    return "";
+  }, [reportingToId, idToName]);
 
   const validate = () => {
     if (!row?.employeeid) return "Missing employeeid";
@@ -418,7 +500,6 @@ function EditExEmployeeModal({ row, onClose, onSaved }) {
         number: number === "" ? null : Number(number),
         grosssalary,
         address,
-        // NEW
         designation: designation || null,
         reporting_to_id: reportingToId || null,
       };
@@ -506,7 +587,7 @@ function EditExEmployeeModal({ row, onClose, onSaved }) {
             </div>
           </div>
 
-          {/* NEW ROW: Designation / Reporting To */}
+          {/* NEW ROW: Designation / Reporting To / Gross Salary */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             <div>
               <label className="block text-sm font-medium text-gray-700">Designation</label>
@@ -527,6 +608,9 @@ function EditExEmployeeModal({ row, onClose, onSaved }) {
                 className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
                 placeholder="e.g. EMP1002"
               />
+              <div className="mt-1 text-xs text-gray-600">
+                {reportingToId ? (managerName ? `Manager: ${managerName}` : "No match found") : ""}
+              </div>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700">Gross Salary</label>
@@ -542,12 +626,12 @@ function EditExEmployeeModal({ row, onClose, onSaved }) {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             <div>
               <label className="block text-sm font-medium text-gray-700">DOJ</label>
-            <input
-    type="date"
-    value={/^\d{4}-\d{2}-\d{2}$/.test(doj || "") ? doj : ""}
-    onChange={(e) => setDoj(e.target.value)}
-    className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
-  />
+              <input
+                type="date"
+                value={/^\d{4}-\d{2}-\d{2}$/.test(doj || "") ? doj : ""}
+                onChange={(e) => setDoj(e.target.value)}
+                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700">Phone</label>
@@ -580,7 +664,8 @@ function EditExEmployeeModal({ row, onClose, onSaved }) {
             <button
               type="submit"
               disabled={submitting}
-className="inline-flex items-center justify-center rounded-lg bg-[#C1272D] text-white font-medium px-4 py-2 hover:bg-[#a02125] disabled:opacity-60"            >
+              className="inline-flex items-center justify-center rounded-lg bg-[#C1272D] text-white font-medium px-4 py-2 hover:bg-[#a02125] disabled:opacity-60"
+            >
               {submitting ? "Saving…" : "Save Changes"}
             </button>
           </div>
@@ -589,4 +674,3 @@ className="inline-flex items-center justify-center rounded-lg bg-[#C1272D] text-
     </div>
   );
 }
-
