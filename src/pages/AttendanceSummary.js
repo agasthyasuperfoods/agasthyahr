@@ -284,12 +284,13 @@ export default function AttendanceSummary() {
   };
   useEffect(() => { if (!meLoading) fetchLeaves(); }, [meLoading, month, hr.company, hr.location]);
 
-  /* ---------- Lookup map ---------- */
+  /* ---------- Lookup map (includes carry-forward) ---------- */
   const empMap = useMemo(() => {
     const m = {};
     for (const u of emps || []) {
       const key = normId(u.employeeid ?? u.id);
       if (!key) continue;
+      const leavesCfNum = Number(u.leaves_cf);
       m[key] = {
         name: u.name ?? "",
         doj: justDate(u.doj ?? ""),
@@ -297,6 +298,8 @@ export default function AttendanceSummary() {
         grosssalary: u.grossSalary ?? u.grosssalary ?? u.gross_salary ?? "",
         company: (u.company ?? "").trim(),
         probationYes: String(u.probation ?? "").trim().toLowerCase() === "yes",
+        // <- carry-forward leaves from EmployeeTable."Leaves_cf"
+        leaves_cf: Number.isFinite(leavesCfNum) ? leavesCfNum : null,
       };
     }
     return m;
@@ -321,13 +324,14 @@ export default function AttendanceSummary() {
           ? Number(r.salary_per_month)
           : Number.isFinite(salaryNum) ? salaryNum : salaryTxt,
         current_month_eligibility: probationYes ? 0 : 2,
-        // NOTE: we compute from month — keep server value ignored for determinism
+        // NOTE: compute from month for determinism
         actual_working_days: actualWorkingDays,
         _resolved_company: (r.company ?? aux.company ?? "").trim(),
+        // expose master carry-forward (for reference/fallback)
+        _master_leaves_cf: aux.leaves_cf,
       };
     });
 
-    // Server likely filtered by company/location; this is a guard
     const cmp = (hr.company || "").trim().toLowerCase();
     return cmp ? scoped.filter((r) => String(r._resolved_company || "").trim().toLowerCase() === cmp) : scoped;
   }, [rows, empMap, hr.company, actualWorkingDays]);
@@ -343,6 +347,16 @@ export default function AttendanceSummary() {
     return Number.isFinite(fromRow) ? fromRow : 0;
   };
 
+  // NEW: default for Leaves C/f from EmployeeTable."Leaves_cf"
+  const getCarryForwardDefault = (r) => {
+    const aux = empMap[normId(r.employeeid)] || {};
+    const fromEmp = Number(aux.leaves_cf);
+    if (Number.isFinite(fromEmp)) return fromEmp;
+    const fromRow = Number(r.leaves_cf_new);
+    if (Number.isFinite(fromRow)) return fromRow;
+    return 0;
+  };
+
   /* ---------- Inline edit orchestration ---------- */
   const startEdit = (row) => {
     const id = row.employeeid;
@@ -352,7 +366,8 @@ export default function AttendanceSummary() {
         leaves_taken: String(getDefaultLeaves(row)),
         late_adj_days: String(row.late_adj_days ?? ""),
         lop_days: String(row.lop_days ?? ""),
-        leaves_cf_new: String(row.leaves_cf_new ?? ""),
+        // prefill from EmployeeTable master if present
+        leaves_cf_new: String(getCarryForwardDefault(row)),
       };
       setEditBackup((b) => ({ ...b, [id]: { ...init } }));
       return { ...d, [id]: init };
@@ -410,7 +425,7 @@ export default function AttendanceSummary() {
           leaves_taken: String(getDefaultLeaves(r)),
           late_adj_days: String(r.late_adj_days ?? ""),
           lop_days: String(r.lop_days ?? ""),
-          leaves_cf_new: String(r.leaves_cf_new ?? ""),
+          leaves_cf_new: String(getCarryForwardDefault(r)),
         };
         return {
           employeeid: r.employeeid,
@@ -418,6 +433,7 @@ export default function AttendanceSummary() {
             leaves_taken: toNumOrNull(d.leaves_taken),
             late_adj_days: toNumOrNull(d.late_adj_days),
             lop_days: toNumOrNull(d.lop_days),
+            // This is the value shown in "Leaves C/f" — prefilled from EmployeeTable
             leaves_cf_new: toNumOrNull(d.leaves_cf_new),
           },
         };
@@ -519,7 +535,7 @@ export default function AttendanceSummary() {
                 onChange={(e) => {
                   const v = e.target.value;
                   setMonth(v);
-                  // keep URL in sync for deep-linking and back/forward nav
+                  // keep URL in sync
                   router.replace({ pathname: router.pathname, query: { ...router.query, month: v } }, undefined, { shallow: true });
                 }}
                 className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
@@ -569,7 +585,8 @@ export default function AttendanceSummary() {
                           leaves_taken: String(getDefaultLeaves(r)),
                           late_adj_days: String(r.late_adj_days ?? ""),
                           lop_days: String(r.lop_days ?? ""),
-                          leaves_cf_new: String(r.leaves_cf_new ?? ""),
+                          // <- here we show EmployeeTable carry-forward by default
+                          leaves_cf_new: String(getCarryForwardDefault(r)),
                         };
                         const leavesTakenNum = Number.isFinite(Number(d.leaves_taken)) ? Number(d.leaves_taken) : 0;
                         const workingDays = Math.max(0, actualWorkingDays - leavesTakenNum);
@@ -639,6 +656,7 @@ export default function AttendanceSummary() {
                               }
                               if (c.key === "actual_working_days") val = actualWorkingDays;
                               if (c.key === "leaves_taken") val = d.leaves_taken === "" ? "-" : d.leaves_taken;
+                              if (c.key === "leaves_cf_new") val = d.leaves_cf_new === "" ? "-" : d.leaves_cf_new;
                               if (c.key === "present_days") val = workingDays;
 
                               return <td key={c.key} className={`px-3 py-2 border-t ${c.align || ""}`}>{val ?? "-"}</td>;

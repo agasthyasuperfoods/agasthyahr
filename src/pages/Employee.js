@@ -1,13 +1,5 @@
 // src/pages/employee.js
-// Clean, organized header row:
-// - Left: Search with typeahead (hard-close, keyboard nav, debounce) + title/description
-// - Middle: Calendar with per-day attendance colors (green submitted, orange not submitted, future no color) + legend
-// - Right: Total employee count
-// Also includes "Update Details" modal + assigned assets table.
-// + Header wiring: hrName, openProfile (modal), logout
-// Updates requested:
-// - Make PAN and Email non-mandatory in Update Details modal (kept optional, no validation blockers)
-// - Surface Carryforward Leaves (Leaves_cf) from EmployeeTable in both Details section and Update Details modal (read-only)
+// Uses single API at /api/updateapipage to fetch full EmployeeTable rows.
 
 import React, { useEffect, useRef, useState } from "react";
 import Head from "next/head";
@@ -18,7 +10,7 @@ import Swal from "sweetalert2";
 import { Users, Search as SearchIcon, Loader2, Pencil, X as XIcon, Save } from "lucide-react";
 
 const ASSETS_API = "/api/assets/Aindex";
-const USERS_API = "/api/users";
+const USERS_API = "/api/updateapipage"; // single API
 const ATTENDANCE_CHECK_API = "/api/attendance/check";
 
 /* ========= tiny auth identity helper for profile fallback ========= */
@@ -49,7 +41,6 @@ const fmt = {
   },
 };
 
-/* ========= Daily Greeting & Quote helpers ========= */
 const QUOTES = [
   { text: "Success is the sum of small efforts, repeated day in and day out.", author: "Robert Collier" },
   { text: "The secret of getting ahead is getting started.", author: "Mark Twain" },
@@ -93,7 +84,6 @@ function AttendanceCalendar({ className = "" }) {
 
   const startPad = first.getDay();
   const daysInMonth = last.getDate();
-
   const monthName = today.toLocaleString(undefined, { month: "long" });
 
   const cells = [];
@@ -156,13 +146,7 @@ function AttendanceCalendar({ className = "" }) {
         )}
       </div>
       <div className="grid grid-cols-7 text-center text-[11px] text-gray-500 mb-1">
-        <div>Sun</div>
-        <div>Mon</div>
-        <div>Tue</div>
-        <div>Wed</div>
-        <div>Thu</div>
-        <div>Fri</div>
-        <div>Sat</div>
+        <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
       </div>
       <div className="grid grid-cols-7 gap-1 text-center">
         {cells.map((d, i) => {
@@ -200,6 +184,14 @@ function AttendanceCalendar({ className = "" }) {
   );
 }
 
+/* ========= API helper ========= */
+async function fetchEmployeeById(id) {
+  const res = await fetch(`/api/updateapipage?id=${encodeURIComponent(id)}`);
+  const j = await res.json().catch(() => ({}));
+  if (res.ok && Array.isArray(j?.data) && j.data.length) return j.data[0];
+  throw new Error(j?.error || "Employee not found");
+}
+
 /* ========= Update Employee Modal ========= */
 function EmployeeEditModal({ user, onClose, onSaved }) {
   const [name, setName] = useState(user?.name || "");
@@ -214,10 +206,10 @@ function EmployeeEditModal({ user, onClose, onSaved }) {
   const [address, setAddress] = useState(user?.address || "");
   const [saving, setSaving] = useState(false);
 
-  // NEW: surface carryforward leaves (read-only) and reporting/designation
+  // NEW: read-only fields
   const [designation, setDesignation] = useState(user?.designation || "");
   const [reportingToId, setReportingToId] = useState(user?.reporting_to_id || "");
-  const [leavesCf] = useState(user?.Leaves_cf ?? user?.leaves_cf ?? ""); // read-only snapshot
+  const [leavesCf] = useState(user?.Leaves_cf ?? user?.leaves_cf ?? ""); // read-only
 
   const save = async () => {
     try {
@@ -228,7 +220,7 @@ function EmployeeEditModal({ user, onClose, onSaved }) {
         email: email || null,                 // optional
         role: role || null,
         doj: doj || null,
-        number: phone || null,                // use "number" for API consistency
+        number: phone || null,
         company: company || null,
         grosssalary: grosssalary === "" ? null : String(grosssalary),
         adhaarnumber: adhaarnumber || null,
@@ -236,9 +228,9 @@ function EmployeeEditModal({ user, onClose, onSaved }) {
         address: address || null,
         designation: designation || null,
         reporting_to_id: reportingToId || null,
-        // NOTE: Leaves_cf is read-only here; not updating from this modal
+        // Leaves_cf is read-only
       };
-      const res = await fetch(`/api/users?id=${encodeURIComponent(user.employeeid)}`, {
+      const res = await fetch(`/api/updateapipage?id=${encodeURIComponent(user.employeeid)}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -386,12 +378,12 @@ export default function Employee() {
       if (!me) {
         const { id, email } = getAuthIdentity();
         if (id) {
-          const r = await fetch(`/api/users?id=${encodeURIComponent(id)}`);
+          const r = await fetch(`${USERS_API}?id=${encodeURIComponent(id)}`);
           const j = await r.json().catch(() => ({}));
           if (r.ok && Array.isArray(j?.data) && j.data.length) me = j.data[0];
         }
         if (!me && email) {
-          const r = await fetch(`/api/users?email=${encodeURIComponent(email)}`);
+          const r = await fetch(`${USERS_API}?email=${encodeURIComponent(email)}`);
           const j = await r.json().catch(() => ({}));
           if (r.ok && Array.isArray(j?.data) && j.data.length) me = j.data[0];
         }
@@ -578,9 +570,17 @@ export default function Employee() {
       const arr = Array.isArray(j?.data) ? j.data : [];
       setResults(arr);
       if (arr.length === 1) {
-        setSelected(arr[0]);
-        suggestEnabledRef.current = false;
-        hardCloseSuggestions();
+        try {
+          const only = arr[0];
+          const full = only?.employeeid ? await fetchEmployeeById(only.employeeid) : only;
+          setSelected(full);
+          setResults([full]);
+        } catch {
+          setSelected(arr[0]);
+        } finally {
+          suggestEnabledRef.current = false;
+          hardCloseSuggestions();
+        }
       }
     } catch (e2) {
       setError(e2.message || "Search failed");
@@ -609,15 +609,23 @@ export default function Employee() {
     })();
   }, [selected?.employeeid]);
 
-  const chooseSuggestion = (u) => {
-    setSearch(u.employeeid || u.email || u.name || "");
-    setResults([u]);
-    setSelected(u);
-    suggestEnabledRef.current = false;
-    hardCloseSuggestions();
+  // Async choose suggestion -> always fetch full row
+  const chooseSuggestion = async (u) => {
+    try {
+      setSearch(u.employeeid || u.email || u.name || "");
+      const full = u?.employeeid ? await fetchEmployeeById(u.employeeid) : u;
+      setResults([full]);
+      setSelected(full);
+    } catch {
+      setResults([u]);
+      setSelected(u);
+    } finally {
+      suggestEnabledRef.current = false;
+      hardCloseSuggestions();
+    }
   };
 
-  const onInputKeyDown = (e) => {
+  const onInputKeyDown = async (e) => {
     if (suggestOpen && (suggestions.length || suggestLoading)) {
       if (e.key === "ArrowDown") {
         e.preventDefault();
@@ -630,7 +638,7 @@ export default function Employee() {
       } else if (e.key === "Enter") {
         if (highlightIdx >= 0 && suggestions[highlightIdx]) {
           e.preventDefault();
-          chooseSuggestion(suggestions[highlightIdx]);
+          await chooseSuggestion(suggestions[highlightIdx]);
           return;
         }
       } else if (e.key === "Escape") {
@@ -667,6 +675,24 @@ export default function Employee() {
       Swal.fire({ icon: "error", title: "Unassign failed", text: e.message || "Failed" });
     }
   };
+
+  // Safety net: upgrade partial selections to full DB row
+  useEffect(() => {
+    (async () => {
+      if (!selected?.employeeid) return;
+      const missingCore =
+        selected.designation === undefined ||
+        selected.reporting_to_id === undefined ||
+        (selected.Leaves_cf === undefined && selected.leaves_cf === undefined) ||
+        selected.grosssalary === undefined;
+      if (!missingCore) return;
+      try {
+        const full = await fetchEmployeeById(selected.employeeid);
+        setSelected(full);
+        setResults((prev) => prev.map((r) => (r.employeeid === full.employeeid ? full : r)));
+      } catch {}
+    })();
+  }, [selected?.employeeid]);
 
   const canShowEmployeePicker = results.length > 1 && !selected;
   const showEmployeeDetails = !!selected;
@@ -799,13 +825,7 @@ export default function Employee() {
                                 role="option"
                                 aria-selected={active}
                                 onMouseDown={(e) => e.preventDefault()}
-                                onClick={() => {
-                                  setSearch(u.employeeid || u.email || u.name || "");
-                                  setResults([u]);
-                                  setSelected(u);
-                                  suggestEnabledRef.current = false;
-                                  hardCloseSuggestions();
-                                }}
+                                onClick={() => chooseSuggestion(u)}
                                 className={`px-3 py-2 cursor-pointer ${active ? "bg-blue-50" : "bg-white"} hover:bg-blue-50`}
                               >
                                 <div className="flex items-center justify-between gap-3">
@@ -905,10 +925,17 @@ export default function Employee() {
                         <td className="px-3 py-2 border-t">{u.company || "-"}</td>
                         <td className="px-3 py-2 border-t text-right">
                           <button
-                            onClick={() => {
-                              setSelected(u);
-                              suggestEnabledRef.current = false;
-                              hardCloseSuggestions();
+                            onClick={async () => {
+                              try {
+                                const full = u?.employeeid ? await fetchEmployeeById(u.employeeid) : u;
+                                setSelected(full);
+                                setResults((prev) => prev.map((r) => (r.employeeid === u.employeeid ? full : r)));
+                              } catch {
+                                setSelected(u);
+                              } finally {
+                                suggestEnabledRef.current = false;
+                                hardCloseSuggestions();
+                              }
                             }}
                             className="inline-flex items-center px-2.5 py-1.5 rounded-md bg-blue-50 text-blue-700 hover:bg-blue-100"
                           >
@@ -939,15 +966,6 @@ export default function Employee() {
                   <div>
                     <h3 className="text-base font-semibold text-gray-900">Employee Details</h3>
                     <p className="text-sm text-gray-600">All fields pulled from EmployeeTable.</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm hover:bg-gray-50"
-                      onClick={() => setShowEdit(true)}
-                      title="Update employee details"
-                    >
-                      <Pencil className="h-4 w-4" /> Update Details
-                    </button>
                   </div>
                 </div>
 
