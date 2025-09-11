@@ -24,7 +24,7 @@ const COLS = [
 
 const PAGE_SIZES = [10, 20, 50, 100];
 
-// ---------- ID helpers (normalize & variants) ----------
+// ---------- Utils ----------
 const normId = (s) =>
   String(s ?? "")
     .trim()
@@ -50,6 +50,17 @@ function getAuthIdentity() {
     id: ls.getItem("hr_employeeid") || null,
     email: ls.getItem("hr_email") || null,
   };
+}
+
+// Ensure YYYY-MM-DD (strip time if present)
+function dateOnly(v) {
+  const s = String(v ?? "");
+  if (!s) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s; // already date-only
+  const first = s.split("T")[0].split(" ")[0]; // strip time if present
+  if (/^\d{4}-\d{2}-\d{2}$/.test(first)) return first;
+  const d = new Date(s);
+  return Number.isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
 }
 
 export default function ExEmployeesPage() {
@@ -335,6 +346,13 @@ export default function ExEmployeesPage() {
                                 </td>
                               );
                             }
+                            if (c.key === "resigneddate" || c.key === "doj") {
+                              return (
+                                <td key={c.key} className="px-3 py-2 border-t">
+                                  {dateOnly(r?.[c.key]) || "-"}
+                                </td>
+                              );
+                            }
                             return (
                               <td key={c.key} className="px-3 py-2 border-t">
                                 {r?.[c.key] ?? "-"}
@@ -459,8 +477,8 @@ function EditExEmployeeModal({ idToName, row, onClose, onSaved }) {
   const [role, setRole] = useState(row?.role || "");
   const [email, setEmail] = useState(row?.email || "");
   const [company, setCompany] = useState(row?.company || "");
-  const [resigneddate, setResigneddate] = useState(row?.resigneddate || ""); // YYYY-MM-DD string (VARCHAR)
-  const [doj, setDoj] = useState(row?.doj || "");
+  const [resigneddate, setResigneddate] = useState(dateOnly(row?.resigneddate) || ""); // date-only
+  const [doj, setDoj] = useState(dateOnly(row?.doj) || "");                            // date-only
   const [number, setNumber] = useState(row?.number ?? "");
   const [grosssalary, setGrosssalary] = useState(row?.grosssalary || "");
   const [address, setAddress] = useState(row?.address || "");
@@ -495,8 +513,8 @@ function EditExEmployeeModal({ idToName, row, onClose, onSaved }) {
         role,
         email,
         company,
-        resigneddate,
-        doj,
+        resigneddate: dateOnly(resigneddate) || null, // send date-only
+        doj: dateOnly(doj) || null,                   // send date-only
         number: number === "" ? null : Number(number),
         grosssalary,
         address,
@@ -579,7 +597,7 @@ function EditExEmployeeModal({ idToName, row, onClose, onSaved }) {
               <label className="block text-sm font-medium text-gray-700">Resigned Date</label>
               <input
                 type="date"
-                value={/^\d{4}-\d{2}-\d{2}$/.test(resigneddate || "") ? resigneddate : ""}
+                value={resigneddate}
                 onChange={(e) => setResigneddate(e.target.value)}
                 className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
                 placeholder="YYYY-MM-DD"
@@ -628,7 +646,7 @@ function EditExEmployeeModal({ idToName, row, onClose, onSaved }) {
               <label className="block text-sm font-medium text-gray-700">DOJ</label>
               <input
                 type="date"
-                value={/^\d{4}-\d{2}-\d{2}$/.test(doj || "") ? doj : ""}
+                value={doj}
                 onChange={(e) => setDoj(e.target.value)}
                 className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
               />
