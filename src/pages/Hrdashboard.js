@@ -351,7 +351,7 @@ export default function Hrdashboard() {
   const rangeEnd = Math.min(total, page * pageSize);
 
   const hasPreview = previewRows.length > 0;
-  const canOpenPreview = hasPreview || hasData;
+const canOpenPreview = hasPreview || hasData;
 
   if (!ready) {
     return (
@@ -386,13 +386,11 @@ export default function Hrdashboard() {
         />
 
         {/* Page content */}
-        <div className="  space-y-8">
+        <div className="space-y-8">
           {/* Intro */}
           <div className="bg-white border border-gray-200 shadow-sm p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-2">{`Welcome, ${hrName || "HR"}`}</h2>
-            <p className="text-sm text-gray-600">
-              Manage employees and attendance. Generate monthly sheets for Finance.
-            </p>
+            <p className="text-sm text-gray-600">Manage employees and attendance. Generate monthly sheets for Finance.</p>
             <div className="mt-4">
               <button
                 onClick={() => setShowCreate(true)}
@@ -407,9 +405,7 @@ export default function Hrdashboard() {
           <section className="bg-white border border-gray-200 rounded-2xl shadow-sm p-6">
             <div className="mb-4">
               <h3 className="text-base font-semibold text-gray-900">Attendance</h3>
-              <p className="text-xs text-gray-500">
-                Upload biometric file, review the parsed data, edit if needed, then save
-              </p>
+              <p className="text-xs text-gray-500">Upload biometric file, review the parsed data, edit if needed, then save</p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -434,9 +430,7 @@ export default function Hrdashboard() {
                   {dailyLoading ? (
                     <div className="mt-1 text-xs text-gray-500">Checking existing data…</div>
                   ) : hasData ? (
-                    <div className="mt-1 text-xs text-emerald-700">
-                      Existing records found for this date: {existingCount}
-                    </div>
+                    <div className="mt-1 text-xs text-emerald-700">Existing records found for this date: {existingCount}</div>
                   ) : (
                     <div className="mt-1 text-xs text-gray-500">No existing records for this date yet.</div>
                   )}
@@ -463,16 +457,14 @@ export default function Hrdashboard() {
                   disabled={!canOpenPreview}
                   onClick={() => setShowPreview(true)}
                   className={`mt-3 inline-flex items-center rounded-lg px-3 py-2 text-sm font-medium ${
-                    canOpenPreview
-                      ? "bg-[#C1272D] text-white hover:bg-[#a02125]"
-                      : "bg-gray-200 text-gray-500 cursor-not-allowed"
+                    canOpenPreview ? "bg-[#C1272D] text-white hover:bg-[#a02125]" : "bg-gray-200 text-gray-500 cursor-not-allowed"
                   }`}
                 >
                   {previewRows.length ? "View & Submit" : hasData ? "Update" : "View & Submit"}
                 </button>
               </div>
 
-              {/* Monthly Review (navigate to separate page) */}
+              {/* Monthly Review */}
               <div className="rounded-xl border border-gray-200 p-4">
                 <h4 className="text-sm font-semibold text-gray-900 mb-3">Monthly Review</h4>
                 <div className="flex items-center gap-3">
@@ -496,7 +488,7 @@ export default function Hrdashboard() {
           </section>
 
           {/* Employees table */}
-          <section className="bg-white border border-gray-200  shadow-sm p-3  ">
+          <section className="bg-white border border-gray-200 shadow-sm p-3">
             <div className="mb-4">
               <h3 className="text-base font-semibold text-gray-900">Employees</h3>
               <p className="text-xs text-gray-500">Create / edit / remove from EmployeeTable</p>
@@ -538,145 +530,142 @@ export default function Hrdashboard() {
               </div>
             </div>
 
-            {/* Scrollable table with sticky header + sticky bottom pagination */}
-           {/* Scrollable table with sticky header; footer outside scroll */}
-<div className="overflow-x-auto border border-gray-200 rounded-xl bg-white">
-  {/* Scroll area */}
-  <div className="relative max-h-[80vh] overflow-auto">
-    <table className="min-w-[1100px] w-full text-sm">
-      <thead className="bg-gray-50 sticky top-0 z-10">
-        <tr className="text-left text-gray-600">
-          <th className="px-3 py-2 border-b">Employee ID</th>
-          <th className="px-3 py-2 border-b">Full name</th>
-          <th className="px-3 py-2 border-b">Email</th>
-          <th className="px-3 py-2 border-b">Role</th>
-          <th className="px-3 py-2 border-b">DOJ</th>
-          <th className="px-3 py-2 border-b">Phone</th>
-          <th className="px-3 py-2 border-b">Company</th>
-          <th className="px-3 py-2 border-b">Reporting To</th>
-          <th className="px-3 py-2 border-b">Designation</th>
-          <th className="px-3 py-2 border-b">Address</th>
-          <th className="px-3 py-2 border-b text-right">Actions</th>
-        </tr>
-      </thead>
+            {/* Scrollable table with sticky header; footer outside scroll */}
+            <div className="overflow-x-auto border border-gray-200 rounded-xl bg-white">
+              <div className="relative max-h-[80vh] overflow-auto">
+                <table className="min-w-[1100px] w-full text-sm">
+                  <thead className="bg-gray-50 sticky top-0 z-10">
+                    <tr className="text-left text-gray-600">
+                      <th className="px-3 py-2 border-b">Employee ID</th>
+                      <th className="px-3 py-2 border-b">Full name</th>
+                      <th className="px-3 py-2 border-b">Email</th>
+                      <th className="px-3 py-2 border-b">Role</th>
+                      <th className="px-3 py-2 border-b">DOJ</th>
+                      <th className="px-3 py-2 border-b">Phone</th>
+                      <th className="px-3 py-2 border-b">Company</th>
+                      <th className="px-3 py-2 border-b">Reporting To</th>
+                      <th className="px-3 py-2 border-b">Designation</th>
+                      <th className="px-3 py-2 border-b">Address</th>
+                      <th className="px-3 py-2 border-b text-right">Actions</th>
+                    </tr>
+                  </thead>
 
-      <tbody>
-        {usersLoading ? (
-          <tr>
-            <td colSpan={11} className="px-3 py-6 text-center text-gray-500">
-              <span className="inline-block h-5 w-5 mr-2 animate-spin rounded-full border-2 border-gray-300 border-t-transparent" />
-              Loading employees…
-            </td>
-          </tr>
-        ) : usersError ? (
-          <tr>
-            <td colSpan={11} className="px-3 py-6 text-center text-red-600">{usersError}</td>
-          </tr>
-        ) : filteredUsers.length === 0 ? (
-          <tr>
-            <td colSpan={11} className="px-3 py-6 text-center text-gray-500">
-              {users.length === 0 ? (
-                <>No employees found. Click <span className="font-medium">Onboard Employee</span> to add one.</>
-              ) : (
-                <>No matches for <span className="font-semibold">“{searchQuery}”</span>.</>
-              )}
-            </td>
-          </tr>
-        ) : (
-          pagedUsers.map((u, i) => (
-            <tr key={u.employeeid || i} className="odd:bg-white even:bg-gray-50 align-top">
-              <td className="px-3 py-2 border-t">{u.employeeid ?? "-"}</td>
-              <td className="px-3 py-2 border-t">{u.name || "-"}</td>
-              <td className="px-3 py-2 border-t">{u.email || "-"}</td>
-              <td className="px-3 py-2 border-t">
-                <span className="rounded bg-gray-100 px-2 py-0.5">{u.role || "-"}</span>
-              </td>
-              <td className="px-3 py-2 border-t">{u.doj || "-"}</td>
-              <td className="px-3 py-2 border-t">{u.number || "-"}</td>
-              <td className="px-3 py-2 border-t">{u.company || "-"}</td>
+                  <tbody>
+                    {usersLoading ? (
+                      <tr>
+                        <td colSpan={11} className="px-3 py-6 text-center text-gray-500">
+                          <span className="inline-block h-5 w-5 mr-2 animate-spin rounded-full border-2 border-gray-300 border-t-transparent" />
+                          Loading employees…
+                        </td>
+                      </tr>
+                    ) : usersError ? (
+                      <tr>
+                        <td colSpan={11} className="px-3 py-6 text-center text-red-600">{usersError}</td>
+                      </tr>
+                    ) : filteredUsers.length === 0 ? (
+                      <tr>
+                        <td colSpan={11} className="px-3 py-6 text-center text-gray-500">
+                          {users.length === 0 ? (
+                            <>No employees found. Click <span className="font-medium">Onboard Employee</span> to add one.</>
+                          ) : (
+                            <>No matches for <span className="font-semibold">“{searchQuery}”</span>.</>
+                          )}
+                        </td>
+                      </tr>
+                    ) : (
+                      pagedUsers.map((u, i) => (
+                        <tr key={u.employeeid || i} className="odd:bg-white even:bg-gray-50 align-top">
+                          <td className="px-3 py-2 border-t">{u.employeeid ?? "-"}</td>
+                          <td className="px-3 py-2 border-t">{u.name || "-"}</td>
+                          <td className="px-3 py-2 border-t">{u.email || "-"}</td>
+                          <td className="px-3 py-2 border-t">
+                            <span className="rounded bg-gray-100 px-2 py-0.5">{u.role || "-"}</span>
+                          </td>
+                          <td className="px-3 py-2 border-t">{u.doj || "-"}</td>
+                          <td className="px-3 py-2 border-t">{u.number || "-"}</td>
+                          <td className="px-3 py-2 border-t">{u.company || "-"}</td>
 
-              {/* Reporting To: show NAME first (big), ID below (small) */}
-              <td className="px-3 py-2 border-t whitespace-nowrap">
-                <div className="text-gray-900">{resolveManagerName(u.reporting_to_id) || "—"}</div>
-                <div className="text-[11px] text-gray-500">{u.reporting_to_id || "-"}</div>
-              </td>
+                          {/* Reporting To: show NAME first, ID below */}
+                          <td className="px-3 py-2 border-t whitespace-nowrap">
+                            <div className="text-gray-900">{resolveManagerName(u.reporting_to_id) || "—"}</div>
+                            <div className="text-[11px] text-gray-500">{u.reporting_to_id || "-"}</div>
+                          </td>
 
-              <td className="px-3 py-2 border-t">{u.designation || "-"}</td>
-              <td className="px-3 py-2 border-t">{u.address || "-"}</td>
-              <td className="px-3 py-2 border-t text-right">
-                <div className="inline-flex items-center gap-1.5">
-                  <button
-                    onClick={() => {
-                      setEditEmployee(u);
-                      setShowEdit(true);
-                    }}
-                    className="p-2 rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
-                    title="Edit employee"
-                    aria-label="Edit employee"
-                  >
-                    <Pencil className="h-4 w-4" />
-                    <span className="sr-only">Edit</span>
-                  </button>
+                          <td className="px-3 py-2 border-t">{u.designation || "-"}</td>
+                          <td className="px-3 py-2 border-t">{u.address || "-"}</td>
+                          <td className="px-3 py-2 border-t text-right">
+                            <div className="inline-flex items-center gap-1.5">
+                              <button
+                                onClick={() => {
+                                  setEditEmployee(u);
+                                  setShowEdit(true);
+                                }}
+                                className="p-2 rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+                                title="Edit employee"
+                                aria-label="Edit employee"
+                              >
+                                <Pencil className="h-4 w-4" />
+                                <span className="sr-only">Edit</span>
+                              </button>
 
-                  <button
-                    onClick={() => onDelete(u.employeeid)}
-                    className="p-2 rounded-md border border-red-200 bg-red-50 text-red-600 hover:bg-red-100"
-                    title="Delete employee"
-                    aria-label="Delete employee"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    <span className="sr-only">Delete</span>
-                  </button>
+                              <button
+                                onClick={() => onDelete(u.employeeid)}
+                                className="p-2 rounded-md border border-red-200 bg-red-50 text-red-600 hover:bg-red-100"
+                                title="Delete employee"
+                                aria-label="Delete employee"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                                <span className="sr-only">Delete</span>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Footer (outside scroll) */}
+              <div className="border-t bg-white px-3 py-2">
+                <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                  <div className="text-sm text-gray-600">
+                    Showing <span className="font-medium">{rangeStart}</span>–<span className="font-medium">{rangeEnd}</span> of{" "}
+                    <span className="font-medium">{total}</span>
+                  </div>
+
+                  <div className="flex items-center gap-1">
+                    <button
+                      className="px-3 py-2 text-sm rounded-lg border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-50"
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      disabled={page <= 1}
+                    >
+                      Prev
+                    </button>
+
+                    {pageNumbers.map((p) => (
+                      <button
+                        key={p}
+                        className={`px-3 py-2 text-sm rounded-lg border ${
+                          p === page ? "border-gray-900 bg-gray-900 text-white" : "border-gray-300 bg-white hover:bg-gray-50"
+                        }`}
+                        onClick={() => setPage(p)}
+                      >
+                        {p}
+                      </button>
+                    ))}
+
+                    <button
+                      className="px-3 py-2 text-sm rounded-lg border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-50"
+                      onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                      disabled={page >= totalPages}
+                    >
+                      Next
+                    </button>
+                  </div>
                 </div>
-              </td>
-            </tr>
-          ))
-        )}
-      </tbody>
-    </table>
-  </div>
-
-  {/* Footer (fixed at the bottom of the table card, outside scroll) */}
-  <div className="border-t bg-white px-3 py-2">
-    <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-      <div className="text-sm text-gray-600">
-        Showing <span className="font-medium">{rangeStart}</span>–<span className="font-medium">{rangeEnd}</span> of{" "}
-        <span className="font-medium">{total}</span>
-      </div>
-
-      <div className="flex items-center gap-1">
-        <button
-          className="px-3 py-2 text-sm rounded-lg border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-50"
-          onClick={() => setPage((p) => Math.max(1, p - 1))}
-          disabled={page <= 1}
-        >
-          Prev
-        </button>
-
-        {pageNumbers.map((p) => (
-          <button
-            key={p}
-            className={`px-3 py-2 text-sm rounded-lg border ${
-              p === page ? "border-gray-900 bg-gray-900 text-white" : "border-gray-300 bg-white hover:bg-gray-50"
-            }`}
-            onClick={() => setPage(p)}
-          >
-            {p}
-          </button>
-        ))}
-
-        <button
-          className="px-3 py-2 text-sm rounded-lg border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-50"
-          onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-          disabled={page >= totalPages}
-        >
-          Next
-        </button>
-      </div>
-    </div>
-  </div>
-</div>
-
+              </div>
+            </div>
           </section>
         </div>
 
@@ -745,7 +734,7 @@ export default function Hrdashboard() {
 }
 
 /* ===========================
-   Preview Modal (edit & save to DB)
+   Preview Modal (search + priority grouping)
    =========================== */
 function PreviewDailyModal({ date, rows, onClose, onSaved }) {
   const minutesToHoursStr = (min) => {
@@ -760,7 +749,7 @@ function PreviewDailyModal({ date, rows, onClose, onSaved }) {
     return Math.round(n * 60);
   };
 
-  // Editable data initialized purely from incoming rows
+  // Editable data initialized from incoming rows
   const [data, setData] = useState(() =>
     (rows || []).map((r) => ({
       employeeid: String(r.employeeid ?? ""),
@@ -774,8 +763,10 @@ function PreviewDailyModal({ date, rows, onClose, onSaved }) {
       company: String(r.company || ""),
     }))
   );
-
   const [saving, setSaving] = useState(false);
+
+  // In-modal search
+  const [search, setSearch] = useState("");
 
   const headers = [
     { key: "employeeid", label: "Employee ID", readOnly: true, className: "w-32" },
@@ -797,6 +788,59 @@ function PreviewDailyModal({ date, rows, onClose, onSaved }) {
     });
   };
 
+  // Priority ordering: ASF → AGB → ANM → others (alphabetical)
+  const PRIORITY = ["ASF", "AGB", "ANM"];
+  const rankCompany = (c) => {
+    const k = String(c || "").trim().toUpperCase();
+    const idx = PRIORITY.indexOf(k);
+    return idx === -1 ? PRIORITY.length : idx;
+  };
+
+  // Build filtered, sorted, grouped view (stable indices preserved for editing)
+  const items = useMemo(() => {
+    const q = search.trim().toLowerCase();
+
+    // filter
+    const filtered = data
+      .map((r, idx) => ({ idx, r }))
+      .filter(({ r }) => {
+        if (!q) return true;
+        const fields = [r.employeeid, r.name, r.company, r.shift, r.status, r.remarks, r.intime, r.outtime].map((v) =>
+          String(v || "").toLowerCase()
+        );
+        return fields.some((s) => s.includes(q));
+      });
+
+    // sort with priority
+    filtered.sort((a, b) => {
+      const ra = rankCompany(a.r.company);
+      const rb = rankCompany(b.r.company);
+      if (ra !== rb) return ra - rb;
+
+      const ca = String(a.r.company || "").toUpperCase();
+      const cb = String(b.r.company || "").toUpperCase();
+      if (ra === PRIORITY.length && ca !== cb) return ca.localeCompare(cb); // others by company
+
+      const na = String(a.r.name || "").toUpperCase();
+      const nb = String(b.r.name || "").toUpperCase();
+      if (na !== nb) return na.localeCompare(nb);
+      return String(a.r.employeeid || "").localeCompare(String(b.r.employeeid || ""));
+    });
+
+    // group by company
+    const out = [];
+    let currentCompany = "__INIT__";
+    for (const item of filtered) {
+      const comp = String(item.r.company || "—");
+      if (comp !== currentCompany) {
+        out.push({ type: "group", key: comp });
+        currentCompany = comp;
+      }
+      out.push({ type: "row", idx: item.idx });
+    }
+    return out;
+  }, [data, search]);
+
   const save = async () => {
     try {
       setSaving(true);
@@ -806,7 +850,7 @@ function PreviewDailyModal({ date, rows, onClose, onSaved }) {
         shift: r.shift || null,
         intime: r.intime || null,
         outtime: r.outtime || null,
-        workdur: hoursStrToMinutes(r.workdur_hours), // minutes
+        workdur: hoursStrToMinutes(r.workdur_hours),
         status: r.status || null,
         remarks: r.remarks || null,
         company: r.company || null,
@@ -832,21 +876,52 @@ function PreviewDailyModal({ date, rows, onClose, onSaved }) {
     return `${d}/${m}/${y}`;
   };
 
+  // Derived counts (optional telemetry in header)
+  const totalRows = data.length;
+  // Note: items includes group rows; derive "shownRows" as number of row items
+  const shownRows = items.filter((x) => x.type === "row").length;
+
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center" aria-modal="true" role="dialog">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} aria-hidden="true" />
       <div className="relative w-full md:max-w-7xl w-[96vw] bg-white border border-gray-200 rounded-t-2xl md:rounded-2xl shadow-xl m-0 md:m-4 max-h-[88vh] flex flex-col">
         {/* Header */}
         <div className="px-6 pt-6 pb-3 flex items-center justify-between border-b border-gray-200">
-          <h3 className="text-lg font-semibold text-gray-900">Preview • {toHumanDateDdMmYyyy(date)}</h3>
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900">Preview • {toHumanDateDdMmYyyy(date)}</h3>
+            <div className="mt-1 text-xs text-gray-600">Showing {shownRows} of {totalRows} records</div>
+          </div>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-700" aria-label="Close" title="Close">
             ✕
           </button>
         </div>
 
+        {/* Toolbar: Search */}
+        <div className="px-6 py-3 border-b border-gray-200 bg-white">
+          <div className="flex items-center gap-2 w-full md:max-w-md">
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              placeholder="Search by ID, name, company, shift, status, remarks…"
+            />
+            {search ? (
+              <button
+                type="button"
+                onClick={() => setSearch("")}
+                className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm hover:bg-gray-50"
+                title="Clear"
+              >
+                Clear
+              </button>
+            ) : null}
+          </div>
+        </div>
+
         {/* Body */}
         <div className="px-6 py-4 overflow-hidden flex-1 flex flex-col">
-          {!rows?.length ? (
+          {!data?.length ? (
             <div className="py-8 text-center text-gray-600">No rows parsed.</div>
           ) : (
             <div className="border border-gray-200 rounded-xl overflow-hidden flex-1 min-h-0">
@@ -855,49 +930,67 @@ function PreviewDailyModal({ date, rows, onClose, onSaved }) {
                   <thead className="bg-gray-50 sticky top-0 z-10">
                     <tr className="text-left text-gray-600">
                       {headers.map((h) => (
-                        <th key={h.key} className={`px-3 py-2 border-b ${h.className || ""}`}>
-                          {h.label}
-                        </th>
+                        <th key={h.key} className={`px-3 py-2 border-b ${h.className || ""}`}>{h.label}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {data.map((r, i) => (
-                      <tr key={i} className="odd:bg-white even:bg-gray-50">
-                        {headers.map((h) => (
-                          <td key={h.key} className="px-3 py-2 border-t align-top">
-                            {h.readOnly ? (
-                              <span className="block text-gray-800">{r[h.key] || "-"}</span>
-                            ) : h.key === "workdur_hours" ? (
-                              <input
-                                type="number"
-                                step="0.01"
-                                value={r.workdur_hours ?? ""}
-                                onChange={(e) => setCell(i, "workdur_hours", e.target.value)}
-                                className="w-full rounded border border-gray-300 px-2 py-1"
-                                placeholder="e.g., 7.5"
-                              />
-                            ) : h.key === "remarks" ? (
-                              <textarea
-                                rows={2}
-                                value={r.remarks ?? ""}
-                                onChange={(e) => setCell(i, "remarks", e.target.value)}
-                                className="w-full rounded border border-gray-300 px-2 py-1"
-                                placeholder="Optional notes"
-                              />
-                            ) : (
-                              <input
-                                type="text"
-                                value={r[h.key] ?? ""}
-                                onChange={(e) => setCell(i, h.key, e.target.value)}
-                                className="w-full rounded border border-gray-300 px-2 py-1"
-                                placeholder={h.key === "intime" || h.key === "outtime" ? "HH:MM or HH:MM:SS" : ""}
-                              />
-                            )}
-                          </td>
-                        ))}
+                    {items.length === 0 ? (
+                      <tr>
+                        <td colSpan={headers.length} className="px-3 py-6 text-center text-gray-500">
+                          No matches for “{search}”.
+                        </td>
                       </tr>
-                    ))}
+                    ) : (
+                      items.map((it, i) => {
+                        if (it.type === "group") {
+                          return (
+                            <tr key={`g-${it.key}-${i}`}>
+                              <td colSpan={headers.length} className="bg-gray-100/70 text-gray-800 px-3 py-2 border-t font-semibold">
+                                {it.key || "—"}
+                              </td>
+                            </tr>
+                          );
+                        }
+                        const r = data[it.idx]; // live reference for editing
+                        return (
+                          <tr key={`r-${it.idx}-${i}`} className="odd:bg-white even:bg-gray-50">
+                            {headers.map((h) => (
+                              <td key={h.key} className="px-3 py-2 border-t align-top">
+                                {h.readOnly ? (
+                                  <span className="block text-gray-800">{r[h.key] || "-"}</span>
+                                ) : h.key === "workdur_hours" ? (
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    value={r.workdur_hours ?? ""}
+                                    onChange={(e) => setCell(it.idx, "workdur_hours", e.target.value)}
+                                    className="w-full rounded border border-gray-300 px-2 py-1"
+                                    placeholder="e.g., 7.5"
+                                  />
+                                ) : h.key === "remarks" ? (
+                                  <textarea
+                                    rows={2}
+                                    value={r.remarks ?? ""}
+                                    onChange={(e) => setCell(it.idx, "remarks", e.target.value)}
+                                    className="w-full rounded border border-gray-300 px-2 py-1"
+                                    placeholder="Optional notes"
+                                  />
+                                ) : (
+                                  <input
+                                    type="text"
+                                    value={r[h.key] ?? ""}
+                                    onChange={(e) => setCell(it.idx, h.key, e.target.value)}
+                                    className="w-full rounded border border-gray-300 px-2 py-1"
+                                    placeholder={h.key === "intime" || h.key === "outtime" ? "HH:MM or HH:MM:SS" : ""}
+                                  />
+                                )}
+                              </td>
+                            ))}
+                          </tr>
+                        );
+                      })
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -938,15 +1031,13 @@ function CreateEmployeeModal({ idToName, onClose, onCreated }) {
   const [role, setRole] = useState("EMPLOYEE");
   const [doj, setDoj] = useState("");
   const [phone, setPhone] = useState("");
-  const [company, setCompany] = useState(""); // dropdown
+  const [company, setCompany] = useState("");
   const [gross, setGross] = useState("");
   const [aadhaar, setAadhaar] = useState("");
   const [pan, setPan] = useState("");
   const [address, setAddress] = useState("");
-  // NEW FIELDS
   const [designation, setDesignation] = useState("");
   const [reportingToId, setReportingToId] = useState("");
-  // Conditional password for HR/FINANCE
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -979,7 +1070,6 @@ function CreateEmployeeModal({ idToName, onClose, onCreated }) {
       Swal.fire({ icon: "error", title: "Validation error", text: err });
       return;
     }
-
     try {
       setSubmitting(true);
       const body = {
@@ -1007,8 +1097,8 @@ function CreateEmployeeModal({ idToName, onClose, onCreated }) {
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json?.error || "Failed to create employee");
       onCreated?.();
-    } catch (e) {
-      Swal.fire({ icon: "error", title: "Create failed", text: e.message || "Something went wrong" });
+    } catch (e2) {
+      Swal.fire({ icon: "error", title: "Create failed", text: e2.message || "Something went wrong" });
     } finally {
       setSubmitting(false);
     }
@@ -1020,41 +1110,23 @@ function CreateEmployeeModal({ idToName, onClose, onCreated }) {
       <div className="relative w-full md:max-w-3xl bg-white border border-gray-200 rounded-2xl shadow-xl p-6 m-0 md:m-4">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-gray-900">Create Employee</h3>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-700" aria-label="Close" title="Close">
-            ✕
-          </button>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-700" aria-label="Close" title="Close">✕</button>
         </div>
 
         <form onSubmit={onSubmit} className="grid grid-cols-1 gap-5">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             <div>
               <label className="block text-sm font-medium text-gray-700">Employee ID</label>
-              <input
-                type="text"
-                value={employeeId}
-                onChange={(e) => setEmployeeId(e.target.value)}
-                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
-                placeholder="e.g. EMP1001 or 1001"
-              />
+              <input type="text" value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2" placeholder="e.g. EMP1001 or 1001" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700">Full name</label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
-                placeholder="e.g. Harini"
-              />
+              <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2" placeholder="e.g. Harini" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700">Role</label>
               <select value={role} onChange={(e) => setRole(e.target.value)} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2">
-                {ROLES.map((r) => (
-                  <option key={r} value={r}>
-                    {r}
-                  </option>
-                ))}
+                {ROLES.map((r) => (<option key={r} value={r}>{r}</option>))}
               </select>
             </div>
           </div>
@@ -1062,32 +1134,15 @@ function CreateEmployeeModal({ idToName, onClose, onCreated }) {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             <div>
               <label className="block text-sm font-medium text-gray-700">Email</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
-                placeholder="user@agasthya.co.in"
-              />
+              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2" placeholder="user@agasthya.co.in" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700">Date of Joining</label>
-              <input
-                type="date"
-                value={doj}
-                onChange={(e) => setDoj(e.target.value)}
-                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
-              />
+              <input type="date" value={doj} onChange={(e) => setDoj(e.target.value)} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700">Phone</label>
-              <input
-                type="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
-                placeholder="+91 98765 43210"
-              />
+              <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2" placeholder="+91 98765 43210" />
             </div>
           </div>
 
@@ -1095,69 +1150,32 @@ function CreateEmployeeModal({ idToName, onClose, onCreated }) {
             <div>
               <label className="block text-sm font-medium text-gray-700">Company</label>
               <select value={company} onChange={(e) => setCompany(e.target.value)} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2">
-                <option value="" disabled>
-                  Select company…
-                </option>
-                {COMPANY_OPTIONS.map((co) => (
-                  <option key={co} value={co}>
-                    {co}
-                  </option>
-                ))}
+                <option value="" disabled>Select company…</option>
+                {COMPANY_OPTIONS.map((co) => (<option key={co} value={co}>{co}</option>))}
               </select>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700">Gross Salary</label>
-              <input
-                type="number"
-                step="0.01"
-                value={gross}
-                onChange={(e) => setGross(e.target.value)}
-                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
-                placeholder="e.g. 30000"
-              />
+              <input type="number" step="0.01" value={gross} onChange={(e) => setGross(e.target.value)} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2" placeholder="e.g. 30000" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700">Aadhaar (12 digits)</label>
-              <input
-                type="text"
-                value={aadhaar}
-                onChange={(e) => setAadhaar(e.target.value.replace(/\D/g, "").slice(0, 12))}
-                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
-                placeholder="000000000000"
-              />
+              <input type="text" value={aadhaar} onChange={(e) => setAadhaar(e.target.value.replace(/\D/g, "").slice(0, 12))} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2" placeholder="000000000000" />
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             <div>
               <label className="block text-sm font-medium text-gray-700">PAN</label>
-              <input
-                type="text"
-                value={pan}
-                onChange={(e) => setPan(e.target.value.toUpperCase().slice(0, 10))}
-                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
-                placeholder="ABCDE1234F"
-              />
+              <input type="text" value={pan} onChange={(e) => setPan(e.target.value.toUpperCase().slice(0, 10))} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2" placeholder="ABCDE1234F" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700">Designation</label>
-              <input
-                type="text"
-                value={designation}
-                onChange={(e) => setDesignation(e.target.value)}
-                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
-                placeholder="e.g. Sr. Executive"
-              />
+              <input type="text" value={designation} onChange={(e) => setDesignation(e.target.value)} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2" placeholder="e.g. Sr. Executive" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700">Reporting To (Employee ID)</label>
-              <input
-                type="text"
-                value={reportingToId}
-                onChange={(e) => setReportingToId(e.target.value)}
-                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
-                placeholder="e.g. EMP1002"
-              />
+              <input type="text" value={reportingToId} onChange={(e) => setReportingToId(e.target.value)} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2" placeholder="e.g. EMP1002" />
               <div className="mt-1 text-xs text-gray-600">
                 {reportingToId ? (managerName ? `Manager: ${managerName}` : "No match found") : ""}
               </div>
@@ -1167,42 +1185,18 @@ function CreateEmployeeModal({ idToName, onClose, onCreated }) {
           {(role === "HR" || role === "FINANCE") && (
             <div>
               <label className="block text-sm font-medium text-gray-700">Password (required for HR/FINANCE)</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
-                placeholder="Set a password"
-              />
+              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2" placeholder="Set a password" />
             </div>
           )}
 
           <div>
             <label className="block text-sm font-medium text-gray-700">Address</label>
-            <textarea
-              rows={2}
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
-              placeholder="Flat / Street / City / State / PIN"
-            />
+            <textarea rows={2} value={address} onChange={(e) => setAddress(e.target.value)} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2" placeholder="Flat / Street / City / State / PIN" />
           </div>
 
           <div className="pt-2 flex items-center justify-end gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={submitting}
-              className="inline-flex items-center justify-center rounded-lg bg-[#C1272D] text-white font-medium px-4 py-2 hover:bg-[#a02125]"
-            >
-              {submitting ? "Creating…" : "Create Employee"}
-            </button>
+            <button type="button" onClick={onClose} className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+            <button type="submit" disabled={submitting} className="inline-flex items-center justify-center rounded-lg bg-[#C1272D] text-white font-medium px-4 py-2 hover:bg-[#a02125]">{submitting ? "Creating…" : "Create Employee"}</button>
           </div>
         </form>
       </div>
@@ -1220,11 +1214,9 @@ function EditEmployeeModal({ idToName, employee, onClose, onUpdated }) {
   const [aadhaar, setAadhaar] = useState(employee?.adhaarnumber || "");
   const [pan, setPan] = useState(employee?.pancard || "");
   const [address, setAddress] = useState(employee?.address || "");
-  // NEW: designation, reporting_to_id, grosssalary
   const [designation, setDesignation] = useState(employee?.designation || "");
   const [reportingToId, setReportingToId] = useState(employee?.reporting_to_id || "");
   const [gross, setGross] = useState(String(employee?.grosssalary ?? employee?.grossSalary ?? ""));
-
   const [submitting, setSubmitting] = useState(false);
 
   const managerName = useMemo(() => {
@@ -1254,7 +1246,6 @@ function EditEmployeeModal({ idToName, employee, onClose, onUpdated }) {
       Swal.fire({ icon: "error", title: "Validation error", text: err });
       return;
     }
-
     try {
       setSubmitting(true);
       const body = {
@@ -1281,8 +1272,8 @@ function EditEmployeeModal({ idToName, employee, onClose, onUpdated }) {
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json?.error || "Failed to update employee");
       onUpdated?.();
-    } catch (e) {
-      Swal.fire({ icon: "error", title: "Update failed", text: e.message || "Something went wrong" });
+    } catch (e2) {
+      Swal.fire({ icon: "error", title: "Update failed", text: e2.message || "Something went wrong" });
     } finally {
       setSubmitting(false);
     }
@@ -1291,139 +1282,71 @@ function EditEmployeeModal({ idToName, employee, onClose, onUpdated }) {
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center" aria-modal="true" role="dialog">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} aria-hidden="true" />
-      {/* WIDER MODAL */}
       <div className="relative w-full md:max-w-6xl lg:max-w-7xl w-[96vw] bg-white border border-gray-200 rounded-2xl md:rounded-2xl shadow-xl p-6 m-0 md:m-4">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-gray-900">Edit Employee #{employee?.employeeid}</h3>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-700" aria-label="Close" title="Close">
-            ✕
-          </button>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-700" aria-label="Close" title="Close">✕</button>
         </div>
 
         <form onSubmit={onSubmit} className="grid grid-cols-1 gap-5">
           <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-5">
             <div>
               <label className="block text-sm font-medium text-gray-700">Full name</label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
-              />
+              <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700">Role</label>
               <select value={role} onChange={(e) => setRole(e.target.value)} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2">
-                {ROLES.map((r) => (
-                  <option key={r} value={r}>
-                    {r}
-                  </option>
-                ))}
+                {ROLES.map((r) => (<option key={r} value={r}>{r}</option>))}
               </select>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700">Email</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
-              />
+              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700">Date of Joining</label>
-              <input
-                type="date"
-                value={doj || ""}
-                onChange={(e) => setDoj(e.target.value)}
-                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
-              />
+              <input type="date" value={doj || ""} onChange={(e) => setDoj(e.target.value)} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2" />
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-5">
             <div>
               <label className="block text-sm font-medium text-gray-700">Phone</label>
-              <input
-                type="tel"
-                value={phone || ""}
-                onChange={(e) => setPhone(e.target.value)}
-                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
-                placeholder="+91 98765 43210"
-              />
+              <input type="tel" value={phone || ""} onChange={(e) => setPhone(e.target.value)} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2" placeholder="+91 98765 43210" />
             </div>
-
             <div>
               <label className="block text-sm font-medium text-gray-700">Company</label>
               <select value={company} onChange={(e) => setCompany(e.target.value)} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2">
-                <option value="" disabled>
-                  Select company…
-                </option>
-                {COMPANY_OPTIONS.map((co) => (
-                  <option key={co} value={co}>
-                    {co}
-                  </option>
-                ))}
+                <option value="" disabled>Select company…</option>
+                {COMPANY_OPTIONS.map((co) => (<option key={co} value={co}>{co}</option>))}
               </select>
             </div>
-
             <div>
               <label className="block text-sm font-medium text-gray-700">Aadhaar (12 digits)</label>
-              <input
-                type="text"
-                value={aadhaar || ""}
-                onChange={(e) => setAadhaar(e.target.value.replace(/\D/g, "").slice(0, 12))}
-                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
-                placeholder="000000000000"
-              />
+              <input type="text" value={aadhaar || ""} onChange={(e) => setAadhaar(e.target.value.replace(/\D/g, "").slice(0, 12))} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2" placeholder="000000000000" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700">PAN</label>
-              <input
-                type="text"
-                value={pan || ""}
-                onChange={(e) => setPan(e.target.value.toUpperCase().slice(0, 10))}
-                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
-                placeholder="ABCDE1234F"
-              />
+              <input type="text" value={pan || ""} onChange={(e) => setPan(e.target.value.toUpperCase().slice(0, 10))} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2" placeholder="ABCDE1234F" />
             </div>
           </div>
 
-          {/* NEW ROW: Designation / Reporting / Gross Salary */}
           <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-5">
             <div>
               <label className="block text-sm font-medium text-gray-700">Designation</label>
-              <input
-                type="text"
-                value={designation}
-                onChange={(e) => setDesignation(e.target.value)}
-                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
-                placeholder="e.g. Sr. Executive"
-              />
+              <input type="text" value={designation} onChange={(e) => setDesignation(e.target.value)} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2" placeholder="e.g. Sr. Executive" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700">Reporting To (Employee ID)</label>
-              <input
-                type="text"
-                value={reportingToId}
-                onChange={(e) => setReportingToId(e.target.value)}
-                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
-                placeholder="e.g. EMP1002"
-              />
+              <input type="text" value={reportingToId} onChange={(e) => setReportingToId(e.target.value)} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2" placeholder="e.g. EMP1002" />
               <div className="mt-1 text-xs text-gray-600">
                 {reportingToId ? (managerName ? `Manager: ${managerName}` : "No match found") : ""}
               </div>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700">Gross Salary</label>
-              <input
-                type="number"
-                step="0.01"
-                value={gross}
-                onChange={(e) => setGross(e.target.value)}
-                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
-                placeholder="e.g. 30000"
-              />
+              <input type="number" step="0.01" value={gross} onChange={(e) => setGross(e.target.value)} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2" placeholder="e.g. 30000" />
             </div>
             <div className="hidden lg:block" />
           </div>
@@ -1431,33 +1354,15 @@ function EditEmployeeModal({ idToName, employee, onClose, onUpdated }) {
           <div className="grid grid-cols-1 lg:grid-cols-4 md:grid-cols-3 gap-5">
             <div className="lg:col-span-2 md:col-span-2">
               <label className="block text-sm font-medium text-gray-700">Address</label>
-              <textarea
-                rows={2}
-                value={address || ""}
-                onChange={(e) => setAddress(e.target.value)}
-                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
-                placeholder="Flat / Street / City / State / PIN"
-              />
+              <textarea rows={2} value={address || ""} onChange={(e) => setAddress(e.target.value)} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2" placeholder="Flat / Street / City / State / PIN" />
             </div>
             <div className="hidden lg:block" />
             <div className="hidden lg:block" />
           </div>
 
           <div className="pt-2 flex items-center justify-end gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={submitting}
-              className="inline-flex items-center justify-center rounded-lg bg-[#C1272D] text-white font-medium px-4 py-2 hover:bg-[#a02125]"
-            >
-              {submitting ? "Saving…" : "Save Changes"}
-            </button>
+            <button type="button" onClick={onClose} className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+            <button type="submit" disabled={submitting} className="inline-flex items-center justify-center rounded-lg bg-[#C1272D] text-white font-medium px-4 py-2 hover:bg-[#a02125]">{submitting ? "Saving…" : "Save Changes"}</button>
           </div>
         </form>
       </div>

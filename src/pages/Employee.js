@@ -5,6 +5,9 @@
 // - Right: Total employee count
 // Also includes "Update Details" modal + assigned assets table.
 // + Header wiring: hrName, openProfile (modal), logout
+// Updates requested:
+// - Make PAN and Email non-mandatory in Update Details modal (kept optional, no validation blockers)
+// - Surface Carryforward Leaves (Leaves_cf) from EmployeeTable in both Details section and Update Details modal (read-only)
 
 import React, { useEffect, useRef, useState } from "react";
 import Head from "next/head";
@@ -141,7 +144,9 @@ function AttendanceCalendar({ className = "" }) {
   return (
     <div className={`rounded-xl border border-gray-200 bg-white shadow-sm p-3 ${className}`} style={{ width: 300 }}>
       <div className="flex items-center justify-between mb-2">
-        <div className="text-sm font-semibold text-gray-900">{monthName} {year}</div>
+        <div className="text-sm font-semibold text-gray-900">
+          {monthName} {year}
+        </div>
         {loading ? (
           <div className="text-xs text-gray-500 inline-flex items-center gap-1">
             <Loader2 className="h-3.5 w-3.5 animate-spin" /> loading…
@@ -151,7 +156,13 @@ function AttendanceCalendar({ className = "" }) {
         )}
       </div>
       <div className="grid grid-cols-7 text-center text-[11px] text-gray-500 mb-1">
-        <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+        <div>Sun</div>
+        <div>Mon</div>
+        <div>Tue</div>
+        <div>Wed</div>
+        <div>Thu</div>
+        <div>Fri</div>
+        <div>Sat</div>
       </div>
       <div className="grid grid-cols-7 gap-1 text-center">
         {cells.map((d, i) => {
@@ -192,39 +203,40 @@ function AttendanceCalendar({ className = "" }) {
 /* ========= Update Employee Modal ========= */
 function EmployeeEditModal({ user, onClose, onSaved }) {
   const [name, setName] = useState(user?.name || "");
-  const [email, setEmail] = useState(user?.email || "");
+  const [email, setEmail] = useState(user?.email || ""); // OPTIONAL
   const [role, setRole] = useState(user?.role || "");
   const [doj, setDoj] = useState(user?.doj ? String(user.doj).slice(0, 10) : "");
   const [phone, setPhone] = useState(user?.number || "");
   const [company, setCompany] = useState(user?.company || "");
   const [grosssalary, setGrosssalary] = useState(user?.grosssalary ?? "");
   const [adhaarnumber, setAadhaar] = useState(user?.adhaarnumber || "");
-  const [pancard, setPAN] = useState(user?.pancard || "");
+  const [pancard, setPAN] = useState(user?.pancard || ""); // OPTIONAL
   const [address, setAddress] = useState(user?.address || "");
   const [saving, setSaving] = useState(false);
 
-  // NEW
+  // NEW: surface carryforward leaves (read-only) and reporting/designation
   const [designation, setDesignation] = useState(user?.designation || "");
   const [reportingToId, setReportingToId] = useState(user?.reporting_to_id || "");
+  const [leavesCf] = useState(user?.Leaves_cf ?? user?.leaves_cf ?? ""); // read-only snapshot
 
   const save = async () => {
     try {
       setSaving(true);
       const body = {
         employeeid: user.employeeid,
-        name,
-        email,
-        role,
+        name: name || null,
+        email: email || null,                 // optional
+        role: role || null,
         doj: doj || null,
-        number: phone || null,                    // << use "number" for API consistency
-        company,
+        number: phone || null,                // use "number" for API consistency
+        company: company || null,
         grosssalary: grosssalary === "" ? null : String(grosssalary),
         adhaarnumber: adhaarnumber || null,
-        pancard: pancard || null,
+        pancard: pancard || null,             // optional
         address: address || null,
-        // NEW
         designation: designation || null,
         reporting_to_id: reportingToId || null,
+        // NOTE: Leaves_cf is read-only here; not updating from this modal
       };
       const res = await fetch(`/api/users?id=${encodeURIComponent(user.employeeid)}`, {
         method: "PUT",
@@ -233,7 +245,7 @@ function EmployeeEditModal({ user, onClose, onSaved }) {
       });
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j?.error || "Update failed");
-      onSaved?.(j.data || body);
+      onSaved?.(j.data || { ...user, ...body, Leaves_cf: user?.Leaves_cf ?? user?.leaves_cf });
       onClose?.();
       await Swal.fire({ icon: "success", title: "Updated", text: "Employee details saved." });
     } catch (e) {
@@ -255,28 +267,72 @@ function EmployeeEditModal({ user, onClose, onSaved }) {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div><label className="block text-sm text-gray-700 mb-1">Name</label><input value={name} onChange={(e)=>setName(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" /></div>
-          <div><label className="block text-sm text-gray-700 mb-1">Email</label><input value={email} onChange={(e)=>setEmail(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" /></div>
+          <div>
+            <label className="block text-sm text-gray-700 mb-1">Name</label>
+            <input value={name} onChange={(e) => setName(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+          </div>
+          <div>
+            <label className="block text-sm text-gray-700 mb-1">Email (optional)</label>
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+          </div>
 
-          <div><label className="block text-sm text-gray-700 mb-1">Role</label><input value={role} onChange={(e)=>setRole(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" /></div>
-          <div><label className="block text-sm text-gray-700 mb-1">Company</label><input value={company} onChange={(e)=>setCompany(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" /></div>
+          <div>
+            <label className="block text-sm text-gray-700 mb-1">Role</label>
+            <input value={role} onChange={(e) => setRole(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+          </div>
+          <div>
+            <label className="block text-sm text-gray-700 mb-1">Company</label>
+            <input value={company} onChange={(e) => setCompany(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+          </div>
 
           {/* NEW FIELDS */}
-          <div><label className="block text-sm text-gray-700 mb-1">Designation</label><input value={designation} onChange={(e)=>setDesignation(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" placeholder="e.g. Sr. Executive" /></div>
-          <div><label className="block text-sm text-gray-700 mb-1">Reporting To (Employee ID)</label><input value={reportingToId} onChange={(e)=>setReportingToId(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" placeholder="e.g. EMP1002" /></div>
+          <div>
+            <label className="block text-sm text-gray-700 mb-1">Designation</label>
+            <input value={designation} onChange={(e) => setDesignation(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" placeholder="e.g. Sr. Executive" />
+          </div>
+          <div>
+            <label className="block text-sm text-gray-700 mb-1">Reporting To (Employee ID)</label>
+            <input value={reportingToId} onChange={(e) => setReportingToId(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" placeholder="e.g. EMP1002" />
+          </div>
 
-          <div><label className="block text-sm text-gray-700 mb-1">Phone</label><input value={phone} onChange={(e)=>setPhone(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" /></div>
-          <div><label className="block text-sm text-gray-700 mb-1">Date of Joining</label><input type="date" value={doj} onChange={(e)=>setDoj(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" /></div>
+          <div>
+            <label className="block text-sm text-gray-700 mb-1">Phone</label>
+            <input value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+          </div>
+          <div>
+            <label className="block text-sm text-gray-700 mb-1">Date of Joining</label>
+            <input type="date" value={doj} onChange={(e) => setDoj(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+          </div>
 
-          <div><label className="block text-sm text-gray-700 mb-1">Gross Salary</label><input value={grosssalary ?? ""} onChange={(e)=>setGrosssalary(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" /></div>
-          <div><label className="block text-sm text-gray-700 mb-1">Aadhaar</label><input value={adhaarnumber} onChange={(e)=>setAadhaar(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" /></div>
-          <div><label className="block text-sm text-gray-700 mb-1">PAN</label><input value={pancard} onChange={(e)=>setPAN(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" /></div>
+          <div>
+            <label className="block text-sm text-gray-700 mb-1">Gross Salary</label>
+            <input value={grosssalary ?? ""} onChange={(e) => setGrosssalary(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+          </div>
+          <div>
+            <label className="block text-sm text-gray-700 mb-1">Aadhaar</label>
+            <input value={adhaarnumber} onChange={(e) => setAadhaar(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+          </div>
+          <div>
+            <label className="block text-sm text-gray-700 mb-1">PAN (optional)</label>
+            <input value={pancard} onChange={(e) => setPAN(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+          </div>
 
-          <div className="md:col-span-2"><label className="block text-sm text-gray-700 mb-1">Address</label><textarea rows={2} value={address} onChange={(e)=>setAddress(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" /></div>
+          {/* Read-only Carryforward Leaves */}
+          <div className="md:col-span-2">
+            <label className="block text-sm text-gray-700 mb-1">Carryforward Leaves (read-only)</label>
+            <input value={leavesCf ?? ""} readOnly className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700" />
+          </div>
+
+          <div className="md:col-span-2">
+            <label className="block text-sm text-gray-700 mb-1">Address</label>
+            <textarea rows={2} value={address} onChange={(e) => setAddress(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+          </div>
         </div>
 
         <div className="mt-5 flex items-center justify-end gap-3">
-          <button onClick={onClose} className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Cancel</button>
+          <button onClick={onClose} className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
+            Cancel
+          </button>
           <button onClick={save} disabled={saving} className="inline-flex items-center gap-2 rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-60">
             <Save className="h-4 w-4" /> {saving ? "Saving…" : "Save Changes"}
           </button>
@@ -290,7 +346,7 @@ function Field({ label, value, wide, formatter }) {
   return (
     <div className={wide ? "md:col-span-2 xl:col-span-3" : ""}>
       <div className="text-xs text-gray-500">{label}</div>
-      <div className="mt-0.5 text-gray-900">{formatter ? formatter(value) : value || "-"}</div>
+      <div className="mt-0.5 text-gray-900">{formatter ? formatter(value) : value ?? "-"}</div>
     </div>
   );
 }
@@ -314,7 +370,9 @@ export default function Employee() {
         if (!cancelled) setHrName("HR");
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const openProfile = async () => {
@@ -347,7 +405,9 @@ export default function Employee() {
   };
 
   const logout = async () => {
-    try { await fetch("/api/logout", { method: "POST" }); } catch {}
+    try {
+      await fetch("/api/logout", { method: "POST" });
+    } catch {}
     try {
       if (typeof window !== "undefined") {
         localStorage.removeItem("hr_auth");
@@ -358,7 +418,9 @@ export default function Employee() {
         localStorage.removeItem("remember");
       }
     } catch {}
-    try { router.replace("/Hlogin"); } catch {}
+    try {
+      router.replace("/Hlogin");
+    } catch {}
     if (typeof window !== "undefined") setTimeout(() => window.location.replace("/Hlogin"), 50);
   };
 
@@ -422,7 +484,9 @@ export default function Employee() {
         }
       } catch {}
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Debounced suggestions
@@ -620,12 +684,7 @@ export default function Employee() {
       </Head>
 
       <main className="min-h-screen bg-gray-50">
-        <AppHeader
-          currentPath={router.pathname}
-          hrName={hrName}
-          onProfileClick={openProfile}
-          onLogout={logout}
-        />
+        <AppHeader currentPath={router.pathname} hrName={hrName} onProfileClick={openProfile} onLogout={logout} />
 
         <div className="p-4 md:p-6 space-y-8">
           {/* ===== Organized Search / Calendar / KPI ===== */}
@@ -752,7 +811,9 @@ export default function Employee() {
                                 <div className="flex items-center justify-between gap-3">
                                   <div className="min-w-0">
                                     <div className="text-sm font-medium text-gray-900 truncate">{u.name || "-"}</div>
-                                    <div className="text-xs text-gray-600 truncate">{u.email || "-"} • {u.company || "-"} • {u.role || "-"}</div>
+                                    <div className="text-xs text-gray-600 truncate">
+                                      {u.email || "-"} • {u.company || "-"} • {u.role || "-"}
+                                    </div>
                                   </div>
                                   <div className="text-xs text-gray-500 font-mono">{u.employeeid || ""}</div>
                                 </div>
@@ -838,7 +899,9 @@ export default function Employee() {
                         <td className="px-3 py-2 border-t">{u.employeeid ?? "-"}</td>
                         <td className="px-3 py-2 border-t">{u.name || "-"}</td>
                         <td className="px-3 py-2 border-t">{u.email || "-"}</td>
-                        <td className="px-3 py-2 border-t"><span className="rounded bg-gray-100 px-2 py-0.5">{u.role || "-"}</span></td>
+                        <td className="px-3 py-2 border-t">
+                          <span className="rounded bg-gray-100 px-2 py-0.5">{u.role || "-"}</span>
+                        </td>
                         <td className="px-3 py-2 border-t">{u.company || "-"}</td>
                         <td className="px-3 py-2 border-t text-right">
                           <button
@@ -856,7 +919,9 @@ export default function Employee() {
                     ))}
                     {results.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="px-3 py-6 text-center text-gray-500">No results.</td>
+                        <td colSpan={6} className="px-3 py-6 text-center text-gray-500">
+                          No results.
+                        </td>
                       </tr>
                     ) : null}
                   </tbody>
@@ -894,13 +959,12 @@ export default function Employee() {
                   <Field label="Company" value={selected.company} />
                   <Field label="Phone" value={selected.number} />
                   <Field label="Designation" value={selected.designation} />
-<Field label="Reporting To" value={selected.reporting_to_id} />
+                  <Field label="Reporting To" value={selected.reporting_to_id} />
                   <Field label="Date of Joining" value={selected.doj} formatter={fmt.date} />
-  <Field label="Gross Salary" value={selected.grosssalary || selected.grossSalary} />
-                    <Field label="PAN" value={selected.pancard} />
-                      <Field label="Address" value={selected.address} />
-
-
+                  <Field label="Gross Salary" value={selected.grosssalary || selected.grossSalary} />
+                  <Field label="PAN" value={selected.pancard} />
+                  <Field label="Carryforward Leaves" value={selected.Leaves_cf ?? selected.leaves_cf} />
+                  <Field label="Address" value={selected.address} />
                 </div>
               </div>
 
@@ -909,7 +973,9 @@ export default function Employee() {
                 <div className="flex items-start justify-between mb-3">
                   <div>
                     <h3 className="text-base font-semibold text-gray-900">Assigned Assets</h3>
-                    <p className="text-xs text-gray-500">Pulled from <code className="font-mono">public."Assets"</code>.</p>
+                    <p className="text-xs text-gray-500">
+                      Pulled from <code className="font-mono">public."Assets"</code>.
+                    </p>
                   </div>
                 </div>
 
@@ -940,7 +1006,9 @@ export default function Employee() {
                         </tr>
                       ) : assets.length === 0 ? (
                         <tr>
-                          <td colSpan={11} className="px-3 py-6 text-center text-gray-500">No assets assigned.</td>
+                          <td colSpan={11} className="px-3 py-6 text-center text-gray-500">
+                            No assets assigned.
+                          </td>
                         </tr>
                       ) : (
                         assets.map((a) => (
@@ -954,7 +1022,9 @@ export default function Employee() {
                             <td className="px-3 py-2 border-t">{fmt.date(a.assigned_date)}</td>
                             <td className="px-3 py-2 border-t">{a.company || "-"}</td>
                             <td className="px-3 py-2 border-t">{a.location || "-"}</td>
-                            <td className="px-3 py-2 border-t"><span className="rounded bg-gray-100 px-2 py-0.5">{a.status || "-"}</span></td>
+                            <td className="px-3 py-2 border-t">
+                              <span className="rounded bg-gray-100 px-2 py-0.5">{a.status || "-"}</span>
+                            </td>
                             <td className="px-3 py-2 border-t text-right">
                               <button onClick={() => offboardOne(a)} className="inline-flex items-center px-2.5 py-1.5 rounded-md bg-red-50 text-red-700 hover:bg-red-100">
                                 Unassign
@@ -979,7 +1049,9 @@ export default function Employee() {
           onClose={() => setShowEdit(false)}
           onSaved={(updated) => {
             setSelected(updated);
-            setResults((prev) => (prev.length === 1 ? [updated] : prev.map((u) => (u.employeeid === updated.employeeid ? updated : u))));
+            setResults((prev) =>
+              prev.length === 1 ? [updated] : prev.map((u) => (u.employeeid === updated.employeeid ? updated : u))
+            );
             setShowEdit(false);
           }}
         />

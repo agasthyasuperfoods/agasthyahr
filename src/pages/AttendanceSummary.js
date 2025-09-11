@@ -1,17 +1,20 @@
+'use client';
+
 import { useEffect, useMemo, useState } from "react";
 import Head from "next/head";
+import { useRouter } from "next/router";
 import Swal from "sweetalert2";
 import AppHeader from "@/components/AppHeader";
 
-/* ---------------- Utilities ---------------- */
+/* ----------------- Utils ----------------- */
 function prevMonthYYYYMM() {
   const d = new Date();
   const p = new Date(d.getFullYear(), d.getMonth() - 1, 1);
   return `${p.getFullYear()}-${String(p.getMonth() + 1).padStart(2, "0")}`;
 }
 function humanMonth(yyyyMm) {
-  if (!yyyyMm || !/^\d{4}-\d{2}$/.test(String(yyyyMm))) return "-";
-  const [y, m] = yyyyMm.split("-");
+  if (!/^\d{4}-\d{2}$/.test(String(yyyyMm))) return "-";
+  const [y, m] = String(yyyyMm).split("-");
   const d = new Date(Number(y), Number(m) - 1, 1);
   return d.toLocaleString(undefined, { month: "long", year: "numeric" });
 }
@@ -35,15 +38,34 @@ const toNumOrNull = (v) => {
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
 };
-
-/* per-user company key */
+function daysInMonth(yyyyMm) {
+  if (!/^\d{4}-\d{2}$/.test(String(yyyyMm))) return 0;
+  const [y, m] = String(yyyyMm).split("-").map(Number);
+  return new Date(y, m, 0).getDate();
+}
 const companyKey = (empId) => `hr_company_${String(empId || "anon")}`;
+function statusToLeaveUnits(statusRaw) {
+  const s = String(statusRaw || "").trim().toLowerCase();
+  if (!s) return 0;
+  if (s.includes("half") || s.includes("0.5") || s === "hl" || s === "l/2" || s.includes("1/2")) return 0.5;
+  if (s === "l") return 1;
+  if (s.includes("leave")) return 1;
+  const tokens = ["cl", "sl", "el", "pl", "al", "ml", "ul"];
+  if (tokens.some((t) => s === t || s.endsWith(` ${t}`))) return 1;
+  return 0;
+}
 
+/* ----------------- Page ----------------- */
 export default function AttendanceSummary() {
-  const [hr, setHr] = useState({ id: "", name: "HR", company: "" });
+  const router = useRouter();
+
+  // include location in viewer state
+  const [hr, setHr] = useState({ id: "", name: "HR", company: "", location: "" });
   const [meLoading, setMeLoading] = useState(true);
 
+  // Default to previous month, but hydrate from ?month later
   const [month, setMonth] = useState(prevMonthYYYYMM());
+
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [complete, setComplete] = useState(false);
@@ -52,57 +74,69 @@ export default function AttendanceSummary() {
   const [emps, setEmps] = useState([]);
   const [empsLoading, setEmpsLoading] = useState(true);
 
-  const [editingId, setEditingId] = useState(null);
-  const [editDraft, setEditDraft] = useState({
-    leaves_taken: "", late_adj_days: "", lop_days: "", leaves_cf_new: "", present_days: "",
-  });
-  const [savingRow, setSavingRow] = useState(false);
+  const [leavesMap, setLeavesMap] = useState({});
+  const [leavesLoading, setLeavesLoading] = useState(true);
 
-  /* ✅ Resolve current user and authoritative company */
+  const [draft, setDraft] = useState({});
+  const [editingId, setEditingId] = useState(null);
+  const [editBackup, setEditBackup] = useState({});
+  const [submitting, setSubmitting] = useState(false);
+
+  /* ---------- Resolve current user + authoritative company + location ---------- */
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        // 1) Server says who I am
         let me = {};
         try {
           const r = await fetch("/api/me", { credentials: "include" });
           me = (await r.json().catch(() => ({}))) || {};
         } catch {}
-
-        // 2) Find id (server cookie or LS)
         let id =
           me.employeeid ||
           (typeof window !== "undefined" ? localStorage.getItem("hr_employeeid") : "") ||
           "";
 
-        // 3) Prefer DB company (from /api/me if present)
+        // Prefer me.company/me.location if present, else fetch from EmployeeTable
         let resolvedCompany = (me.company || "").trim();
+        let resolvedLocation = (me.location || "").trim();
 
-        // 4) If still missing or generic default, fetch DB by id
-        if ((!resolvedCompany || resolvedCompany === "ASF") && id) {
+        if (id) {
           try {
             const r = await fetch(`/api/users?id=${encodeURIComponent(id)}`, { credentials: "include" });
             const j = await r.json().catch(() => ({}));
             if (r.ok && Array.isArray(j?.data) && j.data.length) {
-              const dbCompany = (j.data[0]?.company || "").trim();
-              if (dbCompany) resolvedCompany = dbCompany;
+              const u = j.data[0] || {};
+              const dbCompany = (u?.company || "").trim();
+              const dbLocation = (u?.location || "").trim();
+              if (!resolvedCompany && dbCompany) resolvedCompany = dbCompany;
+              if (!resolvedLocation && dbLocation) resolvedLocation = dbLocation;
             }
           } catch {}
         }
 
-        // 5) Namespaced LS fallback
-        if (!resolvedCompany && id && typeof window !== "undefined") {
-          resolvedCompany = (localStorage.getItem(companyKey(id)) || "").trim();
+        /* ---------- SPECIAL ACCESS RULES ---------- */
+        const nid = normId(id);
+        if (nid === "EMP12") {
+          // EMP12 sees all HO employees (location-only)
+          resolvedLocation = "HO";
+          resolvedCompany = ""; // clear company filter so location-only applies
+        } else if (nid === "EMP72") {
+          // EMP72 sees all ANM employees (company-only)
+          resolvedCompany = "ANM";
+          resolvedLocation = ""; // clear location so company-only applies
         }
 
-        // 6) Final default
-        if (!resolvedCompany) resolvedCompany = "ASF";
+        // Only default to ASF if still empty and not EMP12 rule
+        if (!resolvedCompany && nid !== "EMP12") {
+          const cookieOrLs = (typeof window !== "undefined" ? localStorage.getItem(companyKey(id)) : "") || "";
+          resolvedCompany = cookieOrLs.trim() || "ASF";
+        }
 
         const resolvedName = me.name || "HR";
 
-        // Persist namespaced + broadcast for THIS user only
         try {
+          // persist company (can be empty string for EMP12)
           localStorage.setItem(companyKey(id), resolvedCompany);
           document.cookie = `hr_company_${encodeURIComponent(id)}=${encodeURIComponent(resolvedCompany)}; Path=/; Max-Age=31536000; SameSite=Lax`;
           if (typeof window !== "undefined") {
@@ -110,9 +144,9 @@ export default function AttendanceSummary() {
           }
         } catch {}
 
-        if (!cancelled) setHr({ id, name: resolvedName, company: resolvedCompany });
+        if (!cancelled) setHr({ id, name: resolvedName, company: resolvedCompany, location: resolvedLocation });
       } catch {
-        if (!cancelled) setHr({ id: "", name: "HR", company: "ASF" });
+        if (!cancelled) setHr({ id: "", name: "HR", company: "ASF", location: "" });
       } finally {
         if (!cancelled) setMeLoading(false);
       }
@@ -120,7 +154,7 @@ export default function AttendanceSummary() {
     return () => { cancelled = true; };
   }, []);
 
-  // Only accept cross-tab changes for THIS user
+  // Only listen for company change (location is not cross-tab synced here)
   useEffect(() => {
     if (typeof window === "undefined") return;
     const onStorage = (e) => {
@@ -132,9 +166,9 @@ export default function AttendanceSummary() {
     const onCustom = (e) => {
       const det = e?.detail || {};
       if (!hr.id) return;
-      if (det.by && det.by !== hr.id) return; // ignore other users
+      if (det.by && det.by !== hr.id) return;
       const next = String(det.company || "").trim();
-      if (next) setHr((h) => ({ ...h, company: next }));
+      if (next || next === "") setHr((h) => ({ ...h, company: next }));
     };
     window.addEventListener("storage", onStorage);
     window.addEventListener("hr-company-changed", onCustom);
@@ -144,12 +178,44 @@ export default function AttendanceSummary() {
     };
   }, [hr.id]);
 
-  /* ---------------- Fetch EmployeeTable for this company ---------------- */
+  /* ---------- Hydrate from URL: ?month=YYYY-MM and optional ?company=XYZ ---------- */
+  useEffect(() => {
+    if (!router.isReady) return;
+    const m = Array.isArray(router.query.month) ? router.query.month[0] : router.query.month;
+    if (typeof m === "string" && /^\d{4}-\d{2}$/.test(m)) {
+      setMonth(m);
+    }
+  }, [router.isReady, router.query.month]);
+
+  useEffect(() => {
+    if (!router.isReady || meLoading) return;
+    const c = Array.isArray(router.query.company) ? router.query.company[0] : router.query.company;
+    const nextCompany = (typeof c === "string" ? c.trim() : "");
+    if (nextCompany && hr.company !== nextCompany) {
+      const by = hr.id;
+      try {
+        localStorage.setItem(companyKey(by), nextCompany);
+        document.cookie = `hr_company_${encodeURIComponent(by)}=${encodeURIComponent(nextCompany)}; Path=/; Max-Age=31536000; SameSite=Lax`;
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("hr-company-changed", { detail: { company: nextCompany, by } }));
+        }
+      } catch {}
+      setHr((prev) => ({ ...prev, company: nextCompany }));
+    }
+  }, [router.isReady, router.query.company, meLoading, hr.id, hr.company]);
+
+  /* ---------- Data fetchers ---------- */
   const fetchEmps = async () => {
-    if (!hr.company) { setEmps([]); return; }
+    if (!hr.company && !hr.location) { setEmps([]); return; }
     try {
       setEmpsLoading(true);
-      const r = await fetch(`/api/users?company=${encodeURIComponent(hr.company)}`, { credentials: "include" });
+      const url =
+        `/api/users` +
+        `?${new URLSearchParams({
+          ...(hr.company ? { company: hr.company } : {}),
+          ...(hr.location ? { location: hr.location } : {}),
+        }).toString()}`;
+      const r = await fetch(url, { credentials: "include" });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(j?.error || "Failed to load employees");
       const list = Array.isArray(j?.data) ? j.data : Array.isArray(j) ? j : [];
@@ -160,17 +226,19 @@ export default function AttendanceSummary() {
       setEmpsLoading(false);
     }
   };
-  useEffect(() => {
-    if (!meLoading) fetchEmps();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [meLoading, hr.company]);
+  useEffect(() => { if (!meLoading) fetchEmps(); }, [meLoading, hr.company, hr.location]);
 
-  /* ---------------- Fetch Attendance Summary ---------------- */
   const fetchSummary = async () => {
-    if (!hr.company) { setRows([]); setComplete(false); setMissingDays(0); return; }
+    if (!hr.company && !hr.location) { setRows([]); setComplete(false); setMissingDays(0); return; }
     try {
       setLoading(true);
-      const url = `/api/attendance/summary?month=${encodeURIComponent(month)}&company=${encodeURIComponent(hr.company)}`;
+      const url =
+        `/api/attendance/summary` +
+        `?${new URLSearchParams({
+          month,
+          ...(hr.company ? { company: hr.company } : {}),
+          ...(hr.location ? { location: hr.location } : {}),
+        }).toString()}`;
       const r = await fetch(url, { credentials: "include" });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(j?.error || "Failed to load");
@@ -184,13 +252,39 @@ export default function AttendanceSummary() {
       setLoading(false);
     }
   };
-  useEffect(() => {
-    if (meLoading) return;
-    fetchSummary();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [meLoading, month, hr.company]);
+  useEffect(() => { if (!meLoading) fetchSummary(); }, [meLoading, month, hr.company, hr.location]);
 
-  /* ---------------- Merge + rules ---------------- */
+  const fetchLeaves = async () => {
+    if (!hr.company && !hr.location) { setLeavesMap({}); setLeavesLoading(false); return; }
+    try {
+      setLeavesLoading(true);
+      const url =
+        `/api/attendance/daily` +
+        `?${new URLSearchParams({
+          month,
+          ...(hr.company ? { company: hr.company } : {}),
+          ...(hr.location ? { location: hr.location } : {}),
+        }).toString()}`;
+      const r = await fetch(url, { credentials: "include" });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j?.error || "Failed to load monthly attendance");
+      const list = Array.isArray(j?.rows) ? j.rows : [];
+      const acc = {};
+      for (const row of list) {
+        const id = normId(row.employeeid);
+        if (!id) continue;
+        acc[id] = (acc[id] || 0) + statusToLeaveUnits(row.status);
+      }
+      setLeavesMap(acc);
+    } catch {
+      setLeavesMap({});
+    } finally {
+      setLeavesLoading(false);
+    }
+  };
+  useEffect(() => { if (!meLoading) fetchLeaves(); }, [meLoading, month, hr.company, hr.location]);
+
+  /* ---------- Lookup map ---------- */
   const empMap = useMemo(() => {
     const m = {};
     for (const u of emps || []) {
@@ -208,6 +302,10 @@ export default function AttendanceSummary() {
     return m;
   }, [emps]);
 
+  /* ---------- Month-driven (calendar) Actual Working Days ---------- */
+  const actualWorkingDays = useMemo(() => daysInMonth(month), [month]);
+
+  /* ---------- Merge server rows with lookups ---------- */
   const mergedRows = useMemo(() => {
     const scoped = (rows || []).map((r) => {
       const aux = empMap[normId(r.employeeid)] || {};
@@ -223,70 +321,145 @@ export default function AttendanceSummary() {
           ? Number(r.salary_per_month)
           : Number.isFinite(salaryNum) ? salaryNum : salaryTxt,
         current_month_eligibility: probationYes ? 0 : 2,
+        // NOTE: we compute from month — keep server value ignored for determinism
+        actual_working_days: actualWorkingDays,
         _resolved_company: (r.company ?? aux.company ?? "").trim(),
       };
     });
 
+    // Server likely filtered by company/location; this is a guard
     const cmp = (hr.company || "").trim().toLowerCase();
-    return scoped.filter((r) => String(r._resolved_company || "").trim().toLowerCase() === cmp);
-  }, [rows, empMap, hr.company]);
+    return cmp ? scoped.filter((r) => String(r._resolved_company || "").trim().toLowerCase() === cmp) : scoped;
+  }, [rows, empMap, hr.company, actualWorkingDays]);
 
-  const anyLoading = loading || empsLoading;
-  const allDaysSubmitted = useMemo(() => {
-    if (anyLoading) return false;
-    if (Number(missingDays || 0) > 0) return false;
-    return !mergedRows.some((r) => Number(r?.missing_days || 0) > 0);
-  }, [anyLoading, missingDays, mergedRows]);
+  const anyLoading = loading || empsLoading || leavesLoading;
+  const readyToSubmit = !meLoading && !anyLoading && mergedRows.length > 0;
 
-  const readyToSubmit = !meLoading && !anyLoading && mergedRows.length > 0 && allDaysSubmitted;
+  const getDefaultLeaves = (r) => {
+    const key = normId(r.employeeid);
+    const computed = Number(leavesMap[key] || 0);
+    if (Number.isFinite(computed)) return computed;
+    const fromRow = Number(r.leaves_taken);
+    return Number.isFinite(fromRow) ? fromRow : 0;
+  };
 
-  /* ---------------- Inline edit ---------------- */
+  /* ---------- Inline edit orchestration ---------- */
   const startEdit = (row) => {
-    setEditingId(row.employeeid);
-    setEditDraft({
-      leaves_taken: String(row.leaves_taken ?? ""),
-      late_adj_days: String(row.late_adj_days ?? ""),
-      lop_days: String(row.lop_days ?? ""),
-      leaves_cf_new: String(row.leaves_cf_new ?? ""),
-      present_days: String(row.present_days ?? ""),
-    });
-  };
-  const cancelEdit = () => {
-    setEditingId(null);
-    setEditDraft({ leaves_taken: "", late_adj_days: "", lop_days: "", leaves_cf_new: "", present_days: "" });
-  };
-  const saveEdit = async (employeeid) => {
-    try {
-      setSavingRow(true);
-      const updates = {
-        leaves_taken: toNumOrNull(editDraft.leaves_taken),
-        late_adj_days: toNumOrNull(editDraft.late_adj_days),
-        lop_days: toNumOrNull(editDraft.lop_days),
-        leaves_cf_new: toNumOrNull(editDraft.leaves_cf_new),
-        present_days: toNumOrNull(editDraft.present_days),
+    const id = row.employeeid;
+    setDraft((d) => {
+      const exists = d[id];
+      const init = exists || {
+        leaves_taken: String(getDefaultLeaves(row)),
+        late_adj_days: String(row.late_adj_days ?? ""),
+        lop_days: String(row.lop_days ?? ""),
+        leaves_cf_new: String(row.leaves_cf_new ?? ""),
       };
-      for (const [k, v] of Object.entries(updates)) {
-        if (v != null && v < 0) {
-          Swal.fire({ icon: "error", title: "Invalid value", text: `${k.replaceAll("_", " ")} cannot be negative.` });
-          setSavingRow(false);
-          return;
-        }
-      }
-      const res = await fetch("/api/attendance/summary/update", {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ month, employeeid, updates }),
+      setEditBackup((b) => ({ ...b, [id]: { ...init } }));
+      return { ...d, [id]: init };
+    });
+    setEditingId(id);
+  };
+
+  const cancelEdit = (id) => {
+    setDraft((d) => {
+      const next = { ...d };
+      if (editBackup[id]) next[id] = { ...editBackup[id] };
+      return next;
+    });
+    setEditBackup((b) => {
+      const n = { ...b };
+      delete n[id];
+      return n;
+    });
+    setEditingId(null);
+  };
+
+  const saveEdit = (id) => {
+    setEditBackup((b) => {
+      const n = { ...b };
+      delete n[id];
+      return n;
+    });
+    setEditingId(null);
+  };
+
+  const handleDraftChange = (employeeid, key, value) => {
+    setDraft((d) => ({
+      ...d,
+      [employeeid]: { ...(d[employeeid] || {}), [key]: value },
+    }));
+  };
+
+  /* ---------- Submit orchestration ---------- */
+  const submitAll = async () => {
+    if (!readyToSubmit || submitting) return;
+    try {
+      setSubmitting(true);
+      const ok = await Swal.fire({
+        icon: "question",
+        title: `Submit ${humanMonth(month)} to Finance?`,
+        text: "Your edited rows will be saved, then the month will be frozen.",
+        showCancelButton: true,
+        confirmButtonText: "Submit",
+        confirmButtonColor: "#C1272D",
+      }).then((r) => r.isConfirmed);
+      if (!ok) { setSubmitting(false); return; }
+
+      const payloads = mergedRows.map((r) => {
+        const d = draft[r.employeeid] || {
+          leaves_taken: String(getDefaultLeaves(r)),
+          late_adj_days: String(r.late_adj_days ?? ""),
+          lop_days: String(r.lop_days ?? ""),
+          leaves_cf_new: String(r.leaves_cf_new ?? ""),
+        };
+        return {
+          employeeid: r.employeeid,
+          updates: {
+            leaves_taken: toNumOrNull(d.leaves_taken),
+            late_adj_days: toNumOrNull(d.late_adj_days),
+            lop_days: toNumOrNull(d.lop_days),
+            leaves_cf_new: toNumOrNull(d.leaves_cf_new),
+          },
+        };
       });
-      const j = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(j?.error || "Update failed");
+
+      const calls = payloads.map(({ employeeid, updates }) =>
+        fetch("/api/attendance/summary/update", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ month, employeeid, updates }),
+        }).then(async (res) => {
+          const j = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(j?.error || `Update failed for ${employeeid}`);
+          return j;
+        })
+      );
+
+      const settled = await Promise.allSettled(calls);
+      const failed = settled.filter((s) => s.status === "rejected");
+      if (failed.length) throw new Error(`Failed to save ${failed.length} row(s).`);
+
+      const r = await fetch("/api/attendance/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ month, company: hr.company || undefined }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j?.error || "Submit failed");
+
       await fetchSummary();
-      cancelEdit();
-      Swal.fire({ icon: "success", title: "Saved", text: "Row updated successfully.", confirmButtonColor: "#C1272D" });
+      await fetchLeaves();
+      Swal.fire({ icon: "success", title: "Submitted", text: `Saved ${j.saved} rows to ${hr.company || "your scope"}.`, confirmButtonColor: "#C1272D" });
     } catch (e) {
-      Swal.fire({ icon: "error", title: "Update failed", text: e.message || "Something went wrong" });
+      Swal.fire({ icon: "error", title: "Submit failed", text: e.message || "Something went wrong" });
     } finally {
-      setSavingRow(false);
+      setSubmitting(false);
     }
   };
 
+  /* ---------- Columns ---------- */
   const cols = [
     { key: "sno", label: "Sl no", w: "w-16" },
     { key: "name", label: "Name", w: "min-w-[220px]" },
@@ -300,10 +473,11 @@ export default function AttendanceSummary() {
     { key: "late_adj_days", label: "Late Logins adj in leaves", w: "w-44", align: "text-center", editable: true },
     { key: "lop_days", label: "LOP", w: "w-24", align: "text-center", editable: true },
     { key: "leaves_cf_new", label: "Leaves C/f", w: "w-28", align: "text-center", editable: true },
-    { key: "present_days", label: "Working Days", w: "w-28", align: "text-center", editable: true },
+    { key: "present_days", label: "Working Days", w: "w-28", align: "text-center" },
     { key: "_actions", label: "Actions", w: "w-32", align: "text-right" },
   ];
 
+  /* ---------- Render ---------- */
   return (
     <>
       <Head>
@@ -315,7 +489,7 @@ export default function AttendanceSummary() {
         <AppHeader
           currentPath="/AttendanceSummary"
           hrName={hr.name || "HR"}
-          hrCompany={hr.company || ""}   // <- single source of truth for the badge
+          hrCompany={hr.company || ""}
           onProfileSaved={(u) => {
             const nextCompany = String(u?.company || "").trim();
             const by = hr.id;
@@ -333,49 +507,38 @@ export default function AttendanceSummary() {
             <div>
               <h1 className="text-lg md:text-xl font-semibold text-gray-900">Attendance Summary</h1>
               <p className="text-sm text-gray-600">
-                Company: <span className="font-medium">{hr.company || "—"}</span> • Period: {humanMonth(month)}
+                {hr.company ? <>Company: <span className="font-medium">{hr.company}</span> • </> : null}
+                {hr.location ? <>Location: <span className="font-medium">{hr.location}</span> • </> : null}
+                Period: {humanMonth(month)}
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+              <input
+                type="month"
+                value={month}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setMonth(v);
+                  // keep URL in sync for deep-linking and back/forward nav
+                  router.replace({ pathname: router.pathname, query: { ...router.query, month: v } }, undefined, { shallow: true });
+                }}
+                className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              />
               <button onClick={fetchSummary} disabled={meLoading} className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm hover:bg-gray-50 disabled:opacity-60">
                 Refresh
               </button>
               <button
-                onClick={async () => {
-                  if (!readyToSubmit) return;
-                  try {
-                    const ok = await Swal.fire({
-                      icon: "question",
-                      title: `Submit ${humanMonth(month)} to Finance?`,
-                      text: "This will freeze the snapshot for the month.",
-                      showCancelButton: true,
-                      confirmButtonText: "Submit",
-                      confirmButtonColor: "#C1272D",
-                    }).then((r) => r.isConfirmed);
-                    if (!ok) return;
-                    const r = await fetch("/api/attendance/submit", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ month, company: hr.company || undefined }),
-                    });
-                    const j = await r.json().catch(() => ({}));
-                    if (!r.ok) throw new Error(j?.error || "Submit failed");
-                    Swal.fire({ icon: "success", title: "Submitted", text: `Saved ${j.saved} rows to ${hr.company || "your company"}.`, confirmButtonColor: "#C1272D" });
-                  } catch (e) {
-                    Swal.fire({ icon: "error", title: "Submit failed", text: e.message || "Something went wrong" });
-                  }
-                }}
-                disabled={!readyToSubmit}
-                title={!readyToSubmit ? "Enabled only when all days are complete" : ""}
-                className={`rounded-lg px-3 py-2 text-sm font-medium text-white ${readyToSubmit ? "bg-[#C1272D] hover:bg-[#a02125]" : "bg-gray-300 cursor-not-allowed"}`}
+                onClick={submitAll}
+                disabled={!readyToSubmit || submitting}
+                title={!readyToSubmit ? "Data still loading" : ""}
+                className={`rounded-lg px-3 py-2 text-sm font-medium text-white ${readyToSubmit && !submitting ? "bg-[#C1272D] hover:bg-[#a02125]" : "bg-gray-300 cursor-not-allowed"}`}
               >
-                Submit to Finance
+                {submitting ? "Submitting…" : "Submit to Finance"}
               </button>
             </div>
           </div>
 
-          {!(loading || empsLoading) && !mergedRows.length ? (
+          {!(loading || empsLoading || leavesLoading) && !mergedRows.length ? (
             <div className="text-sm text-gray-600 border border-gray-200 bg-white rounded-xl p-6">
               No data for {humanMonth(month)}.
             </div>
@@ -391,7 +554,7 @@ export default function AttendanceSummary() {
                     </tr>
                   </thead>
                   <tbody>
-                    {loading || empsLoading ? (
+                    {(loading || empsLoading || leavesLoading) ? (
                       <tr>
                         <td colSpan={cols.length} className="px-3 py-8 text-center text-gray-500">
                           <span className="inline-block h-5 w-5 mr-2 animate-spin rounded-full border-2 border-gray-300 border-t-transparent" />
@@ -400,9 +563,19 @@ export default function AttendanceSummary() {
                       </tr>
                     ) : (
                       mergedRows.map((r, i) => {
-                        const isEditing = editingId === r.employeeid;
+                        const id = r.employeeid;
+                        const isEditing = editingId === id;
+                        const d = draft[id] || {
+                          leaves_taken: String(getDefaultLeaves(r)),
+                          late_adj_days: String(r.late_adj_days ?? ""),
+                          lop_days: String(r.lop_days ?? ""),
+                          leaves_cf_new: String(r.leaves_cf_new ?? ""),
+                        };
+                        const leavesTakenNum = Number.isFinite(Number(d.leaves_taken)) ? Number(d.leaves_taken) : 0;
+                        const workingDays = Math.max(0, actualWorkingDays - leavesTakenNum);
+
                         return (
-                          <tr key={r.employeeid || i} className="odd:bg-white even:bg-gray-50">
+                          <tr key={id || i} className="odd:bg-white even:bg-gray-50">
                             {cols.map((c) => {
                               if (c.key === "sno") return <td key={c.key} className={`px-3 py-2 border-t ${c.align || ""}`}>{i + 1}</td>;
                               if (c.key === "_actions") {
@@ -418,16 +591,14 @@ export default function AttendanceSummary() {
                                     ) : (
                                       <div className="flex items-center justify-end gap-2">
                                         <button
-                                          onClick={() => saveEdit(r.employeeid)}
-                                          disabled={savingRow}
-                                          className="inline-flex items-center rounded-md bg-emerald-600 text-white px-3 py-1.5 text-xs font-medium hover:bg-emerald-700 disabled:opacity-60"
+                                          onClick={() => saveEdit(id)}
+                                          className="inline-flex items-center rounded-md bg-[#C1272D] text-white px-3 py-1.5 text-xs font-medium hover:bg-[#a02125]"
                                         >
-                                          {savingRow ? "Saving…" : "Save"}
+                                          Save
                                         </button>
                                         <button
-                                          onClick={cancelEdit}
-                                          disabled={savingRow}
-                                          className="inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                                          onClick={() => cancelEdit(id)}
+                                          className="inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
                                         >
                                           Cancel
                                         </button>
@@ -436,21 +607,28 @@ export default function AttendanceSummary() {
                                   </td>
                                 );
                               }
-                              if (c.editable && isEditing) {
-                                const k = c.key;
+
+                              if (c.editable) {
+                                const value = d[c.key] ?? "";
                                 return (
                                   <td key={c.key} className={`px-3 py-1.5 border-t ${c.align || ""}`}>
-                                    <input
-                                      type="number"
-                                      inputMode="decimal"
-                                      value={editDraft[k]}
-                                      onChange={(e) => setEditDraft((d) => ({ ...d, [k]: e.target.value }))}
-                                      className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm text-gray-900"
-                                      placeholder="0"
-                                    />
+                                    {isEditing ? (
+                                      <input
+                                        type="number"
+                                        inputMode="decimal"
+                                        step={c.key === "leaves_taken" ? "0.5" : "1"}
+                                        value={value}
+                                        onChange={(e) => handleDraftChange(id, c.key, e.target.value)}
+                                        className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm text-gray-900"
+                                        placeholder="0"
+                                      />
+                                    ) : (
+                                      <span>{value === "" ? "-" : value}</span>
+                                    )}
                                   </td>
                                 );
                               }
+
                               let val = r[c.key];
                               if (c.key === "doj") val = ddmmyyyy(val);
                               if (c.key === "salary_per_month") {
@@ -459,6 +637,10 @@ export default function AttendanceSummary() {
                                 else if (!Number.isNaN(Number(val))) val = Number(val).toLocaleString();
                                 else val = String(val);
                               }
+                              if (c.key === "actual_working_days") val = actualWorkingDays;
+                              if (c.key === "leaves_taken") val = d.leaves_taken === "" ? "-" : d.leaves_taken;
+                              if (c.key === "present_days") val = workingDays;
+
                               return <td key={c.key} className={`px-3 py-2 border-t ${c.align || ""}`}>{val ?? "-"}</td>;
                             })}
                           </tr>
@@ -473,9 +655,9 @@ export default function AttendanceSummary() {
 
           <div className="text-xs text-gray-600">
             {readyToSubmit ? (
-              <span className="text-emerald-700">✓ All days are complete. You can submit.</span>
+              <span className="text-emerald-700">You can submit when your inline edits are complete.</span>
             ) : (
-              <span className="text-amber-700">Month incomplete. Missing entries across employees: {missingDays}.</span>
+              <span className="text-amber-700">Loading data…</span>
             )}
           </div>
         </div>
