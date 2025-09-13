@@ -5,7 +5,6 @@ import React, { useEffect, useRef, useState } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
 import AppHeader from "@/components/AppHeader";
-import ProfileModal from "@/components/ProfileModal";
 import Swal from "sweetalert2";
 import { Users, Search as SearchIcon, Loader2, Pencil, X as XIcon, Save } from "lucide-react";
 
@@ -186,7 +185,7 @@ function AttendanceCalendar({ className = "" }) {
 
 /* ========= API helper ========= */
 async function fetchEmployeeById(id) {
-  const res = await fetch(`/api/updateapipage?id=${encodeURIComponent(id)}`);
+  const res = await fetch(`${USERS_API}?id=${encodeURIComponent(id)}`);
   const j = await res.json().catch(() => ({}));
   if (res.ok && Array.isArray(j?.data) && j.data.length) return j.data[0];
   throw new Error(j?.error || "Employee not found");
@@ -206,7 +205,7 @@ function EmployeeEditModal({ user, onClose, onSaved }) {
   const [address, setAddress] = useState(user?.address || "");
   const [saving, setSaving] = useState(false);
 
-  // NEW: read-only fields
+  // Read-only / additional fields
   const [designation, setDesignation] = useState(user?.designation || "");
   const [reportingToId, setReportingToId] = useState(user?.reporting_to_id || "");
   const [leavesCf] = useState(user?.Leaves_cf ?? user?.leaves_cf ?? ""); // read-only
@@ -228,9 +227,8 @@ function EmployeeEditModal({ user, onClose, onSaved }) {
         address: address || null,
         designation: designation || null,
         reporting_to_id: reportingToId || null,
-        // Leaves_cf is read-only
       };
-      const res = await fetch(`/api/updateapipage?id=${encodeURIComponent(user.employeeid)}`, {
+      const res = await fetch(`${USERS_API}?id=${encodeURIComponent(user.employeeid)}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -277,7 +275,6 @@ function EmployeeEditModal({ user, onClose, onSaved }) {
             <input value={company} onChange={(e) => setCompany(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
           </div>
 
-          {/* NEW FIELDS */}
           <div>
             <label className="block text-sm text-gray-700 mb-1">Designation</label>
             <input value={designation} onChange={(e) => setDesignation(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" placeholder="e.g. Sr. Executive" />
@@ -309,7 +306,6 @@ function EmployeeEditModal({ user, onClose, onSaved }) {
             <input value={pancard} onChange={(e) => setPAN(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
           </div>
 
-          {/* Read-only Carryforward Leaves */}
           <div className="md:col-span-2">
             <label className="block text-sm text-gray-700 mb-1">Carryforward Leaves (read-only)</label>
             <input value={leavesCf ?? ""} readOnly className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700" />
@@ -346,10 +342,8 @@ function Field({ label, value, wide, formatter }) {
 export default function Employee() {
   const router = useRouter();
 
-  /* ----- Header wiring (hrName, profile modal, logout) ----- */
+  /* ----- Header wiring (hrName, logout) ----- */
   const [hrName, setHrName] = useState("HR");
-  const [showProfile, setShowProfile] = useState(false);
-  const [profileUser, setProfileUser] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -366,35 +360,6 @@ export default function Employee() {
       cancelled = true;
     };
   }, []);
-
-  const openProfile = async () => {
-    try {
-      let me = null;
-      try {
-        const r = await fetch("/api/me");
-        const j = await r.json().catch(() => ({}));
-        if (j && (j.employeeid || j?.user?.employeeid)) me = j.user || j;
-      } catch {}
-      if (!me) {
-        const { id, email } = getAuthIdentity();
-        if (id) {
-          const r = await fetch(`${USERS_API}?id=${encodeURIComponent(id)}`);
-          const j = await r.json().catch(() => ({}));
-          if (r.ok && Array.isArray(j?.data) && j.data.length) me = j.data[0];
-        }
-        if (!me && email) {
-          const r = await fetch(`${USERS_API}?email=${encodeURIComponent(email)}`);
-          const j = await r.json().catch(() => ({}));
-          if (r.ok && Array.isArray(j?.data) && j.data.length) me = j.data[0];
-        }
-      }
-      if (!me) throw new Error("Your profile could not be found");
-      setProfileUser(me);
-      setShowProfile(true);
-    } catch (e) {
-      await Swal.fire({ icon: "error", title: "Profile", text: e.message || "Unable to load profile" });
-    }
-  };
 
   const logout = async () => {
     try {
@@ -441,7 +406,7 @@ export default function Employee() {
   // Total employees KPI
   const [employeeCount, setEmployeeCount] = useState(null);
 
-  // Modal
+  // Update modal
   const [showEdit, setShowEdit] = useState(false);
 
   // Refs
@@ -625,6 +590,7 @@ export default function Employee() {
     }
   };
 
+  // KEYBOARD HANDLER (fixes the ReferenceError)
   const onInputKeyDown = async (e) => {
     if (suggestOpen && (suggestions.length || suggestLoading)) {
       if (e.key === "ArrowDown") {
@@ -710,7 +676,7 @@ export default function Employee() {
       </Head>
 
       <main className="min-h-screen bg-gray-50">
-        <AppHeader currentPath={router.pathname} hrName={hrName} onProfileClick={openProfile} onLogout={logout} />
+        <AppHeader currentPath={router.pathname} hrName={hrName} onLogout={logout} />
 
         <div className="p-4 md:p-6 space-y-8">
           {/* ===== Organized Search / Calendar / KPI ===== */}
@@ -967,6 +933,14 @@ export default function Employee() {
                     <h3 className="text-base font-semibold text-gray-900">Employee Details</h3>
                     <p className="text-sm text-gray-600">All fields pulled from EmployeeTable.</p>
                   </div>
+                  <div>
+                    <button
+                      className="inline-flex items-center gap-2 rounded-lg bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-800"
+                      onClick={() => setShowEdit(true)}
+                    >
+                      <Pencil className="h-4 w-4" /> Update
+                    </button>
+                  </div>
                 </div>
 
                 <div className="mt-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 text-sm">
@@ -1071,24 +1045,6 @@ export default function Employee() {
               prev.length === 1 ? [updated] : prev.map((u) => (u.employeeid === updated.employeeid ? updated : u))
             );
             setShowEdit(false);
-          }}
-        />
-      ) : null}
-
-      {/* Profile modal from the header */}
-      {showProfile && profileUser ? (
-        <ProfileModal
-          user={profileUser}
-          onClose={() => setShowProfile(false)}
-          onSaved={(updated) => {
-            setShowProfile(false);
-            if (updated?.name) setHrName(updated.name);
-            Swal.fire({
-              icon: "success",
-              title: "Profile updated",
-              text: "Your changes have been saved.",
-              confirmButtonColor: "#C1272D",
-            });
           }}
         />
       ) : null}

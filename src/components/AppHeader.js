@@ -22,6 +22,40 @@ const pickExactByEmail = (list, emailRaw) => {
   ) || null;
 };
 
+// Resolve the fullest user record we can (server -> users by exact id/email)
+async function resolveExactUser(seed) {
+  let me = seed || null;
+  const id = String(me?.employeeid || "").trim();
+  const email = String(me?.email || "").trim();
+
+  // Prefer exact-by-ID
+  if (id) {
+    try {
+      const r = await fetch(`/api/users?id=${encodeURIComponent(id)}`, { credentials: "include" });
+      const j = await r.json().catch(() => ({}));
+      if (r.ok) {
+        const exact = pickExactById(j?.data, id);
+        if (exact) return exact;
+      }
+    } catch {}
+  }
+
+  // Else exact-by-email
+  if (email) {
+    try {
+      const r = await fetch(`/api/users?email=${encodeURIComponent(email)}`, { credentials: "include" });
+      const j = await r.json().catch(() => ({}));
+      if (r.ok) {
+        const exact = pickExactByEmail(j?.data, email);
+        if (exact) return exact;
+      }
+    } catch {}
+  }
+
+  // Fallback to whatever we had
+  return me;
+}
+
 export default function AppHeader({
   currentPath = "",
   hrName = "HR",
@@ -121,7 +155,7 @@ export default function AppHeader({
         me = hrUser;
       }
 
-      // 1) Otherwise, try /api/me
+      // 1) Otherwise, try /api/me (may be partial)
       if (!me) {
         try {
           const r = await fetch("/api/me", { credentials: "include" });
@@ -130,25 +164,20 @@ export default function AppHeader({
         } catch {}
       }
 
-      // 2) Fallback to LS id/email, fetch exact match from /api/users
+      // 2) Fallback to LS id/email
       if (!me && typeof window !== "undefined") {
         const id = localStorage.getItem("hr_employeeid");
         const email = localStorage.getItem("hr_email");
 
-        if (id) {
-          const r = await fetch(`/api/users?id=${encodeURIComponent(id)}`);
-          const j = await r.json().catch(() => ({}));
-          if (r.ok) me = pickExactById(j?.data, id) || me;
-        }
-        if (!me && email) {
-          const r = await fetch(`/api/users?email=${encodeURIComponent(email)}`);
-          const j = await r.json().catch(() => ({}));
-          if (r.ok) me = pickExactByEmail(j?.data, email) || me;
-        }
+        if (id) me = { ...(me || {}), employeeid: id };
+        if (!me && email) me = { email };
       }
 
       if (!me) throw new Error("Your profile could not be found");
-      setProfileUser(me);
+
+      // 3) ALWAYS hydrate to exact user row so all fields (address, aadhaar, etc.) exist
+      const hydrated = await resolveExactUser(me);
+      setProfileUser(hydrated || me);
       setShowProfile(true);
     } catch (e) {
       Swal.fire({ icon: "error", title: "Profile", text: e.message || "Unable to load profile" });
@@ -194,9 +223,9 @@ export default function AppHeader({
 
   return (
     <>
-      {/* MADE STICKY */}
+      {/* STICKY HEADER */}
       <header className="sticky top-0 z-40 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/85 border-b border-gray-200">
-        <div className="px-4 py-3 flex items-center justify-between">
+        <div className="px-4  flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="relative h-16 w-16 sm:h-20 sm:w-20">
               <Image src={logoSrc} alt="Agasthya Super Foods" fill className="object-contain" />
@@ -289,6 +318,22 @@ function ProfileModal({ user, onClose, onSaved }) {
   const [gross, setGross] = useState(String(user?.grosssalary ?? user?.grossSalary ?? ""));
   const [submitting, setSubmitting] = useState(false);
 
+  // 🔁 Keep fields in sync if a richer `user` arrives after mount
+  useEffect(() => {
+    setName(user?.name || "");
+    setEmail(user?.email || "");
+    setRole(user?.role || "HR");
+    setDoj(user?.doj || "");
+    setPhone(user?.number || "");
+    setCompany(user?.company || "");
+    setAadhaar(user?.adhaarnumber || "");
+    setPan(user?.pancard || "");
+    setAddress(user?.address || "");
+    setDesignation(user?.designation || "");
+    setReportingToId(user?.reporting_to_id || "");
+    setGross(String(user?.grosssalary ?? user?.grossSalary ?? ""));
+  }, [user]);
+
   const validate = () => {
     if (!name.trim()) return "Full name is required.";
     if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return "Valid email is required.";
@@ -352,8 +397,163 @@ function ProfileModal({ user, onClose, onSaved }) {
         </div>
 
         <form onSubmit={onSubmit} className="grid grid-cols-1 gap-5">
-          {/* form fields unchanged */}
-          {/* ... */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Employee ID</label>
+              <input
+                type="text"
+                value={user?.employeeid ?? ""}
+                readOnly
+                disabled
+                className="mt-1 block w-full rounded-lg border border-gray-300 bg-gray-100 px-3 py-2 text-gray-700"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Full name</label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Role</label>
+              <select
+                value={role}
+                onChange={(e) => setRole(e.target.value)}
+                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+              >
+                {ROLES.map((r) => (<option key={r} value={r}>{r}</option>))}
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Email</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Date of Joining</label>
+              <input
+                type="date"
+                value={doj || ""}
+                onChange={(e) => setDoj(e.target.value)}
+                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Phone</label>
+              <input
+                type="tel"
+                value={phone || ""}
+                onChange={(e) => setPhone(e.target.value)}
+                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+                placeholder="+91 98765 43210"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Company</label>
+              <input
+                type="text"
+                value={company}
+                onChange={(e) => setCompany(e.target.value)}
+                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+                placeholder="ASF / AGB / ASF-FACTORY / ANM / AVION / SRI CHAKRA"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Aadhaar (12 digits)</label>
+              <input
+                type="text"
+                value={aadhaar || ""}
+                onChange={(e) => setAadhaar(e.target.value.replace(/\D/g, "").slice(0, 12))}
+                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+                placeholder="000000000000"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">PAN</label>
+              <input
+                type="text"
+                value={pan || ""}
+                onChange={(e) => setPan(e.target.value.toUpperCase().slice(0, 10))}
+                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+                placeholder="ABCDE1234F"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Designation</label>
+              <input
+                type="text"
+                value={designation}
+                onChange={(e) => setDesignation(e.target.value)}
+                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+                placeholder="e.g. Sr. Executive"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Reporting To (Employee ID)</label>
+              <input
+                type="text"
+                value={reportingToId}
+                onChange={(e) => setReportingToId(e.target.value)}
+                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+                placeholder="e.g. EMP1002"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Gross Salary</label>
+              <input
+                type="number"
+                step="0.01"
+                value={gross}
+                onChange={(e) => setGross(e.target.value)}
+                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+                placeholder="e.g. 30000"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Address</label>
+            <textarea
+              rows={2}
+              value={address || ""}
+              onChange={(e) => setAddress(e.target.value)}
+              className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+              placeholder="Flat / Street / City / State / PIN"
+            />
+          </div>
+
+          <div className="pt-2 flex items-center justify-end gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={submitting}
+              className="inline-flex items-center justify-center rounded-lg bg-[#C1272D] text-white font-medium px-4 py-2 hover:bg-[#a02125]"
+            >
+              {submitting ? "Saving…" : "Save Changes"}
+            </button>
+          </div>
         </form>
       </div>
     </div>
