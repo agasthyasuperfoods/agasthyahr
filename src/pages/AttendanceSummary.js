@@ -77,6 +77,10 @@ export default function AttendanceSummary() {
   const [leavesMap, setLeavesMap] = useState({});
   const [leavesLoading, setLeavesLoading] = useState(true);
 
+  // NEW: late login auto-adjust map
+  const [lateAdjMap, setLateAdjMap] = useState({});
+  const [lateAdjLoading, setLateAdjLoading] = useState(true);
+
   const [draft, setDraft] = useState({});
   const [editingId, setEditingId] = useState(null);
   const [editBackup, setEditBackup] = useState({});
@@ -284,12 +288,37 @@ export default function AttendanceSummary() {
   };
   useEffect(() => { if (!meLoading) fetchLeaves(); }, [meLoading, month, hr.company, hr.location]);
 
-  /* ---------- Lookup map ---------- */
+  // NEW: late login adjustments (0.5 for every 3 late days > 10:15), excluding Sundays & holidays
+  const fetchLateAdj = async () => {
+    if (!hr.company && !hr.location) { setLateAdjMap({}); setLateAdjLoading(false); return; }
+    try {
+      setLateAdjLoading(true);
+      const url =
+        `/api/attendance/late` +
+        `?${new URLSearchParams({
+          month,
+          ...(hr.company ? { company: hr.company } : {}),
+          // threshold: "10:15", // uncomment to override default
+        }).toString()}`;
+      const r = await fetch(url, { credentials: "include" });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j?.error || "Failed to load late adjustments");
+      setLateAdjMap(j.map || {}); // keys are upper-cased employeeids
+    } catch {
+      setLateAdjMap({});
+    } finally {
+      setLateAdjLoading(false);
+    }
+  };
+  useEffect(() => { if (!meLoading) fetchLateAdj(); }, [meLoading, month, hr.company, hr.location]);
+
+  /* ---------- Lookup map (includes carry-forward) ---------- */
   const empMap = useMemo(() => {
     const m = {};
     for (const u of emps || []) {
       const key = normId(u.employeeid ?? u.id);
       if (!key) continue;
+      const leavesCfNum = Number(u.leaves_cf);
       m[key] = {
         name: u.name ?? "",
         doj: justDate(u.doj ?? ""),
@@ -297,6 +326,8 @@ export default function AttendanceSummary() {
         grosssalary: u.grossSalary ?? u.grosssalary ?? u.gross_salary ?? "",
         company: (u.company ?? "").trim(),
         probationYes: String(u.probation ?? "").trim().toLowerCase() === "yes",
+        // <- carry-forward leaves from EmployeeTable."Leaves_cf"
+        leaves_cf: Number.isFinite(leavesCfNum) ? leavesCfNum : null,
       };
     }
     return m;
@@ -321,18 +352,20 @@ export default function AttendanceSummary() {
           ? Number(r.salary_per_month)
           : Number.isFinite(salaryNum) ? salaryNum : salaryTxt,
         current_month_eligibility: probationYes ? 0 : 2,
-        // NOTE: we compute from month — keep server value ignored for determinism
+        // NOTE: compute from month for determinism
         actual_working_days: actualWorkingDays,
         _resolved_company: (r.company ?? aux.company ?? "").trim(),
+        // expose master carry-forward (for reference/fallback)
+        _master_leaves_cf: aux.leaves_cf,
       };
     });
 
-    // Server likely filtered by company/location; this is a guard
     const cmp = (hr.company || "").trim().toLowerCase();
     return cmp ? scoped.filter((r) => String(r._resolved_company || "").trim().toLowerCase() === cmp) : scoped;
   }, [rows, empMap, hr.company, actualWorkingDays]);
 
-  const anyLoading = loading || empsLoading || leavesLoading;
+  // include lateAdjLoading in the overall status
+  const anyLoading = loading || empsLoading || leavesLoading || lateAdjLoading;
   const readyToSubmit = !meLoading && !anyLoading && mergedRows.length > 0;
 
   const getDefaultLeaves = (r) => {
@@ -343,6 +376,27 @@ export default function AttendanceSummary() {
     return Number.isFinite(fromRow) ? fromRow : 0;
   };
 
+  // NEW: default for Leaves C/f from EmployeeTable."Leaves_cf"
+  const getCarryForwardDefault = (r) => {
+    const aux = empMap[normId(r.employeeid)] || {};
+    const fromEmp = Number(aux.leaves_cf);
+    if (Number.isFinite(fromEmp)) return fromEmp;
+    const fromRow = Number(r.leaves_cf_new);
+    if (Number.isFinite(fromRow)) return fromRow;
+    return 0;
+  };
+
+  // NEW: default for Late Logins adjustment (from API)
+  const getLateAdjDefault = (r) => {
+    const key = normId(r.employeeid);
+    if (key && lateAdjMap[key] != null) {
+      const n = Number(lateAdjMap[key]);
+      if (Number.isFinite(n)) return n;
+    }
+    const fromRow = Number(r.late_adj_days);
+    return Number.isFinite(fromRow) ? fromRow : 0;
+  };
+
   /* ---------- Inline edit orchestration ---------- */
   const startEdit = (row) => {
     const id = row.employeeid;
@@ -350,9 +404,10 @@ export default function AttendanceSummary() {
       const exists = d[id];
       const init = exists || {
         leaves_taken: String(getDefaultLeaves(row)),
-        late_adj_days: String(row.late_adj_days ?? ""),
+        late_adj_days: String(getLateAdjDefault(row)), // <- prefills from API
         lop_days: String(row.lop_days ?? ""),
-        leaves_cf_new: String(row.leaves_cf_new ?? ""),
+        // prefill from EmployeeTable master if present
+        leaves_cf_new: String(getCarryForwardDefault(row)),
       };
       setEditBackup((b) => ({ ...b, [id]: { ...init } }));
       return { ...d, [id]: init };
@@ -391,73 +446,96 @@ export default function AttendanceSummary() {
   };
 
   /* ---------- Submit orchestration ---------- */
-  const submitAll = async () => {
-    if (!readyToSubmit || submitting) return;
-    try {
-      setSubmitting(true);
-      const ok = await Swal.fire({
-        icon: "question",
-        title: `Submit ${humanMonth(month)} to Finance?`,
-        text: "Your edited rows will be saved, then the month will be frozen.",
-        showCancelButton: true,
-        confirmButtonText: "Submit",
-        confirmButtonColor: "#C1272D",
-      }).then((r) => r.isConfirmed);
-      if (!ok) { setSubmitting(false); return; }
+ const submitAll = async () => {
+  if (!readyToSubmit || submitting) return;
 
-      const payloads = mergedRows.map((r) => {
-        const d = draft[r.employeeid] || {
-          leaves_taken: String(getDefaultLeaves(r)),
-          late_adj_days: String(r.late_adj_days ?? ""),
-          lop_days: String(r.lop_days ?? ""),
-          leaves_cf_new: String(r.leaves_cf_new ?? ""),
-        };
-        return {
-          employeeid: r.employeeid,
-          updates: {
-            leaves_taken: toNumOrNull(d.leaves_taken),
-            late_adj_days: toNumOrNull(d.late_adj_days),
-            lop_days: toNumOrNull(d.lop_days),
-            leaves_cf_new: toNumOrNull(d.leaves_cf_new),
-          },
-        };
-      });
+  // Only submit for ASF -> asfho
+  const isASF = String(hr.company || "").trim().toUpperCase() === "ASF";
+  if (!isASF) {
+    Swal.fire({
+      icon: "info",
+      title: "Not ASF",
+      text: "Submission is enabled only for ASF (asfho) right now."
+    });
+    return;
+  }
 
-      const calls = payloads.map(({ employeeid, updates }) =>
-        fetch("/api/attendance/summary/update", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ month, employeeid, updates }),
-        }).then(async (res) => {
-          const j = await res.json().catch(() => ({}));
-          if (!res.ok) throw new Error(j?.error || `Update failed for ${employeeid}`);
-          return j;
-        })
+  try {
+    setSubmitting(true);
+    const ok = await Swal.fire({
+      icon: "question",
+      title: `Submit ${humanMonth(month)} to Finance?`,
+      text: "These rows will be saved to the ASFHO table.",
+      showCancelButton: true,
+      confirmButtonText: "Submit",
+      confirmButtonColor: "#C1272D",
+    }).then((r) => r.isConfirmed);
+
+    if (!ok) { setSubmitting(false); return; }
+
+    const rowsPayload = mergedRows.map((r) => {
+      const d = draft[r.employeeid] || {
+        leaves_taken: String(getDefaultLeaves(r)),
+        late_adj_days: String(getLateAdjDefault(r)),
+        lop_days: String(r.lop_days ?? ""),
+        leaves_cf_new: String(getCarryForwardDefault(r)),
+      };
+
+      const leavesTaken = Number(d.leaves_taken || 0);
+      const lateAdj     = Number(d.late_adj_days || 0);
+      const lop         = Number(d.lop_days || 0);
+
+      // Integer working_days for DB:
+      const workingDays = Math.max(
+        0,
+        Math.floor(actualWorkingDays - (leavesTaken + lateAdj + lop))
       );
 
-      const settled = await Promise.allSettled(calls);
-      const failed = settled.filter((s) => s.status === "rejected");
-      if (failed.length) throw new Error(`Failed to save ${failed.length} row(s).`);
+      return {
+        employeeid: r.employeeid,
+        name: r.name || "",
+        doj: justDate(r.doj) || null,
+        designation: r.designation || null,
+        gross_salary: Number.isFinite(Number(r.salary_per_month))
+          ? Number(r.salary_per_month)
+          : null,
 
-      const r = await fetch("/api/attendance/submit", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ month, company: hr.company || undefined }),
-      });
-      const j = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(j?.error || "Submit failed");
+        actual_working_days: actualWorkingDays,
+        current_month_eligibility: Number(r.current_month_eligibility || 0),
+        leaves_taken: leavesTaken,
+        late_adj_days: lateAdj,
+        lop_days: lop,
+        leaves_cf: Number(d.leaves_cf_new || 0),
+        working_days: workingDays,
+      };
+    });
 
-      await fetchSummary();
-      await fetchLeaves();
-      Swal.fire({ icon: "success", title: "Submitted", text: `Saved ${j.saved} rows to ${hr.company || "your scope"}.`, confirmButtonColor: "#C1272D" });
-    } catch (e) {
-      Swal.fire({ icon: "error", title: "Submit failed", text: e.message || "Something went wrong" });
-    } finally {
-      setSubmitting(false);
-    }
-  };
+    const resp = await fetch("/api/finance/submit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        month,
+        company: hr.company, // must be "ASF"
+        rows: rowsPayload,
+      }),
+    });
+
+    const j = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(j?.error || "Submit failed");
+
+    await Swal.fire({
+      icon: "success",
+      title: "Submitted",
+      text: `Saved ${j.saved} row(s) to ASFHO.`,
+      confirmButtonColor: "#C1272D",
+    });
+  } catch (e) {
+    Swal.fire({ icon: "error", title: "Submit failed", text: e.message || "Something went wrong" });
+  } finally {
+    setSubmitting(false);
+  }
+};
 
   /* ---------- Columns ---------- */
   const cols = [
@@ -519,7 +597,7 @@ export default function AttendanceSummary() {
                 onChange={(e) => {
                   const v = e.target.value;
                   setMonth(v);
-                  // keep URL in sync for deep-linking and back/forward nav
+                  // keep URL in sync
                   router.replace({ pathname: router.pathname, query: { ...router.query, month: v } }, undefined, { shallow: true });
                 }}
                 className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
@@ -538,7 +616,7 @@ export default function AttendanceSummary() {
             </div>
           </div>
 
-          {!(loading || empsLoading || leavesLoading) && !mergedRows.length ? (
+          {!(loading || empsLoading || leavesLoading || lateAdjLoading) && !mergedRows.length ? (
             <div className="text-sm text-gray-600 border border-gray-200 bg-white rounded-xl p-6">
               No data for {humanMonth(month)}.
             </div>
@@ -554,7 +632,7 @@ export default function AttendanceSummary() {
                     </tr>
                   </thead>
                   <tbody>
-                    {(loading || empsLoading || leavesLoading) ? (
+                    {(loading || empsLoading || leavesLoading || lateAdjLoading) ? (
                       <tr>
                         <td colSpan={cols.length} className="px-3 py-8 text-center text-gray-500">
                           <span className="inline-block h-5 w-5 mr-2 animate-spin rounded-full border-2 border-gray-300 border-t-transparent" />
@@ -567,9 +645,10 @@ export default function AttendanceSummary() {
                         const isEditing = editingId === id;
                         const d = draft[id] || {
                           leaves_taken: String(getDefaultLeaves(r)),
-                          late_adj_days: String(r.late_adj_days ?? ""),
+                          late_adj_days: String(getLateAdjDefault(r)), // <- display prefilled value
                           lop_days: String(r.lop_days ?? ""),
-                          leaves_cf_new: String(r.leaves_cf_new ?? ""),
+                          // <- here we show EmployeeTable carry-forward by default
+                          leaves_cf_new: String(getCarryForwardDefault(r)),
                         };
                         const leavesTakenNum = Number.isFinite(Number(d.leaves_taken)) ? Number(d.leaves_taken) : 0;
                         const workingDays = Math.max(0, actualWorkingDays - leavesTakenNum);
@@ -639,6 +718,8 @@ export default function AttendanceSummary() {
                               }
                               if (c.key === "actual_working_days") val = actualWorkingDays;
                               if (c.key === "leaves_taken") val = d.leaves_taken === "" ? "-" : d.leaves_taken;
+                              if (c.key === "leaves_cf_new") val = d.leaves_cf_new === "" ? "-" : d.leaves_cf_new;
+                              if (c.key === "late_adj_days") val = d.late_adj_days === "" ? "-" : d.late_adj_days;
                               if (c.key === "present_days") val = workingDays;
 
                               return <td key={c.key} className={`px-3 py-2 border-t ${c.align || ""}`}>{val ?? "-"}</td>;

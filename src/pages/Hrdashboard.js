@@ -85,6 +85,7 @@ export default function Hrdashboard() {
   const [usersError, setUsersError] = useState("");
 
   const [hrName, setHrName] = useState("");
+  const [hrUser, setHrUser] = useState(null); // full, exact user for profile
 
   // Search + pagination (Employees table)
   const [searchQuery, setSearchQuery] = useState("");
@@ -122,33 +123,56 @@ export default function Hrdashboard() {
     return "";
   };
 
-  // Load HR name
+  // Load HR name + exact hrUser (EXACT employeeid match; fallback exact email)
   useEffect(() => {
     if (!ready) return;
     let cancelled = false;
+
+    const pickExactById = (list, idRaw) => {
+      const want = String(idRaw || "").trim();
+      return (Array.isArray(list) ? list : []).find(
+        (u) => String(u?.employeeid || "").trim() === want
+      ) || null;
+    };
+
+    const pickExactByEmail = (list, emailRaw) => {
+      const want = String(emailRaw || "").trim().toLowerCase();
+      return (Array.isArray(list) ? list : []).find(
+        (u) => String(u?.email || "").trim().toLowerCase() === want
+      ) || null;
+    };
+
     (async () => {
       try {
-        const { id, email } = getAuthIdentity();
-        if (!id && !email) {
-          setHrName("HR");
-          return;
-        }
+        const { id, email } = getAuthIdentity(); // from localStorage after login
         let me = null;
+
+        // 1) Try exact employeeid
         if (id) {
           const r = await fetch(`/api/users?id=${encodeURIComponent(id)}`);
           const j = await r.json().catch(() => ({}));
-          if (r.ok && Array.isArray(j?.data) && j.data.length) me = j.data[0];
+          if (r.ok) me = pickExactById(j?.data, id);
         }
+
+        // 2) Fallback to exact email (case-insensitive), if not found by ID
         if (!me && email) {
           const r = await fetch(`/api/users?email=${encodeURIComponent(email)}`);
           const j = await r.json().catch(() => ({}));
-          if (r.ok && Array.isArray(j?.data) && j.data.length) me = j.data[0];
+          if (r.ok) me = pickExactByEmail(j?.data, email);
         }
-        if (!cancelled) setHrName(me?.name || "HR");
+
+        if (!cancelled) {
+          setHrName(me?.name || "HR");
+          setHrUser(me || null);
+        }
       } catch {
-        if (!cancelled) setHrName("HR");
+        if (!cancelled) {
+          setHrName("HR");
+          setHrUser(null);
+        }
       }
     })();
+
     return () => {
       cancelled = true;
     };
@@ -174,6 +198,10 @@ export default function Hrdashboard() {
         localStorage.removeItem("hr_role");
         localStorage.removeItem("auth");
         localStorage.removeItem("remember");
+        localStorage.removeItem("hr_remember");
+        localStorage.removeItem("hr_name");
+        localStorage.removeItem("hr_email");
+        localStorage.removeItem("hr_employeeid");
       }
       await router.push("/Hlogin");
       if (typeof window !== "undefined") {
@@ -351,7 +379,7 @@ export default function Hrdashboard() {
   const rangeEnd = Math.min(total, page * pageSize);
 
   const hasPreview = previewRows.length > 0;
-const canOpenPreview = hasPreview || hasData;
+  const canOpenPreview = hasPreview || hasData;
 
   if (!ready) {
     return (
@@ -379,9 +407,19 @@ const canOpenPreview = hasPreview || hasData;
         <AppHeader
           currentPath={router.pathname}
           hrName={hrName}
+          hrUser={hrUser} // <-- pass exact-match user for Profile modal
           onLogout={logout}
           onProfileSaved={(updated) => {
+            // Keep UI and localStorage in sync after profile save
             if (updated?.name) setHrName(updated.name);
+            if (updated) {
+              setHrUser((prev) => ({ ...(prev || {}), ...updated }));
+              if (typeof window !== "undefined") {
+                if (updated.name) localStorage.setItem("hr_name", updated.name);
+                if (updated.email) localStorage.setItem("hr_email", updated.email);
+                // employeeid shouldn't change, but if you ever allow it, also sync hr_employeeid here
+              }
+            }
           }}
         />
 
@@ -1105,7 +1143,7 @@ function CreateEmployeeModal({ idToName, onClose, onCreated }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center" aria-modal="true" role="dialog">
+    <div className="fixed inset-0 z-50 flex items=end md:items-center justify-center" aria-modal="true" role="dialog">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} aria-hidden="true" />
       <div className="relative w-full md:max-w-3xl bg-white border border-gray-200 rounded-2xl shadow-xl p-6 m-0 md:m-4">
         <div className="flex items-center justify-between mb-4">
@@ -1282,7 +1320,7 @@ function EditEmployeeModal({ idToName, employee, onClose, onUpdated }) {
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center" aria-modal="true" role="dialog">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} aria-hidden="true" />
-      <div className="relative w-full md:max-w-6xl lg:max-w-7xl w-[96vw] bg-white border border-gray-200 rounded-2xl md:rounded-2xl shadow-xl p-6 m-0 md:m-4">
+      <div className="relative w-full md:max-w-6xl lg:max-w-7xl w-[96vw] bg:white border border-gray-200 rounded-2xl md:rounded-2xl shadow-xl p-6 m-0 md:m-4">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-gray-900">Edit Employee #{employee?.employeeid}</h3>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-700" aria-label="Close" title="Close">✕</button>
@@ -1361,7 +1399,7 @@ function EditEmployeeModal({ idToName, employee, onClose, onUpdated }) {
           </div>
 
           <div className="pt-2 flex items-center justify-end gap-3">
-            <button type="button" onClick={onClose} className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+            <button type="button" onClick={onClose} className="inline-flex items-center rounded-lg border border-gray-300 bg:white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
             <button type="submit" disabled={submitting} className="inline-flex items-center justify-center rounded-lg bg-[#C1272D] text-white font-medium px-4 py-2 hover:bg-[#a02125]">{submitting ? "Saving…" : "Save Changes"}</button>
           </div>
         </form>
