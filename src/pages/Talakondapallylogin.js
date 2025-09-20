@@ -1,4 +1,4 @@
-// src/pages/Tandurlogin.js
+// src/pages/Talakondapallylogin.js
 import { useState } from "react";
 import Head from "next/head";
 import Image from "next/image";
@@ -10,7 +10,7 @@ const BTN_SOLID   = "bg-amber-600 hover:bg-amber-700";
 const RING_FOCUS  = "focus:outline-none focus:ring-4 focus:ring-amber-400/30 focus:border-amber-600";
 const LINK_TEXT   = "text-amber-600 hover:underline";
 
-export default function Tandurlogin() {
+export default function Talakondapallylogin() {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword]     = useState("");
   const [showPwd, setShowPwd]       = useState(false);
@@ -44,8 +44,8 @@ export default function Tandurlogin() {
       if (!res.ok) throw new Error(json?.error || "Login failed");
 
       const u = json?.user || {};
-      if (u.id !== "EMP175") {
-        throw new Error("This login is only for EMP175");
+      if (u.id !== "EMP179") {
+        throw new Error("This login is only for EMP179");
       }
 
       if (typeof window !== "undefined") {
@@ -56,7 +56,7 @@ export default function Tandurlogin() {
         if (u.role)  localStorage.setItem("role", u.role);
         if (remember) localStorage.setItem("remember", "1");
 
-        // clear HR-only keys
+        // clear other role keys to avoid confusion
         localStorage.removeItem("hr_auth");
         localStorage.removeItem("hr_role");
         localStorage.removeItem("hr_name");
@@ -64,7 +64,7 @@ export default function Tandurlogin() {
         localStorage.removeItem("hr_employeeid");
       }
 
-      window.location.href = "/TandurAttendance";
+      window.location.href = "/TalakondapallyAttendance";
     } catch (err) {
       Swal.fire({
         icon: "error",
@@ -80,7 +80,7 @@ export default function Tandurlogin() {
   return (
     <>
       <Head>
-        <title>Tandur Sign In • Agasthya Super Foods</title>
+        <title>Talakondapally Sign In • Agasthya Super Foods</title>
         <meta name="robots" content="noindex" />
       </Head>
 
@@ -97,7 +97,7 @@ export default function Tandurlogin() {
                   priority
                 />
               </div>
-              <h1 className="text-xl font-semibold text-gray-900">Tandur Login</h1>
+              <h1 className="text-xl font-semibold text-gray-900">Talakondapally Login</h1>
             </div>
 
             <form onSubmit={onSubmit} className="space-y-5">
@@ -113,7 +113,7 @@ export default function Tandurlogin() {
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
                   className={`mt-1 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 placeholder:text-gray-400 ${RING_FOCUS}`}
-                  placeholder="EMP175 or user@agasthya.co.in"
+                  placeholder="EMP179 or user@agasthya.co.in"
                 />
               </div>
 

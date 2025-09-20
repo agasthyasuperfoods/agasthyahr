@@ -1,4 +1,4 @@
-// src/pages/TandurAttendance.js
+// src/pages/TalakondapallyAttendance.js
 import Head from "next/head";
 import Image from "next/image";
 import { useEffect, useMemo, useState, useCallback } from "react";
@@ -6,13 +6,13 @@ import { useRouter } from "next/router";
 import Swal from "sweetalert2";
 
 // ---------- THEME ----------
-const PRIMARY_HEX = "#D97706"; // Tailwind amber-600
+const PRIMARY_HEX = "#D97706"; // amber-600
 const PRIMARY_BTN = "bg-amber-600 hover:bg-amber-700";
 const PRIMARY_OUTLINE = "focus:outline-none focus:ring-2 focus:ring-amber-400/50";
 // ---------------------------
 
 // ---------- CONSTANT LOCATION ----------
-const LOCATION_LABEL = "Tandur";
+const LOCATION_LABEL = "Talakondapally";
 // --------------------------------------
 
 function todayIso() {
@@ -39,7 +39,7 @@ function determineSubmittedFromApiPayload(j, date) {
   return allForDate && allHaveStatus;
 }
 
-export default function TandurAttendance() {
+export default function TalakondapallyAttendance() {
   const router = useRouter();
   const [ready, setReady] = useState(false);
   const [name, setName] = useState("");
@@ -54,16 +54,16 @@ export default function TandurAttendance() {
   const [isEditing, setIsEditing] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
 
-  // AUTH GUARD
+  // AUTH GUARD (EMP179 only)
   useEffect(() => {
     if (typeof window === "undefined") return;
     const authed = localStorage.getItem("auth") === "1";
     const id = localStorage.getItem("employeeid");
-    if (!authed || id !== "EMP175") {
-      router.replace("/Tandurlogin");
+    if (!authed || id !== "EMP179") {
+      router.replace("/Talakondapallylogin");
       return;
     }
-    setName(localStorage.getItem("name") || "EMP175");
+    setName(localStorage.getItem("name") || "EMP179");
     setReady(true);
   }, [router]);
 
@@ -82,17 +82,17 @@ export default function TandurAttendance() {
         localStorage.removeItem("hr_email");
         localStorage.removeItem("hr_employeeid");
       }
-      router.push("/Tandurlogin");
-      setTimeout(() => window.location.replace("/Tandurlogin"), 50);
+      router.push("/Talakondapallylogin");
+      setTimeout(() => window.location.replace("/Talakondapallylogin"), 50);
     } catch {
-      if (typeof window !== "undefined") window.location.replace("/Tandurlogin");
+      if (typeof window !== "undefined") window.location.replace("/Talakondapallylogin");
     }
   };
 
   const loadForDate = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch(`/api/tandur/attendance?date=${encodeURIComponent(date)}`);
+      const res = await fetch(`/api/talakondapally/attendance?date=${encodeURIComponent(date)}`);
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j?.error || "Failed to load attendance");
 
@@ -102,7 +102,7 @@ export default function TandurAttendance() {
         id: r.employee_id,
         employee_name: r.employee_name,
         number: r.number,
-        // Force location to Tandur for all rows (display side)
+        // Force location to Talakondapally for all rows (display)
         location: LOCATION_LABEL,
         saved_date: r.saved_date || r.date || null,
       }));
@@ -158,10 +158,10 @@ export default function TandurAttendance() {
         employee_id: e.id,
         status: attMap[e.id] || null,
       }));
-      const res = await fetch("/api/tandur/attendance", {
+      const res = await fetch("/api/talakondapally/attendance", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        // We only send status + date; location is managed separately.
+        // Only send status + date; location is managed separately.
         body: JSON.stringify({ date, rows }),
       });
       const j = await res.json().catch(() => ({}));
@@ -202,7 +202,7 @@ export default function TandurAttendance() {
       });
       if (!confirm.isConfirmed) return;
 
-      const res = await fetch(`/api/tandur/employees?id=${emp.id}`, { method: "DELETE" });
+      const res = await fetch(`/api/talakondapally/employees?id=${emp.id}`, { method: "DELETE" });
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j?.error || "Delete failed");
 
@@ -233,7 +233,7 @@ export default function TandurAttendance() {
   if (!ready) {
     return (
       <>
-        <Head><title>Tandur Attendance</title></Head>
+        <Head><title>Talakondapally Attendance</title></Head>
         <div className="min-h-screen flex items-center justify-center text-gray-600">
           <span className="inline-block h-6 w-6 mr-2 animate-spin rounded-full border-2 border-gray-300 border-t-transparent" />
           Loading…
@@ -247,7 +247,7 @@ export default function TandurAttendance() {
   return (
     <>
       <Head>
-        <title>Tandur Attendance</title>
+        <title>Talakondapally Attendance</title>
         <meta name="robots" content="noindex" />
       </Head>
 
@@ -460,7 +460,6 @@ export default function TandurAttendance() {
 function AddEmployeeModal({ onClose, onAdded, disabled }) {
   const [employeeid, setEmployeeid] = useState("");
   const [employee_name, setEmployeeName] = useState("");
-  // Pre-fill location as Tandur and keep read-only to enforce the rule
   const [number, setNumber] = useState("");
   const [location, setLocation] = useState(LOCATION_LABEL);
   const [saving, setSaving] = useState(false);
@@ -477,12 +476,12 @@ function AddEmployeeModal({ onClose, onAdded, disabled }) {
       const payload = {
         employee_name,
         number: number || null,
-        // Force Tandur for all new employees
+        // Force Talakondapally for all new employees
         location: LOCATION_LABEL,
       };
       if (employeeid && Number(employeeid) > 0) payload.employeeid = Number(employeeid);
 
-      const res = await fetch("/api/tandur/employees", {
+      const res = await fetch("/api/talakondapally/employees", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -543,7 +542,7 @@ function AddEmployeeModal({ onClose, onAdded, disabled }) {
               value={number}
               onChange={(e) => setNumber(e.target.value)}
               className={`mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm ${PRIMARY_OUTLINE}`}
-              placeholder="e.g. TND-023"
+              placeholder="e.g. TKP-023"
               disabled={disabled}
             />
           </div>
