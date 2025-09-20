@@ -1,5 +1,5 @@
 // src/pages/Hrdashboard.js
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
 import Swal from "sweetalert2";
@@ -92,6 +92,11 @@ export default function Hrdashboard() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
+  // ANM Farms quick-date for site buttons
+  const [anmDate, setAnmDate] = useState(todayIso());
+  const [anmSite, setAnmSite] = useState(null);
+  const [showAnmPreview, setShowAnmPreview] = useState(false);
+
   function getAuthIdentity() {
     if (typeof window === "undefined") return { id: null, email: null };
     const ls = window.localStorage;
@@ -101,17 +106,15 @@ export default function Hrdashboard() {
     };
   }
 
-  // Build lookup maps from EmployeeTable (cover EMP1001 / 1001 / 0001001 etc.)
-  const { idToName, idToCompany } = useMemo(() => {
+  // Build lookup maps from EmployeeTable
+  const { idToName } = useMemo(() => {
     const n = {};
-    const c = {};
     for (const u of users || []) {
       for (const key of idVariants(u.employeeid)) {
         if (u.name && !n[key]) n[key] = u.name;
-        if (u.company && !c[key]) c[key] = u.company;
       }
     }
-    return { idToName: n, idToCompany: c };
+    return { idToName: n };
   }, [users]);
 
   // Helper: resolve manager name from reporting_to_id
@@ -123,7 +126,7 @@ export default function Hrdashboard() {
     return "";
   };
 
-  // Load HR name + exact hrUser (EXACT employeeid match; fallback exact email)
+  // Load HR name + exact hrUser
   useEffect(() => {
     if (!ready) return;
     let cancelled = false;
@@ -144,17 +147,15 @@ export default function Hrdashboard() {
 
     (async () => {
       try {
-        const { id, email } = getAuthIdentity(); // from localStorage after login
+        const { id, email } = getAuthIdentity();
         let me = null;
 
-        // 1) Try exact employeeid
         if (id) {
           const r = await fetch(`/api/users?id=${encodeURIComponent(id)}`);
           const j = await r.json().catch(() => ({}));
           if (r.ok) me = pickExactById(j?.data, id);
         }
 
-        // 2) Fallback to exact email (case-insensitive), if not found by ID
         if (!me && email) {
           const r = await fetch(`/api/users?email=${encodeURIComponent(email)}`);
           const j = await r.json().catch(() => ({}));
@@ -381,6 +382,16 @@ export default function Hrdashboard() {
   const hasPreview = previewRows.length > 0;
   const canOpenPreview = hasPreview || hasData;
 
+  // ANM FARMS — open popup like biometric
+  const onAnmClick = (site) => {
+    if (!anmDate) {
+      Swal.fire({ icon: "warning", title: "Pick a date", text: "Please select the date." });
+      return;
+    }
+    setAnmSite(site);
+    setShowAnmPreview(true);
+  };
+
   if (!ready) {
     return (
       <>
@@ -407,17 +418,15 @@ export default function Hrdashboard() {
         <AppHeader
           currentPath={router.pathname}
           hrName={hrName}
-          hrUser={hrUser} // <-- pass exact-match user for Profile modal
+          hrUser={hrUser}
           onLogout={logout}
           onProfileSaved={(updated) => {
-            // Keep UI and localStorage in sync after profile save
             if (updated?.name) setHrName(updated.name);
             if (updated) {
               setHrUser((prev) => ({ ...(prev || {}), ...updated }));
               if (typeof window !== "undefined") {
                 if (updated.name) localStorage.setItem("hr_name", updated.name);
                 if (updated.email) localStorage.setItem("hr_email", updated.email);
-                // employeeid shouldn't change, but if you ever allow it, also sync hr_employeeid here
               }
             }
           }}
@@ -439,17 +448,17 @@ export default function Hrdashboard() {
             </div>
           </div>
 
-          {/* Attendance */}
-          <section className="bg-white border border-gray-200 rounded-2xl shadow-sm p-6">
+          {/* Attendance (ROW 1) */}
+          <section className="bg-white border border-gray-200 shadow-sm p-6">
             <div className="mb-4">
               <h3 className="text-base font-semibold text-gray-900">Attendance</h3>
-              <p className="text-xs text-gray-500">Upload biometric file, review the parsed data, edit if needed, then save</p>
+              <p className="text-xs text-gray-500">Upload biometric file or view ANM farms daily attendance</p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Upload + Preview */}
               <div className="rounded-xl border border-gray-200 p-4">
-                <h4 className="text-sm font-semibold text-gray-900 mb-3">Upload Attendance</h4>
+                <h4 className="text-sm font-semibold text-gray-900 mb-3">Agasthya Biometric</h4>
 
                 <div className="mb-3">
                   <label className="block text-sm font-medium text-gray-700">Report Date</label>
@@ -502,9 +511,51 @@ export default function Hrdashboard() {
                 </button>
               </div>
 
-              {/* Monthly Review */}
+              {/* ANM FARMS — Daily Views */}
               <div className="rounded-xl border border-gray-200 p-4">
-                <h4 className="text-sm font-semibold text-gray-900 mb-3">Monthly Review</h4>
+                <h4 className="text-sm font-semibold text-gray-900">ANM FARMS</h4>
+                <p className="text-xs text-gray-500 mb-3">Daily attendance view</p>
+
+                <label className="block text-sm font-medium text-gray-700">Report Date</label>
+                <input
+                  type="date"
+                  value={anmDate}
+                  max={dateMax}
+                  onChange={(e) => setAnmDate(e.target.value)}
+                  className="mt-1 rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                />
+                <div className="mt-1 text-xs text-gray-600">{toHumanDateDdMmYyyy(anmDate)}</div>
+
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onAnmClick("tandur")}
+                    className="inline-flex items-center rounded-md border px-3 py-1.5 text-sm bg-[#C1272D] text-white hover:bg-[#a02125]"
+                  >
+                    View &amp; Submit (Tandur)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onAnmClick("thalakondapallya")}
+                    className="inline-flex items-center rounded-md border px-3 py-1.5 text-sm  bg-[#C1272D] text-white hover:bg-[#a02125]"
+                  >
+                    View &amp; Submit (Thalakondapallya)
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Monthly (ROW 2) */}
+          <section className="bg-white border border-gray-200 shadow-sm p-6">
+            <div className="mb-4">
+              <h3 className="text-base font-semibold text-gray-900">Monthly Summary</h3>
+              <p className="text-xs text-gray-500">Generate and submit monthly attendance sheets for Finance</p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="rounded-xl border border-gray-200 p-4">
+                <h4 className="text-sm font-semibold text-gray-900 mb-3">Review & Submit</h4>
                 <div className="flex items-center gap-3">
                   <input
                     type="month"
@@ -766,25 +817,31 @@ export default function Hrdashboard() {
             }}
           />
         ) : null}
+
+        {showAnmPreview && anmSite ? (
+          <AnmPreviewDailyModal
+            site={anmSite}
+            date={anmDate}
+            onClose={() => {
+              setShowAnmPreview(false);
+              setAnmSite(null);
+            }}
+            onSaved={() => {}}
+          />
+        ) : null}
       </main>
     </>
   );
 }
 
 /* ===========================
-   Preview Modal (search + priority grouping)
+   Preview Modal (Agasthya biometric)
    =========================== */
 function PreviewDailyModal({ date, rows, onClose, onSaved }) {
   const minutesToHoursStr = (min) => {
     const n = Number(min);
     if (!Number.isFinite(n)) return "";
     return String(Math.round((n / 60) * 100) / 100);
-  };
-  const hoursStrToMinutes = (hStr) => {
-    if (hStr === "" || hStr == null) return null;
-    const n = parseFloat(String(hStr).replace(",", "."));
-    if (!Number.isFinite(n)) return null;
-    return Math.round(n * 60);
   };
 
   // Editable data initialized from incoming rows
@@ -809,7 +866,6 @@ function PreviewDailyModal({ date, rows, onClose, onSaved }) {
   const headers = [
     { key: "employeeid", label: "Employee ID", readOnly: true, className: "w-32" },
     { key: "name", label: "Employee Name", className: "w-56" },
-    { key: "shift", label: "Shift", className: "w-28" },
     { key: "intime", label: "In Time (HH:MM or HH:MM:SS)", className: "w-40" },
     { key: "outtime", label: "Out Time (HH:MM or HH:MM:SS)", className: "w-40" },
     { key: "workdur_hours", label: "Work Dur (hours)", className: "w-36" },
@@ -838,7 +894,6 @@ function PreviewDailyModal({ date, rows, onClose, onSaved }) {
   const items = useMemo(() => {
     const q = search.trim().toLowerCase();
 
-    // filter
     const filtered = data
       .map((r, idx) => ({ idx, r }))
       .filter(({ r }) => {
@@ -857,7 +912,7 @@ function PreviewDailyModal({ date, rows, onClose, onSaved }) {
 
       const ca = String(a.r.company || "").toUpperCase();
       const cb = String(b.r.company || "").toUpperCase();
-      if (ra === PRIORITY.length && ca !== cb) return ca.localeCompare(cb); // others by company
+      if (ra === PRIORITY.length && ca !== cb) return ca.localeCompare(cb);
 
       const na = String(a.r.name || "").toUpperCase();
       const nb = String(b.r.name || "").toUpperCase();
@@ -888,7 +943,7 @@ function PreviewDailyModal({ date, rows, onClose, onSaved }) {
         shift: r.shift || null,
         intime: r.intime || null,
         outtime: r.outtime || null,
-        workdur: hoursStrToMinutes(r.workdur_hours),
+        workdur: r.workdur_hours === "" ? null : Math.round(parseFloat(String(r.workdur_hours).replace(",", ".")) * 60),
         status: r.status || null,
         remarks: r.remarks || null,
         company: r.company || null,
@@ -908,25 +963,23 @@ function PreviewDailyModal({ date, rows, onClose, onSaved }) {
     }
   };
 
-  const toHumanDateDdMmYyyy = (yyyyMmDd) => {
+  const toHumanDateDdMmYyyyLocal = (yyyyMmDd) => {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(yyyyMmDd || "")) return "-";
     const [y, m, d] = yyyyMmDd.split("-");
     return `${d}/${m}/${y}`;
   };
 
-  // Derived counts (optional telemetry in header)
   const totalRows = data.length;
-  // Note: items includes group rows; derive "shownRows" as number of row items
   const shownRows = items.filter((x) => x.type === "row").length;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center" aria-modal="true" role="dialog">
+    <div className="fixed inset-0 z-50 flex items-center justify-center" aria-modal="true" role="dialog">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} aria-hidden="true" />
-      <div className="relative w-full md:max-w-7xl w-[96vw] bg-white border border-gray-200 rounded-t-2xl md:rounded-2xl shadow-xl m-0 md:m-4 max-h-[88vh] flex flex-col">
+      <div className="relative w-full  bg-white border border-gray-200 rounded-t-2xl md:rounded-2xl shadow-xl m-0 md:m-4 max-h-[88vh] flex flex-col">
         {/* Header */}
         <div className="px-6 pt-6 pb-3 flex items-center justify-between border-b border-gray-200">
           <div>
-            <h3 className="text-lg font-semibold text-gray-900">Preview • {toHumanDateDdMmYyyy(date)}</h3>
+            <h3 className="text-lg font-semibold text-gray-900">Preview • {toHumanDateDdMmYyyyLocal(date)}</h3>
             <div className="mt-1 text-xs text-gray-600">Showing {shownRows} of {totalRows} records</div>
           </div>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-700" aria-label="Close" title="Close">
@@ -990,7 +1043,7 @@ function PreviewDailyModal({ date, rows, onClose, onSaved }) {
                             </tr>
                           );
                         }
-                        const r = data[it.idx]; // live reference for editing
+                        const r = data[it.idx];
                         return (
                           <tr key={`r-${it.idx}-${i}`} className="odd:bg-white even:bg-gray-50">
                             {headers.map((h) => (
@@ -1060,7 +1113,341 @@ function PreviewDailyModal({ date, rows, onClose, onSaved }) {
 }
 
 /* ===========================
-   Create / Edit
+   ANM Preview Modal (Tandur / Thalakondapallya)
+   Matches DB columns: SI, name, status (date is NOT shown in table)
+   Sorted by SI (ascending) always • Full list scrollable
+   =========================== */
+function AnmPreviewDailyModal({ site, date, onClose, onSaved }) {
+  const siteLabel = site === "tandur" ? "Tandur" : "Thalakondapallya";
+
+  const [data, setData] = useState([]);   // [{ si, name, status, date }]
+  const [orig, setOrig] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [search, setSearch] = useState("");
+
+  const normalizeRow = (row) => ({
+    si: Number(row?.si ?? row?.SI ?? 0) || 0,
+    name: String(row?.name || ""),
+    status: String(row?.status || ""),
+    date: String(row?.date || ""), // keep for header/info only
+  });
+
+  // numeric sort by SI
+  const bySiAsc = useCallback((a, b) => (a.si || 0) - (b.si || 0), []);
+
+  const toHumanDateDdMmYyyyLocal = (yyyyMmDd) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(yyyyMmDd || "")) return "-";
+    const [y, m, d] = yyyyMmDd.split("-");
+    return `${d}/${m}/${y}`;
+  };
+
+  const reload = useCallback(async () => {
+    try {
+      setLoading(true);
+      const r = await fetch(
+        `/api/attendance/anm/daily?site=${encodeURIComponent(site)}&date=${encodeURIComponent(date)}`
+      );
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j?.error || "Failed to fetch ANM attendance");
+
+      const rows = Array.isArray(j?.rows) ? j.rows.map(normalizeRow) : [];
+      rows.sort(bySiAsc); // ✅ 1,2,3...
+      setData(rows);
+      setOrig(rows);
+    } catch (e) {
+      setData([]);
+      setOrig([]);
+      Swal.fire({ icon: "error", title: "Load error", text: e.message || "Could not fetch data" });
+    } finally {
+      setLoading(false);
+    }
+  }, [site, date, bySiAsc]);
+
+  useEffect(() => { reload(); }, [reload]);
+
+  // Search (no date in filter or table)
+  const viewRows = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const list = !q
+      ? [...data]
+      : data.filter((r) =>
+          [r.name, r.status, String(r.si)].some((v) =>
+            String(v || "").toLowerCase().includes(q)
+          )
+        );
+    return [...list].sort(bySiAsc);
+  }, [data, search, bySiAsc]);
+
+  // Counts on filtered view
+  const counts = useMemo(() => {
+    const norm = (s) => String(s || "").trim().toLowerCase();
+    let present = 0, absent = 0, leave = 0, other = 0;
+    for (const r of viewRows) {
+      const s = norm(r.status);
+      if (["p", "present"].includes(s)) present++;
+      else if (["a", "absent"].includes(s)) absent++;
+      else if (["l", "leave"].includes(s)) leave++;
+      else other++;
+    }
+    return { total: viewRows.length, present, absent, leave, other };
+  }, [viewRows]);
+
+  // Changed rows (name/status only)
+  const changedRows = useMemo(() => {
+    const bySi = new Map(orig.map((o) => [o.si, o]));
+    return data.filter((r) => {
+      const o = bySi.get(r.si);
+      if (!o) return false;
+      return o.name !== r.name || o.status !== r.status;
+    });
+  }, [data, orig]);
+
+  const total = data.length;
+  const shown = viewRows.length;
+
+  const updateCell = (i, key, val) => {
+    setData((prev) => {
+      const next = [...prev];
+      next[i] = { ...next[i], [key]: val };
+      return next;
+    });
+  };
+
+  // Submit (ok even with zero edits)
+  const submit = async () => {
+    try {
+      setSaving(true);
+
+      if (changedRows.length === 0) {
+        await Swal.fire({
+          icon: "success",
+          title: "Submitted",
+          text: "No edits detected. Data is already up to date.",
+          confirmButtonColor: "#C1272D",
+        });
+        onSaved?.({ saved: 0, submitted: true });
+        onClose?.();
+        return;
+      }
+
+      for (const r of changedRows) {
+        const res = await fetch(`/api/attendance/anm/row?site=${encodeURIComponent(site)}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ si: r.si, name: r.name, status: r.status }),
+        });
+        const j = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(j?.error || `Failed to update SI ${r.si}`);
+      }
+
+      const snap = [...data].sort(bySiAsc);
+      setOrig(snap);
+      setData(snap);
+
+      await Swal.fire({
+        icon: "success",
+        title: "Submitted",
+        text: `Updated ${changedRows.length} ${changedRows.length === 1 ? "row" : "rows"}.`,
+        confirmButtonColor: "#C1272D",
+      });
+      onSaved?.({ saved: changedRows.length, submitted: true });
+      onClose?.();
+    } catch (e) {
+      Swal.fire({ icon: "error", title: "Submit failed", text: e.message || "Something went wrong" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const onDelete = async (si) => {
+    const ok = await Swal.fire({
+      icon: "warning",
+      title: `Delete row #${si}?`,
+      text: "This cannot be undone.",
+      showCancelButton: true,
+      confirmButtonText: "Delete",
+      cancelButtonText: "Cancel",
+      confirmButtonColor: "#C1272D",
+    }).then((r) => r.isConfirmed);
+    if (!ok) return;
+
+    try {
+      const res = await fetch(
+        `/api/attendance/anm/row?site=${encodeURIComponent(site)}&si=${encodeURIComponent(si)}`,
+        { method: "DELETE" }
+      );
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j?.error || "Delete failed");
+
+      setData((prev) => prev.filter((r) => r.si !== si));
+      setOrig((prev) => prev.filter((r) => r.si !== si));
+      Swal.fire({ icon: "success", title: "Deleted", text: `Row #${si} removed.` });
+    } catch (e) {
+      Swal.fire({ icon: "error", title: "Delete failed", text: e.message || "Something went wrong" });
+    }
+  };
+
+  // Close with unsaved check
+  const isDirty = useMemo(() => changedRows.length > 0, [changedRows]);
+  const handleClose = async () => {
+    if (!isDirty) return onClose?.();
+    const confirm = await Swal.fire({
+      icon: "warning",
+      title: "Discard changes?",
+      text: "You have unsaved edits. Close without submitting?",
+      showCancelButton: true,
+      confirmButtonText: "Discard",
+      cancelButtonText: "Stay",
+      confirmButtonColor: "#C1272D",
+    }).then((r) => r.isConfirmed);
+    if (confirm) onClose?.();
+  };
+
+  // UI
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center" aria-modal="true" role="dialog">
+      <div className="absolute inset-0 bg-black/40" onClick={handleClose} aria-hidden="true" />
+
+      {/* Modal content: fixed height & internal scrolling */}
+      <div className="relative w-full md:max-w-5xl bg-white border border-gray-200 rounded-t-2xl md:rounded-2xl shadow-xl m-0 md:m-4 h-[90vh] max-h-[90vh] overflow-hidden flex flex-col">
+        {/* Header */}
+        <div className="px-6 pt-6 pb-3 flex items-center justify-between border-b border-gray-200 shrink-0">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900">
+              {siteLabel} • {toHumanDateDdMmYyyyLocal(date)}
+            </h3>
+            <div className="mt-1 text-xs text-gray-600">
+              {loading ? "Loading…" : <>Showing {shown} of {total} employees</>}
+            </div>
+            {!loading && (
+              <div className="mt-1 text-xs text-gray-700">
+                <span className="mr-3">Total: <span className="font-semibold">{counts.total}</span></span>
+                <span className="mr-3">Present: <span className="font-semibold text-emerald-700">{counts.present}</span></span>
+                <span className="mr-3">Absent: <span className="font-semibold text-red-600">{counts.absent}</span></span>
+                <span className="mr-3">Leave: <span className="font-semibold text-amber-600">{counts.leave}</span></span>
+                <span>Other: <span className="font-semibold text-gray-600">{counts.other}</span></span>
+              </div>
+            )}
+          </div>
+          <button onClick={handleClose} className="text-gray-500 hover:text-gray-700" aria-label="Close" title="Close">✕</button>
+        </div>
+
+        {/* Toolbar */}
+        <div className="px-6 py-3 border-b border-gray-200 bg-white shrink-0">
+          <div className="flex items-center gap-2 w-full md:max-w-2xl">
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              placeholder="Search by SI, name, or status…"
+              disabled={loading}
+            />
+            <button
+              type="button"
+              onClick={reload}
+              className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm hover:bg-gray-50 disabled:opacity-50"
+              disabled={loading}
+              title="Refresh"
+            >
+              Refresh
+            </button>
+          </div>
+        </div>
+
+        {/* Body (scrolls) */}
+        <div className="px-6 flex-1 min-h-0 flex flex-col">
+          {loading ? (
+            <div className="py-8 text-center text-gray-600">
+              <span className="inline-block h-5 w-5 mr-2 animate-spin rounded-full border-2 border-gray-300 border-t-transparent" />
+              Loading attendance…
+            </div>
+          ) : !data?.length ? (
+            <div className="py-8 text-center text-gray-600">
+              No rows found for {siteLabel} on {toHumanDateDdMmYyyyLocal(date)}.
+            </div>
+          ) : (
+            <div className="border border-gray-200 rounded-xl flex-1 min-h-0">
+              <div className="h-full overflow-y-auto">
+                <table className="min-w-[720px] w-full text-sm">
+                  <thead className="bg-gray-50 sticky top-0 z-10">
+                    <tr className="text-left text-gray-600">
+                      <th className="px-3 py-2 border-b w-24">SI</th>
+                      <th className="px-3 py-2 border-b">Name</th>
+                      <th className="px-3 py-2 border-b w-56">Status</th>
+                      <th className="px-3 py-2 border-b w-32 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {viewRows.map((r) => {
+                      const idx = data.findIndex((x) => x.si === r.si);
+                      return (
+                        <tr key={r.si} className="odd:bg-white even:bg-gray-50">
+                          <td className="px-3 py-2 border-t align-top">{r.si}</td>
+                          <td className="px-3 py-2 border-t align-top">
+                            <input
+                              type="text"
+                              value={r.name}
+                              onChange={(e) => updateCell(idx, "name", e.target.value)}
+                              className="w-full rounded border border-gray-300 px-2 py-1"
+                              placeholder="Name"
+                            />
+                          </td>
+                          <td className="px-3 py-2 border-t align-top">
+                            <input
+                              type="text"
+                              value={r.status}
+                              onChange={(e) => updateCell(idx, "status", e.target.value)}
+                              className="w-full rounded border border-gray-300 px-2 py-1"
+                              placeholder="Status (Present/Absent/Leave)"
+                            />
+                          </td>
+                          <td className="px-3 py-2 border-t align-top text-right">
+                            <button
+                              onClick={() => onDelete(r.si)}
+                              className="p-2 rounded-md border border-red-200 bg-red-50 text-red-600 hover:bg-red-100"
+                              title="Delete row"
+                              aria-label="Delete row"
+                            >
+                              Delete
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 pt-3 pb-6 flex items-center justify-end gap-3 border-t border-gray-200 shrink-0">
+          <button
+            type="button"
+            onClick={handleClose}
+            className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={submit}
+            disabled={loading || saving}
+            className="inline-flex items-center rounded-lg bg-[#C1272D] px-4 py-2 text-sm font-medium text-white hover:bg-[#a02125] disabled:opacity-60"
+          >
+            {saving ? "Submitting…" : "Submit"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ===========================
+   Create / Edit Employee
    =========================== */
 function CreateEmployeeModal({ idToName, onClose, onCreated }) {
   const [employeeId, setEmployeeId] = useState("");
@@ -1143,7 +1530,7 @@ function CreateEmployeeModal({ idToName, onClose, onCreated }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items=end md:items-center justify-center" aria-modal="true" role="dialog">
+    <div className="fixed inset-0 z-50 flex items-center justify-center" aria-modal="true" role="dialog">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} aria-hidden="true" />
       <div className="relative w-full md:max-w-3xl bg-white border border-gray-200 rounded-2xl shadow-xl p-6 m-0 md:m-4">
         <div className="flex items-center justify-between mb-4">
@@ -1318,9 +1705,9 @@ function EditEmployeeModal({ idToName, employee, onClose, onUpdated }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center" aria-modal="true" role="dialog">
+    <div className="fixed inset-0 z-50 flex items-center justify-center" aria-modal="true" role="dialog">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} aria-hidden="true" />
-      <div className="relative w-full md:max-w-6xl lg:max-w-7xl w-[96vw] bg:white border border-gray-200 rounded-2xl md:rounded-2xl shadow-xl p-6 m-0 md:m-4">
+      <div className="relative w-full  bg-white border border-gray-200 rounded-2xl md:rounded-2xl shadow-xl p-6 m-0 md:m-4">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-gray-900">Edit Employee #{employee?.employeeid}</h3>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-700" aria-label="Close" title="Close">✕</button>
@@ -1399,7 +1786,7 @@ function EditEmployeeModal({ idToName, employee, onClose, onUpdated }) {
           </div>
 
           <div className="pt-2 flex items-center justify-end gap-3">
-            <button type="button" onClick={onClose} className="inline-flex items-center rounded-lg border border-gray-300 bg:white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+            <button type="button" onClick={onClose} className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
             <button type="submit" disabled={submitting} className="inline-flex items-center justify-center rounded-lg bg-[#C1272D] text-white font-medium px-4 py-2 hover:bg-[#a02125]">{submitting ? "Saving…" : "Save Changes"}</button>
           </div>
         </form>
