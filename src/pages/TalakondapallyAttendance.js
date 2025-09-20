@@ -411,36 +411,40 @@ export default function TalakondapallyAttendance() {
           </section>
         )}
 
-        <div className="sticky bottom-0 z-20 border-t border-gray-200 bg-white/95 backdrop-blur px-4 py-3">
-          {readOnly ? (
-            <button
-              onClick={startEditing}
-              disabled={loading || employees.length === 0}
-              className={`w-full rounded-xl ${PRIMARY_BTN} text-white py-3 font-medium disabled:opacity-60`}
-            >
-              Update attendance
-            </button>
-          ) : (
-            <div className="flex gap-2">
-              <button
-                onClick={save}
-                disabled={loading || employees.length === 0}
-                className={`flex-1 rounded-xl ${PRIMARY_BTN} text-white py-3 font-medium disabled:opacity-60`}
-              >
-                {submitted ? "Save changes" : "Submit attendance"}
-              </button>
-              {submitted ? (
-                <button
-                  type="button"
-                  onClick={cancelEditing}
-                  className="rounded-xl border border-gray-300 bg-white px-4 py-3 font-medium hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-              ) : null}
-            </div>
-          )}
-        </div>
+      <footer
+  className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white/95 backdrop-blur px-4 py-3 shadow-[0_-2px_10px_rgba(0,0,0,0.06)]"
+  style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom))" }} // iOS safe-area
+>
+  {readOnly ? (
+    <button
+      onClick={startEditing}
+      disabled={loading || employees.length === 0}
+      className={`w-full rounded-xl ${PRIMARY_BTN} text-white py-3 font-medium disabled:opacity-60`}
+    >
+      Update attendance
+    </button>
+  ) : (
+    <div className="flex gap-2">
+      <button
+        onClick={save}
+        disabled={loading || employees.length === 0}
+        className={`flex-1 rounded-xl ${PRIMARY_BTN} text-white py-3 font-medium disabled:opacity-60`}
+      >
+        {submitted ? "Save changes" : "Submit attendance"}
+      </button>
+      {submitted ? (
+        <button
+          type="button"
+          onClick={cancelEditing}
+          className="rounded-xl border border-gray-300 bg-white px-4 py-3 font-medium hover:bg-gray-50"
+        >
+          Cancel
+        </button>
+      ) : null}
+    </div>
+  )}
+</footer>
+
       </main>
 
       {showAdd && isEditing ? (
