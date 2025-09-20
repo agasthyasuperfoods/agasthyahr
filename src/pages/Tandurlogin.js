@@ -1,10 +1,10 @@
-// src/pages/Hlogin.js
+// src/pages/Tandurlogin.js
 import { useState } from "react";
 import Head from "next/head";
 import Image from "next/image";
 import Swal from "sweetalert2";
 
-export default function Hlogin() {
+export default function Tandurlogin() {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [showPwd, setShowPwd] = useState(false);
@@ -35,19 +35,31 @@ export default function Hlogin() {
         body: JSON.stringify({ identifier: idTrim, password: pwdTrim }),
       });
       const json = await res.json().catch(() => ({}));
-
       if (!res.ok) throw new Error(json?.error || "Login failed");
 
-      if (typeof window !== "undefined") {
-        localStorage.setItem("hr_auth", "1");
-        localStorage.setItem("hr_name", json?.user?.name || "HR");
-        if (json?.user?.email) localStorage.setItem("hr_email", json.user.email);
-        if (json?.user?.id) localStorage.setItem("hr_employeeid", json.user.id);
-        if (json?.user?.role) localStorage.setItem("hr_role", json.user.role);
-        if (remember) localStorage.setItem("hr_remember", "1");
+      const u = json?.user || {};
+      if (u.id !== "EMP175") {
+        throw new Error("This login is only for EMP175");
       }
 
-      window.location.href = "/Hrdashboard";
+      if (typeof window !== "undefined") {
+        // Generic auth keys for EMP175
+        localStorage.setItem("auth", "1");
+        if (u.name) localStorage.setItem("name", u.name);
+        if (u.email) localStorage.setItem("email", u.email);
+        if (u.id) localStorage.setItem("employeeid", u.id);
+        if (u.role) localStorage.setItem("role", u.role);
+        if (remember) localStorage.setItem("remember", "1");
+
+        // Clear HR-only keys to avoid cross-auth confusion
+        localStorage.removeItem("hr_auth");
+        localStorage.removeItem("hr_role");
+        localStorage.removeItem("hr_name");
+        localStorage.removeItem("hr_email");
+        localStorage.removeItem("hr_employeeid");
+      }
+
+      window.location.href = "/TandurAttendance";
     } catch (err) {
       Swal.fire({
         icon: "error",
@@ -63,7 +75,7 @@ export default function Hlogin() {
   return (
     <>
       <Head>
-        <title>HR Sign In • Agasthya Super Foods</title>
+        <title>Tandur Sign In • Agasthya Super Foods</title>
         <meta name="robots" content="noindex" />
       </Head>
 
@@ -80,10 +92,7 @@ export default function Hlogin() {
                   priority
                 />
               </div>
-              <h1 className="text-xl font-semibold text-gray-900">HR Login</h1>
-              <p className="text-sm text-gray-500 mt-1">
-                Manage attendance, employees & monthly reports
-              </p>
+              <h1 className="text-xl font-semibold text-gray-900">Tandur Login</h1>
             </div>
 
             <form onSubmit={onSubmit} className="space-y-5">
@@ -99,9 +108,9 @@ export default function Hlogin() {
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
                   className="mt-1 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-4 focus:ring-[#C1272D]/20 focus:border-[#C1272D]"
-                  placeholder="e.g. hr@agasthya.com or EMP-10023"
+                  placeholder="EMP175 or user@agasthya.co.in"
                 />
-             
+          
               </div>
 
               <div>
@@ -109,6 +118,7 @@ export default function Hlogin() {
                   <label htmlFor="password" className="block text-sm font-medium text-gray-700">
                     Password
                   </label>
+                  {/* <-- added to match Hlogin */}
                   <a href="/forgot-password" className="text-xs text-[#C1272D] hover:underline">
                     Forgot password?
                   </a>
@@ -163,17 +173,7 @@ export default function Hlogin() {
                 disabled={loading}
                 className="w-full inline-flex items-center justify-center rounded-lg bg-[#C1272D] text-white font-medium py-2.5 hover:bg-[#a02125] focus:outline-none focus:ring-4 focus:ring-[#C1272D]/30 disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                {loading ? (
-                  <span className="inline-flex items-center gap-2">
-                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
-                    </svg>
-                    Signing in…
-                  </span>
-                ) : (
-                  "Sign in"
-                )}
+                {loading ? "Signing in…" : "Sign in"}
               </button>
 
               <p className="text-center text-xs text-gray-500">
