@@ -53,6 +53,18 @@ const idVariants = (raw) => {
   return Array.from(set);
 };
 
+// ==== shared UI: color the status value ====
+const statusClass = (s) => {
+  const v = String(s || "").trim().toLowerCase();
+  if (v === "present" || v === "p")
+    return "bg-emerald-50 text-emerald-700 border-emerald-200";
+  if (v === "absent" || v === "a")
+    return "bg-red-50 text-red-700 border-red-200";
+  if (v === "leave" || v === "l")
+    return "bg-amber-50 text-amber-700 border-amber-200";
+  return "bg-white text-gray-800 border-gray-300";
+};
+
 export default function Hrdashboard() {
   const router = useRouter();
   const [ready, setReady] = useState(false);
@@ -96,6 +108,13 @@ export default function Hrdashboard() {
   const [anmDate, setAnmDate] = useState(todayIso());
   const [anmSite, setAnmSite] = useState(null);
   const [showAnmPreview, setShowAnmPreview] = useState(false);
+
+  // track whether current date was submitted per site (Tandur/Talakondapally)
+  const [anmSubmitted, setAnmSubmitted] = useState({ tandur: false, talakondapally: false });
+  useEffect(() => {
+    // reset local state when date changes; we'll fetch actual status below
+    setAnmSubmitted({ tandur: false, talakondapally: false });
+  }, [anmDate]);
 
   function getAuthIdentity() {
     if (typeof window === "undefined") return { id: null, email: null };
@@ -271,6 +290,50 @@ export default function Hrdashboard() {
     if (!ready || !uploadDate) return;
     refreshDailyForDate(uploadDate);
   }, [ready, uploadDate]);
+
+  // --- NEW: fetch ANM submitted statuses from DB for the chosen anmDate ---
+  const fetchAnmSubmittedStatuses = useCallback(async (date) => {
+    try {
+      // request to API that returns per-site review/submitted status for the date
+      // expected shapes:
+      // { tandur: "Submitted", talakondapally: "Pending" }
+      // or { sites: { tandur: "Submitted", talakondapally: "Submitted" } }
+      const res = await fetch(`/api/attendance/anm/status?date=${encodeURIComponent(date)}`);
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j?.error || "Failed to fetch ANM statuses");
+
+      let tandurVal = null;
+      let talakVal = null;
+
+      if (j?.sites && typeof j.sites === "object") {
+        tandurVal = j.sites.tandur ?? j.sites.tandur_site ?? null;
+        talakVal = j.sites.talakondapally ?? j.sites.talakonda ?? j.sites.talakondapally_site ?? null;
+      } else {
+        tandurVal = j?.tandur ?? j?.tandur_status ?? j?.tandur_review ?? null;
+        talakVal = j?.talakondapally ?? j?.talak ?? j?.talak_review ?? null;
+      }
+
+      const isSubmitted = (v) => {
+        if (v == null) return false;
+        return String(v).trim().toLowerCase() === "submitted";
+      };
+
+      setAnmSubmitted({
+        tandur: isSubmitted(tandurVal),
+        talakondapally: isSubmitted(talakVal),
+      });
+    } catch (e) {
+      // if the status fetch fails, keep local submitted flags as false
+      console.warn("Failed to fetch ANM submitted statuses:", e?.message || e);
+      setAnmSubmitted({ tandur: false, talakondapally: false });
+    }
+  }, []);
+
+  // call fetchAnmSubmittedStatuses whenever ready or anmDate changes
+  useEffect(() => {
+    if (!ready || !anmDate) return;
+    fetchAnmSubmittedStatuses(anmDate);
+  }, [ready, anmDate, fetchAnmSubmittedStatuses]);
 
   // Parse (preview-only)
   const onParse = async (e) => {
@@ -530,16 +593,24 @@ export default function Hrdashboard() {
                   <button
                     type="button"
                     onClick={() => onAnmClick("tandur")}
-                    className="inline-flex items-center rounded-md border px-3 py-1.5 text-sm bg-[#C1272D] text-white hover:bg-[#a02125]"
+                    className={`inline-flex items-center rounded-md border px-3 py-1.5 text-sm ${
+                      anmSubmitted.tandur
+                        ? "bg-emerald-600 text-white hover:bg-emerald-700"
+                        : "bg-[#C1272D] text-white hover:bg-[#a02125]"
+                    }`}
                   >
-                    View &amp; Submit (Tandur)
+                    {anmSubmitted.tandur ? "Submitted ✓ (Tandur)" : "View & Submit (Tandur)"}
                   </button>
                   <button
                     type="button"
-                    onClick={() => onAnmClick("thalakondapallya")}
-                    className="inline-flex items-center rounded-md border px-3 py-1.5 text-sm  bg-[#C1272D] text-white hover:bg-[#a02125]"
+                    onClick={() => onAnmClick("talakondapally")}
+                    className={`inline-flex items-center rounded-md border px-3 py-1.5 text-sm  ${
+                      anmSubmitted.talakondapally
+                        ? "bg-emerald-600 text-white hover:bg-emerald-700"
+                        : "bg-[#C1272D] text-white hover:bg-[#a02125]"
+                    }`}
                   >
-                    View &amp; Submit (Thalakondapallya)
+                    {anmSubmitted.talakondapally ? "Submitted ✓ (Talakondapally)" : "View & Submit (Talakondapally)"}
                   </button>
                 </div>
               </div>
@@ -555,7 +626,33 @@ export default function Hrdashboard() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               <div className="rounded-xl border border-gray-200 p-4">
-                <h4 className="text-sm font-semibold text-gray-900 mb-3">Review & Submit</h4>
+                <h4 className="text-sm font-semibold text-gray-900 mb-3">Head Office</h4>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="month"
+                    value={reportMonth}
+                    onChange={(e) => setReportMonth(e.target.value)}
+                    className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  />
+                  <span className="text-sm text-gray-600">{toHumanMonth(reportMonth)}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => router.push(`/AttendanceSummary?company=ASF&month=${reportMonth}`)}
+                  className="mt-3 inline-flex items-center rounded-lg bg-gray-800 px-3 py-2 text-sm font-medium text-white hover:bg-gray-700"
+                >
+                  View & Submit
+                </button>
+              </div>
+            </div>
+                    <div className="mb-4">
+              <h3 className="text-base font-semibold text-gray-900">Monthly Summary</h3>
+              <p className="text-xs text-gray-500">Generate and submit monthly attendance sheets for Finance</p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="rounded-xl border border-gray-200 p-4">
+                <h4 className="text-sm font-semibold text-gray-900 mb-3">Head Office</h4>
                 <div className="flex items-center gap-3">
                   <input
                     type="month"
@@ -825,8 +922,16 @@ export default function Hrdashboard() {
             onClose={() => {
               setShowAnmPreview(false);
               setAnmSite(null);
+              // re-check DB status after closing — ensures refresh keeps correct submitted badge
+              // (this will overwrite the optimistic state set by onSaved if necessary)
+              fetchAnmSubmittedStatuses(anmDate).catch(() => {});
             }}
-            onSaved={() => {}}
+            onSaved={() => {
+              // mark the clicked site as submitted for the chosen date (optimistic)
+              setAnmSubmitted((s) => ({ ...s, [anmSite]: true }));
+              // still re-fetch authoritative status from DB
+              fetchAnmSubmittedStatuses(anmDate).catch(() => {});
+            }}
           />
         ) : null}
       </main>
@@ -838,20 +943,47 @@ export default function Hrdashboard() {
    Preview Modal (Agasthya biometric)
    =========================== */
 function PreviewDailyModal({ date, rows, onClose, onSaved }) {
+  // Format helpers (no seconds)
+  const toHHMM = (val) => {
+    const s = String(val || "").trim();
+    if (!s) return "";
+    const m = s.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+    if (!m) return ""; // invalid
+    const hh = Math.min(23, Math.max(0, Number(m[1])));
+    const mm = Math.min(59, Math.max(0, Number(m[2])));
+    return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+  };
+  const isHHMM = (s) => /^\d{2}:\d{2}$/.test(String(s || ""));
+
+  // --- replace minutesToHoursStr with this ---
   const minutesToHoursStr = (min) => {
     const n = Number(min);
     if (!Number.isFinite(n)) return "";
-    return String(Math.round((n / 60) * 100) / 100);
+    // round to nearest minute
+    const totalMin = Math.round(n);
+
+    const hh = Math.floor(totalMin / 60);
+    let mm = totalMin % 60;
+
+    // if minutes reach 59 or more, carry to next hour
+    if (mm >= 59) {
+      return String(hh + 1); // show whole hour (no .00 needed)
+    }
+
+    // show as H.MM where MM are minutes 00..58 (two digits)
+    return `${hh}.${String(mm).padStart(2, "0")}`;
   };
 
-  // Editable data initialized from incoming rows
+
+
+  // Editable data initialized from incoming rows; ensure HH:MM
   const [data, setData] = useState(() =>
     (rows || []).map((r) => ({
       employeeid: String(r.employeeid ?? ""),
       name: String(r.name || ""),
       shift: r.shift || "",
-      intime: r.intime || "",
-      outtime: r.outtime || "",
+      intime: toHHMM(r.intime || ""),
+      outtime: toHHMM(r.outtime || ""),
       workdur_hours: minutesToHoursStr(r.workdur),
       status: r.status || "",
       remarks: r.remarks || "",
@@ -866,8 +998,8 @@ function PreviewDailyModal({ date, rows, onClose, onSaved }) {
   const headers = [
     { key: "employeeid", label: "Employee ID", readOnly: true, className: "w-32" },
     { key: "name", label: "Employee Name", className: "w-56" },
-    { key: "intime", label: "In Time (HH:MM or HH:MM:SS)", className: "w-40" },
-    { key: "outtime", label: "Out Time (HH:MM or HH:MM:SS)", className: "w-40" },
+    { key: "intime", label: "In Time (HH:MM)", className: "w-40" },
+    { key: "outtime", label: "Out Time (HH:MM)", className: "w-40" },
     { key: "workdur_hours", label: "Work Dur (hours)", className: "w-36" },
     { key: "status", label: "Status", className: "w-32" },
     { key: "remarks", label: "Remarks", className: "min-w-[320px]" },
@@ -877,18 +1009,24 @@ function PreviewDailyModal({ date, rows, onClose, onSaved }) {
   const setCell = (i, key, val) => {
     setData((prev) => {
       const next = [...prev];
-      next[i] = { ...next[i], [key]: val };
+      if (key === "intime" || key === "outtime") {
+        next[i] = { ...next[i], [key]: toHHMM(val) };
+      } else {
+        next[i] = { ...next[i], [key]: val };
+      }
       return next;
     });
   };
 
   // Priority ordering: ASF → AGB → ANM → others (alphabetical)
+  // Within company: names NOT starting with 'V' first, then 'V' names at bottom; then name ASC; then employeeid ASC
   const PRIORITY = ["ASF", "AGB", "ANM"];
   const rankCompany = (c) => {
     const k = String(c || "").trim().toUpperCase();
     const idx = PRIORITY.indexOf(k);
     return idx === -1 ? PRIORITY.length : idx;
   };
+  const startsWithV = (s) => String(s || "").trim().toUpperCase().startsWith("V");
 
   // Build filtered, sorted, grouped view (stable indices preserved for editing)
   const items = useMemo(() => {
@@ -904,19 +1042,20 @@ function PreviewDailyModal({ date, rows, onClose, onSaved }) {
         return fields.some((s) => s.includes(q));
       });
 
-    // sort with priority
     filtered.sort((a, b) => {
       const ra = rankCompany(a.r.company);
       const rb = rankCompany(b.r.company);
       if (ra !== rb) return ra - rb;
 
-      const ca = String(a.r.company || "").toUpperCase();
-      const cb = String(b.r.company || "").toUpperCase();
-      if (ra === PRIORITY.length && ca !== cb) return ca.localeCompare(cb);
+      // push 'V*' names to bottom within same company
+      const av = startsWithV(a.r.name) ? 1 : 0;
+      const bv = startsWithV(b.r.name) ? 1 : 0;
+      if (av !== bv) return av - bv; // 0 first, then 1
 
       const na = String(a.r.name || "").toUpperCase();
       const nb = String(b.r.name || "").toUpperCase();
       if (na !== nb) return na.localeCompare(nb);
+
       return String(a.r.employeeid || "").localeCompare(String(b.r.employeeid || ""));
     });
 
@@ -935,19 +1074,67 @@ function PreviewDailyModal({ date, rows, onClose, onSaved }) {
   }, [data, search]);
 
   const save = async () => {
+    // Validate all HH:MM fields before submitting
+    for (const r of data) {
+      if (r.intime && !isHHMM(r.intime)) {
+        Swal.fire({ icon: "error", title: "Invalid time", text: `Invalid In Time for ${r.name || r.employeeid}. Use HH:MM.` });
+        return;
+      }
+      if (r.outtime && !isHHMM(r.outtime)) {
+        Swal.fire({ icon: "error", title: "Invalid time", text: `Invalid Out Time for ${r.name || r.employeeid}. Use HH:MM.` });
+        return;
+      }
+    }
+
     try {
       setSaving(true);
-      const payloadRows = data.map((r) => ({
-        employeeid: r.employeeid,
-        name: r.name || null,
-        shift: r.shift || null,
-        intime: r.intime || null,
-        outtime: r.outtime || null,
-        workdur: r.workdur_hours === "" ? null : Math.round(parseFloat(String(r.workdur_hours).replace(",", ".")) * 60),
-        status: r.status || null,
-        remarks: r.remarks || null,
-        company: r.company || null,
-      }));
+     // helper: parse a user-entered workdur_hours into minutes (or null)
+const parseWorkdurToMinutes = (v) => {
+  if (v === "" || v == null) return null;
+  const s = String(v).trim();
+
+  // H.MM where MM are minutes (1-2 digits). e.g. "7.52" => 7h 52m
+  const mmStyle = s.match(/^(\d+)\.(\d{1,2})$/);
+  if (mmStyle) {
+    const hh = Number(mmStyle[1]);
+    let mm = Number(mmStyle[2]);
+    if (Number.isNaN(hh) || Number.isNaN(mm)) return null;
+
+    // if user typed ".5" meaning 5 minutes we already parse 5; if mm >= 60, carry to next hour
+    if (mm >= 60) {
+      // carry up (e.g. 7.75 => treat minutes 75 as 1h15m => round up to next hour if necessary)
+      const extraHours = Math.floor(mm / 60);
+      mm = mm % 60;
+      return (hh + extraHours) * 60 + mm;
+    }
+
+    // If mm is 59 or more (edge), round up to next hour to match UX expectation
+    if (mm >= 59) return (hh + 1) * 60;
+
+    return hh * 60 + mm;
+  }
+
+  // fallback: try decimal hours (legacy) e.g. "7.88" meaning 7.88 hours
+  const dec = parseFloat(s.replace(",", "."));
+  if (!Number.isNaN(dec)) {
+    return Math.round(dec * 60);
+  }
+
+  return null;
+};
+
+const payloadRows = data.map((r) => ({
+  employeeid: r.employeeid,
+  name: r.name || null,
+  shift: r.shift || null,
+  intime: r.intime || null,
+  outtime: r.outtime || null,
+  workdur: parseWorkdurToMinutes(r.workdur_hours),
+  status: r.status || null,
+  remarks: r.remarks || null,
+  company: r.company || null,
+}));
+
       const res = await fetch("/api/attendance/save", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1067,13 +1254,28 @@ function PreviewDailyModal({ date, rows, onClose, onSaved }) {
                                     className="w-full rounded border border-gray-300 px-2 py-1"
                                     placeholder="Optional notes"
                                   />
+                                ) : h.key === "intime" || h.key === "outtime" ? (
+                                  <input
+                                    type="time"
+                                    step="60"
+                                    value={r[h.key] || ""}
+                                    onChange={(e) => setCell(it.idx, h.key, e.target.value)}
+                                    className="w-full rounded border border-gray-300 px-2 py-1"
+                                  />
+                                ) : h.key === "status" ? (
+                                  <input
+                                    type="text"
+                                    value={r.status ?? ""}
+                                    onChange={(e) => setCell(it.idx, "status", e.target.value)}
+                                    className={`w-full rounded border px-2 py-1 ${statusClass(r.status)}`}
+                                    placeholder="Present / Absent / Leave"
+                                  />
                                 ) : (
                                   <input
                                     type="text"
                                     value={r[h.key] ?? ""}
                                     onChange={(e) => setCell(it.idx, h.key, e.target.value)}
                                     className="w-full rounded border border-gray-300 px-2 py-1"
-                                    placeholder={h.key === "intime" || h.key === "outtime" ? "HH:MM or HH:MM:SS" : ""}
                                   />
                                 )}
                               </td>
@@ -1113,12 +1315,12 @@ function PreviewDailyModal({ date, rows, onClose, onSaved }) {
 }
 
 /* ===========================
-   ANM Preview Modal (Tandur / Thalakondapallya)
+   ANM Preview Modal (Tandur / Talakondapally)
    Matches DB columns: SI, name, status (date is NOT shown in table)
    Sorted by SI (ascending) always • Full list scrollable
    =========================== */
 function AnmPreviewDailyModal({ site, date, onClose, onSaved }) {
-  const siteLabel = site === "tandur" ? "Tandur" : "Thalakondapallya";
+  const siteLabel = site === "tandur" ? "Tandur" : "Talakondapally";
 
   const [data, setData] = useState([]);   // [{ si, name, status, date }]
   const [orig, setOrig] = useState([]);
@@ -1127,7 +1329,7 @@ function AnmPreviewDailyModal({ site, date, onClose, onSaved }) {
   const [search, setSearch] = useState("");
 
   const normalizeRow = (row) => ({
-    si: Number(row?.si ?? row?.SI ?? 0) || 0,
+    si: Number(row?.si ?? row?.SI ?? row?.employeeid ?? 0) || 0,
     name: String(row?.name || ""),
     status: String(row?.status || ""),
     date: String(row?.date || ""), // keep for header/info only
@@ -1219,27 +1421,26 @@ function AnmPreviewDailyModal({ site, date, onClose, onSaved }) {
     try {
       setSaving(true);
 
-      if (changedRows.length === 0) {
-        await Swal.fire({
-          icon: "success",
-          title: "Submitted",
-          text: "No edits detected. Data is already up to date.",
-          confirmButtonColor: "#C1272D",
-        });
-        onSaved?.({ saved: 0, submitted: true });
-        onClose?.();
-        return;
+      if (changedRows.length > 0) {
+        for (const r of changedRows) {
+          const res = await fetch(`/api/attendance/anm/row?site=${encodeURIComponent(site)}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ si: r.si, name: r.name, status: r.status }),
+          });
+          const j = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(j?.error || `Failed to update SI ${r.si}`);
+        }
       }
 
-      for (const r of changedRows) {
-        const res = await fetch(`/api/attendance/anm/row?site=${encodeURIComponent(site)}`, {
-          method: "PUT",
+      // mark review/Review = 'Submitted' for this site+date
+      try {
+        await fetch(`/api/attendance/anm/review?site=${encodeURIComponent(site)}`, {
+          method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ si: r.si, name: r.name, status: r.status }),
+          body: JSON.stringify({ date, review: "Submitted" }),
         });
-        const j = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(j?.error || `Failed to update SI ${r.si}`);
-      }
+      } catch { /* ignore best-effort */ }
 
       const snap = [...data].sort(bySiAsc);
       setOrig(snap);
@@ -1248,9 +1449,12 @@ function AnmPreviewDailyModal({ site, date, onClose, onSaved }) {
       await Swal.fire({
         icon: "success",
         title: "Submitted",
-        text: `Updated ${changedRows.length} ${changedRows.length === 1 ? "row" : "rows"}.`,
+        text: changedRows.length
+          ? `Updated ${changedRows.length} ${changedRows.length === 1 ? "row" : "rows"}.`
+          : "No edits detected. Data is already up to date.",
         confirmButtonColor: "#C1272D",
       });
+
       onSaved?.({ saved: changedRows.length, submitted: true });
       onClose?.();
     } catch (e) {
@@ -1399,7 +1603,7 @@ function AnmPreviewDailyModal({ site, date, onClose, onSaved }) {
                               type="text"
                               value={r.status}
                               onChange={(e) => updateCell(idx, "status", e.target.value)}
-                              className="w-full rounded border border-gray-300 px-2 py-1"
+                              className={`w-full rounded border px-2 py-1 ${statusClass(r.status)}`}
                               placeholder="Status (Present/Absent/Leave)"
                             />
                           </td>

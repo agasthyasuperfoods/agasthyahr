@@ -39,6 +39,7 @@ function normId(s) {
   return String(s ?? "").trim().toUpperCase();
 }
 // Company alias mapping (display-only)
+// Extended to include Tandur and Talakondapally farm names
 function mapCompany(raw) {
   const s = String(raw ?? "").trim();
   if (!s) return "";
@@ -47,6 +48,9 @@ function mapCompany(raw) {
   if (norm === "ANM") return "Agasthya Nutro Mlik";
   if (norm === "ASF") return "AGASTHYA SUPERFOODS";
   if (norm === "ASF-FACTORY" || norm === "ASF - FACTORY") return "Agasthya Superfoods Factory";
+  // ANM Farm special mappings:
+  if (norm === "TANDUR" || norm === "TANDUR_ATTENDANCE" || norm === "TANDUR_FARM") return "Tandur Farm";
+  if (norm === "TALAKONDAPALLY" || norm === "TALAKONDAPALLY_ATTENDANCE" || norm === "TALAKONDA" || norm === "TALAKONDA_ATTENDANCE") return "Talakondapally Farm";
   return s; // fall-through
 }
 // Read stored identity (employee id / email) for profile fetch
@@ -310,11 +314,11 @@ export default function Employees({ initialDate }) {
           ) : (
             <div className="space-y-6 md:space-y-8">
               {groups.map(([company, items]) => (
-            <CompanyCard
-  key={company}
-  company={company}
-  items={items}
-/>
+                <CompanyCard
+                  key={company}
+                  company={company}
+                  items={items}
+                />
               ))}
             </div>
           )}
@@ -372,17 +376,27 @@ function CompanyCard({ company, items, onEdit }) {
     return st.includes("absent") || st.includes("leave");
   }).length;
 
+  // review status (for farm tables you described, rows may have a `review` column)
+  const totalRows = items.length;
+  const submittedCount = items.filter((r) => String(r.review || "").toLowerCase() === "submitted").length;
+  const allSubmitted = totalRows > 0 && submittedCount === totalRows;
+
   return (
     <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
       <div className="bg-gray-50/70 px-5 py-3.5 flex items-center justify-between border-b border-gray-200">
         <div className="text-sm font-semibold text-gray-900">{company}</div>
-        <div className="flex items-center gap-2.5 text-xs">
-          <span className="rounded-full bg-emerald-600 text-white px-3 py-1 font-medium">
-            Present: {present}
-          </span>
-          <span className="rounded-full bg-red-600 text-white px-3 py-1 font-medium">
-            Absent: {absentIncLeave}
-          </span>
+        <div className="flex items-center gap-3">
+          {/* Review badge for farm/attendance tables */}
+ 
+
+          <div className="flex items-center gap-2.5 text-xs">
+            <span className="rounded-full bg-emerald-600 text-white px-3 py-1 font-medium">
+              Present: {present}
+            </span>
+            <span className="rounded-full bg-red-600 text-white px-3 py-1 font-medium">
+              Absent: {absentIncLeave}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -418,7 +432,6 @@ function CompanyCard({ company, items, onEdit }) {
                   <StatusPill status={r.status} />
                 </Td>
                 <Td className="align-top">{safe(r.remarks)}</Td>
-          
               </tr>
             ))}
           </tbody>
@@ -549,7 +562,7 @@ function EditAttendanceModal({ date, row, onClose, onSaved }) {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700">Company</label>
-            <input value={company} onChange={(e) => setCompany(e.target.value)} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2" placeholder="ASF / AGB / ANM / ..." />
+            <input value={company} onChange={(e) => setCompany(e.target.value)} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2" placeholder="ASF / AGB / ANM / Tandur / Talakondapally ..." />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700">In Time</label>
