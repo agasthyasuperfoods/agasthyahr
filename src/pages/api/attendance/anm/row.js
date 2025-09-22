@@ -58,7 +58,7 @@ export default async function handler(req, res) {
     if (req.method === "DELETE") {
       // Delete needs both si/employeeId and date (because PK is (EmployeeId, date))
       const si = Number(req.query.si ?? req.body?.si);
-      const date = String(req.query.date ?? req.body?.date || "");
+const date = String((req.query.date ?? req.body?.date) || "");
 
       if (!Number.isFinite(si) || si <= 0) {
         return res.status(400).json({ error: "Valid si is required" });
