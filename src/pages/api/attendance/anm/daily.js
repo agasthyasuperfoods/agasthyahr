@@ -1,13 +1,17 @@
 // src/pages/api/attendance/anm/daily.js
 import pool from "@/lib/db";
 
+/**
+ * Return rows for a single date.
+ * We map EmployeeId -> si in the API response to match the UI.
+ */
 const TABLES = {
-  tandur: "public.tandur",
-  thalakondapallya: "public.thalakondapallya",
+  tandur: `public.tandur_attendance`,
+  talakondapally: `public.talakondapally_attendance`,
 };
 
 function isYyyyMmDd(s) {
-  return /^\d{4}-\d{2}-\d{2}$/.test(s || "");
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(s || ""));
 }
 
 export default async function handler(req, res) {
@@ -18,24 +22,31 @@ export default async function handler(req, res) {
 
   try {
     const site = String(req.query.site || "").toLowerCase();
-    const date = String(req.query.date || ""); // YYYY-MM-DD
-
+    const date = String(req.query.date || "");
     const table = TABLES[site];
-    if (!table) return res.status(400).json({ error: "Invalid site", sites: Object.keys(TABLES) });
-    if (!isYyyyMmDd(date)) return res.status(400).json({ error: "Invalid date format (YYYY-MM-DD)" });
 
-    // NOTE: Column names:
-    // - Your table shows "SI" (uppercase) as integer primary key, "name" (text), "date" (date), "status" (text).
-    // - We alias "SI" -> si and "date" -> date to keep the frontend simple.
-    const sql = `
-      SELECT "SI" AS si, name, "date"::date AS date, status
+    if (!table) return res.status(400).json({ error: "Invalid site", sites: Object.keys(TABLES) });
+    if (!isYyyyMmDd(date)) return res.status(400).json({ error: "Invalid date (YYYY-MM-DD)" });
+
+    const { rows } = await pool.query(
+      `
+      SELECT "EmployeeId", name, status, "date"
       FROM ${table}
       WHERE "date"::date = $1::date
-      ORDER BY "SI" ASC
-    `;
-    const { rows } = await pool.query(sql, [date]);
+      ORDER BY "EmployeeId" ASC
+      `,
+      [date]
+    );
 
-    return res.status(200).json({ rows });
+    // Map to UI shape { si, name, status, date }
+    const mapped = rows.map(r => ({
+      si: Number(r.EmployeeId),
+      name: r.name,
+      status: r.status,
+      date: r.date?.toISOString?.()?.slice(0, 10) ?? String(r.date),
+    }));
+
+    return res.status(200).json({ rows: mapped, count: mapped.length });
   } catch (e) {
     console.error("ANM daily fetch error:", e);
     return res.status(500).json({ error: "Internal server error" });
