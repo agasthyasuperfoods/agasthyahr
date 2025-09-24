@@ -150,6 +150,9 @@ export default function Employees({ initialDate }) {
   // edit modal state
   const [editRow, setEditRow] = useState(null);
 
+  // PDF download state
+  const [pdfLoading, setPdfLoading] = useState(false);
+
   useEffect(() => {
     let abort = false;
     (async () => {
@@ -235,6 +238,45 @@ export default function Employees({ initialDate }) {
     return { total, present, absent };
   }, [filtered]);
 
+  // ---------- PDF download helpers ----------
+  const downloadBlob = async (res, filename) => {
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  // Download full PDF for the selected date (optionally per company)
+  const downloadPdf = async (company = null) => {
+    try {
+      setPdfLoading(true);
+      const params = new URLSearchParams();
+      params.append("date", date);
+      if (company) params.append("company", company);
+      // request PDF export
+      const url = `/api/attendance/save?${params.toString()}`;
+      const res = await fetch(url, { method: "GET" });
+      if (!res.ok) {
+        let j = {};
+        try { j = await res.json(); } catch {}
+        throw new Error(j?.error || `Export failed (${res.status})`);
+      }
+      const fname = company
+        ? `attendance-${date}-${company.replace(/\s+/g, "_")}.pdf`
+        : `attendance-${date}.pdf`;
+      await downloadBlob(res, fname);
+    } catch (e) {
+      Swal.fire({ icon: "error", title: "Export failed", text: e.message || "Could not download PDF" });
+    } finally {
+      setPdfLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <AppHeader
@@ -286,6 +328,16 @@ export default function Employees({ initialDate }) {
                 <option>OD</option>
                 <option>NoOut</option>
               </select>
+
+              {/* Download PDF button (top-level) */}
+              <button
+                onClick={() => downloadPdf(null)}
+                disabled={pdfLoading}
+                className="ml-2 inline-flex items-center rounded-lg bg-[#C1272D] px-3 py-2 text-sm font-medium text-white hover:bg-[#a02125] disabled:opacity-60"
+                title="Download PDF for selected date"
+              >
+                {pdfLoading ? "Preparing…" : "Download PDF"}
+              </button>
             </div>
           </div>
 
@@ -318,6 +370,7 @@ export default function Employees({ initialDate }) {
                   key={company}
                   company={company}
                   items={items}
+                  onDownload={() => downloadPdf(company)}
                 />
               ))}
             </div>
@@ -368,7 +421,7 @@ function Kpi({ label, value }) {
   );
 }
 
-function CompanyCard({ company, items, onEdit }) {
+function CompanyCard({ company, items, onEdit, onDownload }) {
   // per-company stats
   const present = items.filter((r) => String(r.status || "").toLowerCase().includes("present")).length;
   const absentIncLeave = items.filter((r) => {
@@ -386,8 +439,14 @@ function CompanyCard({ company, items, onEdit }) {
       <div className="bg-gray-50/70 px-5 py-3.5 flex items-center justify-between border-b border-gray-200">
         <div className="text-sm font-semibold text-gray-900">{company}</div>
         <div className="flex items-center gap-3">
-          {/* Review badge for farm/attendance tables */}
- 
+          {/* Download per-company */}
+          <button
+            onClick={onDownload}
+            className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium hover:bg-gray-50"
+            title={`Download PDF for ${company}`}
+          >
+            Download
+          </button>
 
           <div className="flex items-center gap-2.5 text-xs">
             <span className="rounded-full bg-emerald-600 text-white px-3 py-1 font-medium">
