@@ -120,8 +120,13 @@ function detectDepartmentRow(row) {
 }
 
 /* file parser */
-function parseForm(req) {
-  const form = formidable({ multiples: false, keepExtensions: true });
+function parseForm(req, options = {}) {
+  // sensible defaults
+  const form = formidable({
+    multiples: false,
+    keepExtensions: true,
+    maxFileSize: options.maxFileSize || 10 * 1024 * 1024, // 10 MB
+  });
   return new Promise((resolve, reject) => {
     form.parse(req, (err, fields, files) => (err ? reject(err) : resolve({ fields, files })));
   });
@@ -138,13 +143,15 @@ const ALLOWED_COMPANIES = new Set([
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method Not Allowed" });
 
+  let filepath = null;
   try {
-    const { fields, files } = await parseForm(req);
+    const { fields, files } = await parseForm(req, { maxFileSize: 12 * 1024 * 1024 });
 
     // date
     const rawDate = firstField(fields, ["report_date", "reportDate", "date", "day"]) ?? null;
     const upFile = pickOne(files?.file);
     const originalName = upFile?.originalFilename || upFile?.newFilename || "";
+    filepath = upFile?.filepath || upFile?.path;
     const date =
       normalizeReportDate(rawDate) ||
       normalizeReportDate(extractDateFromFilename(originalName));
@@ -158,10 +165,16 @@ export default async function handler(req, res) {
     }
     if (isFuture(date)) return res.status(400).json({ error: "Future date not allowed" });
 
-    const filepath = upFile?.filepath || upFile?.path;
     if (!filepath) return res.status(400).json({ error: "No file uploaded" });
 
-    const wb = XLSX.read(fs.readFileSync(filepath), { cellDates: false, cellNF: false, cellText: false });
+    // Read workbook (defensive)
+    let wb;
+    try {
+      wb = XLSX.read(fs.readFileSync(filepath), { cellDates: false, cellNF: false, cellText: false });
+    } catch (e) {
+      console.error("Failed to parse workbook:", e);
+      return res.status(400).json({ error: "Unable to parse spreadsheet. Ensure file is a valid .xlsx/.xls/.csv" });
+    }
 
     const parsedRows = [];
     const companies = new Set();
@@ -171,7 +184,8 @@ export default async function handler(req, res) {
       const rows = XLSX.utils.sheet_to_json(ws, { header: 1, blankrows: false, raw: true, defval: "" });
       if (!rows?.length) continue;
 
-      const normRows = rows.map(r => (r || []).map(x => String(x ?? "").trim()));
+      // normalized strings for header detection (trimmed)
+      const normRows = rows.map(r => (Array.isArray(r) ? r.map(x => String(x ?? "").trim()) : []));
 
       let currentDepartment = null;
       let resignedMode = false;
@@ -190,14 +204,16 @@ export default async function handler(req, res) {
         // Header row?
         if (!isHeaderRow(row)) continue;
 
-        const { codeIdx, nameIdx, inIdx, outIdx, durIdx, shiftIdx, statusIdx, remarksIdx, companyIdx } = findHeaderIndexes(row);
+        const { codeIdx, nameIdx, inIdx, outIdx, durIdx, shiftIdx, statusIdx, remarksIdx, companyIdx } =
+          findHeaderIndexes(row);
 
         // Consume data rows until next header or department line
         let j = i + 1;
-        for (; j < rows.length; j++) {
+        for (; j < normRows.length; j++) {
           const rawNext = rows[j];
           const next = normRows[j];
-          if (!rawNext || rawNext.length === 0) continue;
+          if (!rawNext) continue;
+          if (!Array.isArray(next) || next.length === 0) continue;
 
           // boundary: next header or next dept
           if (isHeaderRow(next) || detectDepartmentRow(next) != null) break;
@@ -225,7 +241,7 @@ export default async function handler(req, res) {
           // DR* -> Dwaraka Contract Staff (but skip if we're in RESIGNED section above)
           if (/^DR/i.test(employeeid)) company = "Dwaraka Contract Staff";
 
-          // enforce allowed companies
+          // enforce allowed companies (normalize)
           if (!company || !ALLOWED_COMPANIES.has(norm(company))) continue;
 
           // AVION: only GS shifts
@@ -237,7 +253,7 @@ export default async function handler(req, res) {
           parsedRows.push({
             employeeid,
             name: nameIdx !== -1 ? (next[nameIdx] || null) : null,
-            shift:   shiftIdx   !== -1 ? (next[shiftIdx]   || null) : null,
+            shift:   shiftIdx   !== -1 ? (next[shiftIdx]   || null) : null, // keep for preview/UI only
             intime,
             outtime,
             workdur: workdur ?? null,
@@ -267,5 +283,12 @@ export default async function handler(req, res) {
   } catch (e) {
     console.error("POST /api/attendance/preview failed:", e);
     return res.status(500).json({ error: "Preview failed" });
+  } finally {
+    // cleanup uploaded temp file
+    if (filepath) {
+      fs.unlink(filepath, (err) => {
+        if (err) console.warn("Failed to unlink upload file:", filepath, err?.message || err);
+      });
+    }
   }
 }
