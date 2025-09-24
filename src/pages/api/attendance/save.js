@@ -53,11 +53,12 @@ export default async function handler(req, res) {
         }
 
         const sql = `
-          SELECT employeeid, name, company, shift, intime, outtime, workdur, status, remarks, date
-          FROM "AttendanceDaily"
-          ${where.length ? "WHERE " + where.join(" AND ") : ""}
-          ORDER BY company, date, name
-        `;
+  SELECT employeeid, name, company, intime, outtime, workdur, status, remarks, date
+  FROM "AttendanceDaily"
+  ${where.length ? "WHERE " + where.join(" AND ") : ""}
+  ORDER BY company, date, name
+`;
+
         const { rows } = await client.query(sql, params);
 
         const multiDate = !date && !(start && end && start === end);
@@ -103,7 +104,7 @@ export default async function handler(req, res) {
       let previewRows;
       if (useDb) {
         const { rows: persisted } = await client.query(
-          'SELECT employeeid, name, company, shift, intime, outtime, workdur, status, remarks, date \
+          'SELECT employeeid, name, company, intime, outtime, workdur, status, remarks, date \
            FROM "AttendanceDaily" WHERE date = $1 ORDER BY company, name',
           [date]
         );
@@ -115,7 +116,6 @@ export default async function handler(req, res) {
           employeeid: String(r.employeeid || "").trim(),
           name: txt(r.name),
           company: txt(r.company),
-          shift: txt(r.shift),
           intime: toPgTime(r.intime),
           outtime: toPgTime(r.outtime),
           workdur: toPgMinutes(r.workdur),
@@ -145,7 +145,6 @@ export default async function handler(req, res) {
       if (!employeeid) continue;
 
       const name = txt(r.name);
-      const shift = txt(r.shift);
       const intime = toPgTime(r.intime);
       const outtime = toPgTime(r.outtime);
       const workdur = toPgMinutes(r.workdur); // minutes
@@ -159,9 +158,9 @@ export default async function handler(req, res) {
       ]);
       await client.query(
         `INSERT INTO "AttendanceDaily"
-         (employeeid, name, shift, intime, outtime, workdur, status, remarks, company, date)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-        [employeeid, name, shift, intime, outtime, workdur, status, remarks, company, date]
+         (employeeid, name, intime, outtime, workdur, status, remarks, company, date)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+        [employeeid, name, intime, outtime, workdur, status, remarks, company, date]
       );
       saved++;
     }
@@ -169,7 +168,7 @@ export default async function handler(req, res) {
 
     // Build PDF from DB state for that date
     const { rows: persisted } = await client.query(
-      'SELECT employeeid, name, company, shift, intime, outtime, workdur, status, remarks, date \
+      'SELECT employeeid, name, company, intime, outtime, workdur, status, remarks, date \
        FROM "AttendanceDaily" WHERE date = $1 ORDER BY company, name',
       [date]
     );
@@ -250,7 +249,7 @@ const txt = (x) => {
   return s === "" ? null : s;
 };
 const looksResigned = (row) => {
-  const bag = [row?.status, row?.remarks, row?.name, row?.company, row?.shift]
+  const bag = [row?.status, row?.remarks, row?.name, row?.company]
     .map((x) => String(x ?? "").toLowerCase())
     .join(" ");
   return /\bresign/.test(bag);
@@ -289,12 +288,12 @@ async function makeAttendancePdf(items, titleText, opts = {}) {
   const cols = [
     { k: "employeeid", label: "EmpID",  w: 62,  align: "left"   },
     ...(includeDate ? [{ k: "date", label: "Date", w: 72, align: "center" }] : []),
-    { k: "name",       label: "Name",   w: 160, align: "left"   },
-    { k: "shift",      label: "Shift",  w: 46,  align: "center" },
+    { k: "name",       label: "Name",   w: 200, align: "left"   },
     { k: "intime",     label: "In",     w: 46,  align: "center" },
     { k: "outtime",    label: "Out",    w: 46,  align: "center" },
     { k: "hours",      label: "Hours",  w: 58,  align: "right"  },
     { k: "status",     label: "Status", w: 64,  align: "left"   },
+    { k: "remarks",    label: "Remarks", w: 150, align: "left"  },
   ];
   let totalW = cols.reduce((s, c) => s + c.w, 0);
   if (totalW > contentW) {
@@ -371,11 +370,11 @@ async function makeAttendancePdf(items, titleText, opts = {}) {
     employeeid: String(r.employeeid ?? ""),
     name: String(r.name ?? ""),
     company: String(r.company ?? "") || "—",
-    shift: String(r.shift ?? ""),
     intime: fmtTime(r.intime),
     outtime: fmtTime(r.outtime),
     hours: minutesToHHMM(r.workdur),
     status: String(r.status ?? ""),
+    remarks: String(r.remarks ?? ""),
     date: includeDate ? fmtDate(r.date) : undefined,
   }))
   .sort((a,b) =>

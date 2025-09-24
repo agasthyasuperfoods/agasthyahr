@@ -517,7 +517,7 @@ function AddEmployeeModal({ onClose, onAdded, disabled }) {
         </div>
         <form onSubmit={submit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700">Employee ID (optional)</label>
+            <label className="block text-sm font-medium text-gray-700">Employee ID</label>
             <input
               type="number"
               min="1"
@@ -540,7 +540,7 @@ function AddEmployeeModal({ onClose, onAdded, disabled }) {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700">Number (optional)</label>
+            <label className="block text-sm font-medium text-gray-700">Number</label>
             <input
               type="text"
               value={number}
