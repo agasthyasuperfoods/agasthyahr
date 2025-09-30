@@ -8,7 +8,8 @@ export default async function handler(req, res) {
         `SELECT "Employeeid" AS id,
                 employee_name,
                 employee_number AS number,
-                location
+                location,
+                designation
            FROM public.tanduremployees
           ORDER BY "Employeeid" ASC`
       );
@@ -16,14 +17,15 @@ export default async function handler(req, res) {
     }
 
     if (req.method === "POST") {
-      // frontend sends: { employeeid?, employee_name, number?, location? }
-      const { employeeid, employee_name, number, location } = req.body || {};
+      // frontend sends: { employeeid?, employee_name, number?, location?, designation? }
+      const { employeeid, employee_name, number, location, designation } = req.body || {};
 
       const name = (employee_name || "").trim();
       if (!name) return res.status(400).json({ error: "employee_name is required" });
 
       const num = (number || "").trim() || null;
       const loc = (location || "").trim() || null;
+      const desig = (designation || "").trim() || null;
 
       let inserted;
       if (employeeid !== undefined && employeeid !== null && String(employeeid).trim() !== "") {
@@ -32,17 +34,17 @@ export default async function handler(req, res) {
           return res.status(400).json({ error: "employeeid must be a positive integer" });
         }
         inserted = await query(
-          `INSERT INTO public.tanduremployees ("Employeeid", employee_name, employee_number, location)
-           VALUES ($1, $2, $3, $4)
-           RETURNING "Employeeid" AS id, employee_name, employee_number AS number, location`,
-          [eid, name, num, loc]
+          `INSERT INTO public.tanduremployees ("Employeeid", employee_name, employee_number, location, designation)
+           VALUES ($1, $2, $3, $4, $5)
+           RETURNING "Employeeid" AS id, employee_name, employee_number AS number, location, designation`,
+          [eid, name, num, loc, desig]
         );
       } else {
         inserted = await query(
-          `INSERT INTO public.tanduremployees (employee_name, employee_number, location)
-           VALUES ($1, $2, $3)
-           RETURNING "Employeeid" AS id, employee_name, employee_number AS number, location`,
-          [name, num, loc]
+          `INSERT INTO public.tanduremployees (employee_name, employee_number, location, designation)
+           VALUES ($1, $2, $3, $4)
+           RETURNING "Employeeid" AS id, employee_name, employee_number AS number, location, designation`,
+          [name, num, loc, desig]
         );
       }
 
@@ -58,14 +60,12 @@ export default async function handler(req, res) {
     }
 
     if (req.method === "DELETE") {
-      // id can come from ?id= or body.id
       const idRaw = (req.query?.id ?? req.body?.id ?? "").toString().trim();
       const id = Number(idRaw);
       if (!id || !Number.isInteger(id) || id <= 0) {
         return res.status(400).json({ error: "Valid id is required" });
       }
 
-      // delete row
       const del = await query(
         `DELETE FROM public.tanduremployees WHERE "Employeeid" = $1 RETURNING "Employeeid" AS id`,
         [id]
@@ -74,7 +74,6 @@ export default async function handler(req, res) {
         return res.status(404).json({ error: "Employee not found" });
       }
 
-      // re-align sequence after delete (safe to run)
       await query(
         `SELECT setval(
            pg_get_serial_sequence('public.tanduremployees', 'Employeeid'),

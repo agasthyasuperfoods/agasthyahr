@@ -1,4 +1,3 @@
-// src/pages/api/tandur/attendance.js
 import { query } from "@/lib/db";
 
 /**
@@ -16,7 +15,6 @@ import { query } from "@/lib/db";
  */
 
 async function ensureAttendanceTable() {
-  // 1) Create table if missing (uses the composite PK).
   await query(`
     CREATE TABLE IF NOT EXISTS public.tandur_attendance (
       "EmployeeId" INTEGER NOT NULL,
@@ -31,11 +29,9 @@ async function ensureAttendanceTable() {
     )
   `);
 
-  // 2) Remediate legacy single-PK/unique layouts to composite PK (idempotent).
   await query(`
     DO $$
     BEGIN
-      -- Ensure date is NOT NULL (safe to call repeatedly)
       BEGIN
         ALTER TABLE public.tandur_attendance
           ALTER COLUMN date SET NOT NULL;
@@ -43,7 +39,6 @@ async function ensureAttendanceTable() {
         NULL;
       END;
 
-      -- Drop any old constraints seen in your metadata if they exist
       BEGIN
         ALTER TABLE public.tandur_attendance DROP CONSTRAINT IF EXISTS tandur_pkey;
         ALTER TABLE public.tandur_attendance DROP CONSTRAINT IF EXISTS tandur_attendance_EmployeeId_key;
@@ -52,7 +47,6 @@ async function ensureAttendanceTable() {
         NULL;
       END;
 
-      -- Re-add composite primary key if missing
       IF NOT EXISTS (
         SELECT 1
         FROM   pg_index i
@@ -70,7 +64,6 @@ async function ensureAttendanceTable() {
     END$$;
   `);
 
-  // 3) Helpful index for reads by date
   await query(`
     CREATE INDEX IF NOT EXISTS idx_tandur_attendance_date
       ON public.tandur_attendance (date);
@@ -88,20 +81,19 @@ function todayIso() {
 export default async function handler(req, res) {
   try {
     if (req.method === "GET") {
-      // GET /api/tandur/attendance?date=YYYY-MM-DD
       const date = (req.query?.date || "").toString().trim();
       if (!date) return res.status(400).json({ error: "date is required (YYYY-MM-DD)" });
 
       await ensureAttendanceTable();
 
-      // Full roster with status for the requested date
+      // Full roster with status for the requested date (no location)
       const r = await query(
         `
         SELECT
           e."Employeeid"    AS employee_id,
           e.employee_name   AS employee_name,
           e.employee_number AS number,
-          e.location        AS location,
+          e.designation     AS designation,
           t.status          AS status,
           t.date            AS saved_date
         FROM public.tanduremployees e
@@ -112,7 +104,6 @@ export default async function handler(req, res) {
         [date]
       );
 
-      // Compute lock: all employees have a non-null status on that date
       const totals = await query(
         `
         WITH total_employees AS (
@@ -146,8 +137,6 @@ export default async function handler(req, res) {
     }
 
     if (req.method === "POST") {
-      // POST /api/tandur/attendance
-      // Body: { date?: string, rows: Array<{ employee_id: number, status: string|null }> }
       let { date, rows } = req.body || {};
       date = (date || todayIso()).toString().trim();
       if (!Array.isArray(rows)) return res.status(400).json({ error: "rows must be an array" });
@@ -160,7 +149,6 @@ export default async function handler(req, res) {
         if (!employee_id || !Number.isInteger(employee_id)) continue;
         const status = r.status ?? null;
 
-        // Day-wise upsert keyed by (EmployeeId, date)
         await query(
           `
           INSERT INTO public.tandur_attendance ("EmployeeId", name, date, status)
@@ -181,8 +169,6 @@ export default async function handler(req, res) {
     }
 
     if (req.method === "PUT") {
-      // PUT /api/tandur/attendance
-      // Body: { employee_id: number, date?: string, status?: string|null }
       const employee_id = Number((req.body?.employee_id ?? "").toString());
       const date = (req.body?.date || todayIso()).toString().trim();
       const status = req.body?.status ?? null;
