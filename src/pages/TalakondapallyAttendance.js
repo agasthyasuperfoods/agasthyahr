@@ -1,4 +1,4 @@
-// src/pages/TalakondapallyAttendance.js
+// FILE: src/pages/TalakondapallyAttendance.js
 import Head from "next/head";
 import Image from "next/image";
 import { useEffect, useMemo, useState, useCallback } from "react";
@@ -11,9 +11,9 @@ const PRIMARY_BTN = "bg-amber-600 hover:bg-amber-700";
 const PRIMARY_OUTLINE = "focus:outline-none focus:ring-2 focus:ring-amber-400/50";
 // ---------------------------
 
-// ---------- CONSTANT LOCATION ----------
+// ---------- CONSTANT LOCATION (UI-only; not sent to server) ----------
 const LOCATION_LABEL = "Talakondapally";
-// --------------------------------------
+// --------------------------------------------------------------------
 
 function todayIso() {
   const d = new Date();
@@ -46,7 +46,7 @@ export default function TalakondapallyAttendance() {
   const [date, setDate] = useState(todayIso());
   const [loading, setLoading] = useState(true);
 
-  // From API: [{ employee_id, employee_name, number, location, status, saved_date }]
+  // From API: [{ employee_id, employee_name, number, designation, status, saved_date }]
   const [employees, setEmployees] = useState([]);
   const [attMap, setAttMap] = useState({});      // { [id]: STATUS }
   const [serverMap, setServerMap] = useState({}); // snapshot for Cancel
@@ -102,7 +102,8 @@ export default function TalakondapallyAttendance() {
         id: r.employee_id,
         employee_name: r.employee_name,
         number: r.number,
-        // Force location to Talakondapally for all rows (display)
+        designation: r.designation || "",
+        // keep UI-only location label for visual parity with Tandur view
         location: LOCATION_LABEL,
         saved_date: r.saved_date || r.date || null,
       }));
@@ -161,7 +162,7 @@ export default function TalakondapallyAttendance() {
       const res = await fetch("/api/talakondapally/attendance", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        // Only send status + date; location is managed separately.
+        // Only send status + date; employee metadata handled via employees API
         body: JSON.stringify({ date, rows }),
       });
       const j = await res.json().catch(() => ({}));
@@ -320,6 +321,7 @@ export default function TalakondapallyAttendance() {
                     <tr>
                       <th className="text-left px-4 py-2 font-semibold text-gray-700">Name</th>
                       <th className="text-left px-4 py-2 font-semibold text-gray-700">Number</th>
+                      <th className="text-left px-4 py-2 font-semibold text-gray-700">Designation</th>
                       <th className="text-left px-4 py-2 font-semibold text-gray-700">Location</th>
                       <th className="text-left px-4 py-2 font-semibold text-gray-700">Status</th>
                     </tr>
@@ -327,13 +329,14 @@ export default function TalakondapallyAttendance() {
                   <tbody>
                     {employees.length === 0 ? (
                       <tr>
-                        <td colSpan="4" className="px-4 py-4 text-gray-500">No employees for this date.</td>
+                        <td colSpan="5" className="px-4 py-4 text-gray-500">No employees for this date.</td>
                       </tr>
                     ) : (
                       employees.map((e) => (
                         <tr key={e.id} className="border-t border-gray-100">
                           <td className="px-4 py-2 text-gray-900">{e.employee_name}</td>
                           <td className="px-4 py-2 text-gray-700">{e.number || "—"}</td>
+                          <td className="px-4 py-2 text-gray-700">{e.designation || "—"}</td>
                           <td className="px-4 py-2 text-gray-700">{LOCATION_LABEL}</td>
                           <td className="px-4 py-2">
                             <span
@@ -374,7 +377,7 @@ export default function TalakondapallyAttendance() {
                         <div>
                           <div className="font-medium text-gray-900">{e.employee_name}</div>
                           <div className="text-xs text-gray-500">
-                            {e.number || "—"} • {LOCATION_LABEL}
+                            {e.number || "—"} • {e.designation || "—"} • {LOCATION_LABEL}
                           </div>
                         </div>
                         <button
@@ -465,7 +468,7 @@ function AddEmployeeModal({ onClose, onAdded, disabled }) {
   const [employeeid, setEmployeeid] = useState("");
   const [employee_name, setEmployeeName] = useState("");
   const [number, setNumber] = useState("");
-  const [location, setLocation] = useState(LOCATION_LABEL);
+  const [designation, setDesignation] = useState("");
   const [saving, setSaving] = useState(false);
 
   const submit = async (e) => {
@@ -480,8 +483,8 @@ function AddEmployeeModal({ onClose, onAdded, disabled }) {
       const payload = {
         employee_name,
         number: number || null,
-        // Force Talakondapally for all new employees
-        location: LOCATION_LABEL,
+        designation: designation || null,
+        // No location sent; server will handle if needed
       };
       if (employeeid && Number(employeeid) > 0) payload.employeeid = Number(employeeid);
 
@@ -551,14 +554,15 @@ function AddEmployeeModal({ onClose, onAdded, disabled }) {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700">Location</label>
+            <label className="block text-sm font-medium text-gray-700">Designation</label>
             <input
               type="text"
-              value={location}
-              readOnly
-              className={`mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm bg-gray-50 ${PRIMARY_OUTLINE}`}
+              value={designation}
+              onChange={(e) => setDesignation(e.target.value)}
+              className={`mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm ${PRIMARY_OUTLINE}`}
+              placeholder="e.g. Operator / Supervisor"
+              disabled={disabled}
             />
-            <p className="mt-1 text-xs text-gray-500">Location is fixed to {LOCATION_LABEL} for all employees.</p>
           </div>
 
           <div className="flex items-center justify-end gap-2 pt-2">
@@ -582,3 +586,4 @@ function AddEmployeeModal({ onClose, onAdded, disabled }) {
     </div>
   );
 }
+
