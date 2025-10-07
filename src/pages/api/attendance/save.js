@@ -285,16 +285,18 @@ async function makeAttendancePdf(items, titleText, opts = {}) {
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
 
   // Columns (Date column added when exporting >1 date)
-  const cols = [
-    { k: "employeeid", label: "EmpID",  w: 62,  align: "left"   },
-    ...(includeDate ? [{ k: "date", label: "Date", w: 72, align: "center" }] : []),
-    { k: "name",       label: "Name",   w: 200, align: "left"   },
-    { k: "intime",     label: "In",     w: 46,  align: "center" },
-    { k: "outtime",    label: "Out",    w: 46,  align: "center" },
-    { k: "hours",      label: "Hours",  w: 58,  align: "right"  },
-    { k: "status",     label: "Status", w: 64,  align: "left"   },
-    { k: "remarks",    label: "Remarks", w: 150, align: "left"  },
-  ];
+ // Columns (Date column added when exporting >1 date)
+const cols = [
+  { k: "employeeid", label: "EmpID",  w: 80,  align: "left"   },   // increased for proper spacing
+  ...(includeDate ? [{ k: "date", label: "Date", w: 64, align: "center" }] : []),
+  { k: "name",       label: "Name",   w: 200, align: "left"   },   // reduced to give EmpID more room
+  { k: "intime",     label: "In",     w: 46,  align: "center" },   // compact for HH:MM
+  { k: "outtime",    label: "Out",    w: 46,  align: "center" },   // compact for HH:MM
+  { k: "hours",      label: "Hours",  w: 52,  align: "right"  },   // numeric, right-aligned
+  { k: "status",     label: "Status", w: 56,  align: "left"   },   // modest width
+  { k: "remarks",    label: "Remarks", w: 60, align: "left"  },    // kept compact to avoid long wraps
+];
+
   let totalW = cols.reduce((s, c) => s + c.w, 0);
   if (totalW > contentW) {
     const scale = contentW / totalW;
