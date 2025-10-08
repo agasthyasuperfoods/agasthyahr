@@ -285,18 +285,16 @@ async function makeAttendancePdf(items, titleText, opts = {}) {
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
 
   // Columns (Date column added when exporting >1 date)
- // Columns (Date column added when exporting >1 date)
-const cols = [
-  { k: "employeeid", label: "EmpID",  w: 80,  align: "left"   },   // increased for proper spacing
-  ...(includeDate ? [{ k: "date", label: "Date", w: 64, align: "center" }] : []),
-  { k: "name",       label: "Name",   w: 200, align: "left"   },   // reduced to give EmpID more room
-  { k: "intime",     label: "In",     w: 46,  align: "center" },   // compact for HH:MM
-  { k: "outtime",    label: "Out",    w: 46,  align: "center" },   // compact for HH:MM
-  { k: "hours",      label: "Hours",  w: 52,  align: "right"  },   // numeric, right-aligned
-  { k: "status",     label: "Status", w: 56,  align: "left"   },   // modest width
-  { k: "remarks",    label: "Remarks", w: 60, align: "left"  },    // kept compact to avoid long wraps
-];
-
+  const cols = [
+    { k: "employeeid", label: "EmpID",  w: 90,  align: "left"   },   // EmpID room
+    ...(includeDate ? [{ k: "date", label: "Date", w: 64, align: "center" }] : []),
+    { k: "name",       label: "Name",   w: 140, align: "left"   },    // reduced to free up space
+    { k: "intime",     label: "In",     w: 56,  align: "center" },  // increased width
+    { k: "outtime",    label: "Out",    w: 56,  align: "center" },  // increased width
+    { k: "hours",      label: "Hours",  w: 58,  align: "right"  },
+    { k: "status",     label: "Status", w: 50,  align: "left"   },
+    { k: "remarks",    label: "Remarks", w: 73, align: "left"  },
+  ];
   let totalW = cols.reduce((s, c) => s + c.w, 0);
   if (totalW > contentW) {
     const scale = contentW / totalW;
@@ -352,7 +350,7 @@ const cols = [
   const fmtTime = (s) => {
     const v = String(s ?? "").trim();
     if (!v) return "";
-    const m = v.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+    const m = v.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
     return m ? `${m[1].padStart(2,"0")}:${m[2]}` : v;
   };
   const minutesToHHMM = (mins) => {
@@ -379,16 +377,28 @@ const cols = [
     remarks: String(r.remarks ?? ""),
     date: includeDate ? fmtDate(r.date) : undefined,
   }))
-  .sort((a,b) =>
-    a.company.localeCompare(b.company) ||
-    (a.date || "").localeCompare(b.date || "") ||
-    a.name.localeCompare(b.name)
-  );
+  // Sort by company, then by numeric part of employeeid (fall back to empid text then name)
+  .sort((a, b) => {
+    const cmpCompany = a.company.localeCompare(b.company);
+    if (cmpCompany !== 0) return cmpCompany;
 
+    const numA = Number(String(a.employeeid).replace(/\D/g, "")) || 0;
+    const numB = Number(String(b.employeeid).replace(/\D/g, "")) || 0;
+    if (numA !== numB) return numA - numB;
+
+    if (a.employeeid !== b.employeeid) return a.employeeid.localeCompare(b.employeeid);
+    return a.name.localeCompare(b.name);
+  });
+
+  // Group by company, and create a display label per company (appending " • v1")
   const groups = [];
   let g = null;
   for (const row of normalized) {
-    if (!g || g.company !== row.company) { g = { company: row.company, items: [] }; groups.push(g); }
+    if (!g || g.company !== row.company) {
+      const display = `${row.company} • v1`;
+      g = { company: row.company, display, items: [] };
+      groups.push(g);
+    }
     g.items.push(row);
   }
 
@@ -532,7 +542,8 @@ const cols = [
 
   // Render (no grand totals)
   for (const group of groups) {
-    drawCompanyBandAndHeader(group.company, true);
+    // use group.display so company band shows "Company • v1"
+    drawCompanyBandAndHeader(group.display, true);
     group.items.forEach((row, i) => drawRow({ ...row, company: group.company }, i));
     cursorY -= 8;
   }
