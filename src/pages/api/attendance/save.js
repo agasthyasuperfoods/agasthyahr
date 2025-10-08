@@ -286,14 +286,14 @@ async function makeAttendancePdf(items, titleText, opts = {}) {
 
   // Columns (Date column added when exporting >1 date)
   const cols = [
-    { k: "employeeid", label: "EmpID",  w: 62,  align: "left"   },
-    ...(includeDate ? [{ k: "date", label: "Date", w: 72, align: "center" }] : []),
-    { k: "name",       label: "Name",   w: 200, align: "left"   },
-    { k: "intime",     label: "In",     w: 46,  align: "center" },
-    { k: "outtime",    label: "Out",    w: 46,  align: "center" },
+    { k: "employeeid", label: "EmpID",  w: 90,  align: "left"   },   // EmpID room
+    ...(includeDate ? [{ k: "date", label: "Date", w: 64, align: "center" }] : []),
+    { k: "name",       label: "Name",   w: 140, align: "left"   },    // reduced to free up space
+    { k: "intime",     label: "In",     w: 56,  align: "center" },  // increased width
+    { k: "outtime",    label: "Out",    w: 56,  align: "center" },  // increased width
     { k: "hours",      label: "Hours",  w: 58,  align: "right"  },
-    { k: "status",     label: "Status", w: 64,  align: "left"   },
-    { k: "remarks",    label: "Remarks", w: 150, align: "left"  },
+    { k: "status",     label: "Status", w: 50,  align: "left"   },
+    { k: "remarks",    label: "Remarks", w: 73, align: "left"  },
   ];
   let totalW = cols.reduce((s, c) => s + c.w, 0);
   if (totalW > contentW) {
@@ -350,7 +350,7 @@ async function makeAttendancePdf(items, titleText, opts = {}) {
   const fmtTime = (s) => {
     const v = String(s ?? "").trim();
     if (!v) return "";
-    const m = v.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+    const m = v.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
     return m ? `${m[1].padStart(2,"0")}:${m[2]}` : v;
   };
   const minutesToHHMM = (mins) => {
@@ -377,16 +377,28 @@ async function makeAttendancePdf(items, titleText, opts = {}) {
     remarks: String(r.remarks ?? ""),
     date: includeDate ? fmtDate(r.date) : undefined,
   }))
-  .sort((a,b) =>
-    a.company.localeCompare(b.company) ||
-    (a.date || "").localeCompare(b.date || "") ||
-    a.name.localeCompare(b.name)
-  );
+  // Sort by company, then by numeric part of employeeid (fall back to empid text then name)
+  .sort((a, b) => {
+    const cmpCompany = a.company.localeCompare(b.company);
+    if (cmpCompany !== 0) return cmpCompany;
 
+    const numA = Number(String(a.employeeid).replace(/\D/g, "")) || 0;
+    const numB = Number(String(b.employeeid).replace(/\D/g, "")) || 0;
+    if (numA !== numB) return numA - numB;
+
+    if (a.employeeid !== b.employeeid) return a.employeeid.localeCompare(b.employeeid);
+    return a.name.localeCompare(b.name);
+  });
+
+  // Group by company, and create a display label per company (appending " • v1")
   const groups = [];
   let g = null;
   for (const row of normalized) {
-    if (!g || g.company !== row.company) { g = { company: row.company, items: [] }; groups.push(g); }
+    if (!g || g.company !== row.company) {
+      const display = `${row.company} • v1`;
+      g = { company: row.company, display, items: [] };
+      groups.push(g);
+    }
     g.items.push(row);
   }
 
@@ -530,7 +542,8 @@ async function makeAttendancePdf(items, titleText, opts = {}) {
 
   // Render (no grand totals)
   for (const group of groups) {
-    drawCompanyBandAndHeader(group.company, true);
+    // use group.display so company band shows "Company • v1"
+    drawCompanyBandAndHeader(group.display, true);
     group.items.forEach((row, i) => drawRow({ ...row, company: group.company }, i));
     cursorY -= 8;
   }
