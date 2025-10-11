@@ -735,47 +735,93 @@ function PaysheetCard({ company, name, reportMonth, setReportMonth, router }) {
    - Normalizes many incoming column names and handles NW / SCM -> SRI CHAKRA MILK mapping
    - SEARCH: matches idVariants(employeeid) and raw SI-like fields so "186" will match "EMP186"
    =========================== */
+/* ===========================
+   PreviewDailyModal
+   - Edits intime/outtime/status/remarks/workdur
+   - Computes work minutes from intime/outtime and shows human H:MM
+   - Groups rows by company and sorts inside group by numeric part of employeeid
+   - Normalizes many incoming column names and handles NW / SCM -> SRI CHAKRA MILK mapping
+   - SEARCH: matches idVariants(employeeid) and raw SI-like fields so "186" will match "EMP186"
+   =========================== */
 function PreviewDailyModal({ date, rows, onClose, onSaved }) {
   // helper: map multiple known company variants to canonical names
   const normalizeCompany = (raw) => {
-    if (!raw && raw !== 0) return "";
+    if (raw === null || raw === undefined) return "";
     const s = String(raw || "").trim();
     if (!s) return "";
     const u = s.toUpperCase();
-    // mappings
-    if (/NATURE|NAT|NW/.test(u)) return "NATURE'S WELLNESS";
-    if (/SRI\s*CHAKRA\s*MILK|SRI\s*CHAKRA|SRICHAKRA|SRICH?AKRA/.test(u)) return "SRI CHAKRA MILK";
-    if (/SCM\b/i.test(u) || /^SCM$/i.test(u)) return "SRI CHAKRA MILK";
-    if (/ASF/.test(u) && !/FACTORY/.test(u)) return "ASF";
-    if (/ASF-?FACTORY|FACTORY/.test(u)) return "ASF-FACTORY";
-    if (/AGB/.test(u)) return "AGB";
-    if (/ANM/.test(u)) return "ANM";
-    if (/AVION/.test(u)) return "AVION";
+
+    // NW / NATURE variants
+    if (/\bNATURE'?S?\b/.test(u) || /\bNAT\b/.test(u) || /\bNW\b/.test(u) || /^NATURES?$/i.test(s)) {
+      return "NATURE'S WELLNESS";
+    }
+
+    // SRI CHAKRA MILK and variants, SCM short code
+    if (/SRI\s*CHAKRA\s*MILK|SRI\s*CHAKRA|SRICHAKRA|SRICH?AKRA/i.test(s)) return "SRI CHAKRA MILK";
+    if (/^\s*SCM\s*$/i.test(s) || /\bSCM\b/i.test(u)) return "SRI CHAKRA MILK";
+
+    // ASF / ASF-FACTORY
+    if (/ASF-?FACTORY|FACTORY/i.test(s)) return "ASF-FACTORY";
+    if (/\bASF\b/i.test(u) && !/FACTORY/i.test(u)) return "ASF";
+
+    if (/\bAGB\b/i.test(u)) return "AGB";
+    if (/\bANM\b/i.test(u)) return "ANM";
+    if (/\bAVION\b/i.test(u)) return "AVION";
+
+    // fallback
     return String(raw).trim();
   };
 
   // Accept many column names and normalize row object
   const normalizeRow = (raw) => {
     if (!raw) raw = {};
-    // possible id fields
-    const possibleId = raw.employeeid ?? raw.empid ?? raw.EmpID ?? raw.EmpId ?? raw.EMPID ?? raw.si ?? raw.SI ?? raw.Sno ?? raw.SNo ?? raw['SI/EMP ID'] ?? raw['SI'] ?? "";
+
+    // Employee id candidates (many possible column names)
+    const possibleId =
+      raw.employeeid ??
+      raw.empid ??
+      raw.EmpID ??
+      raw.EmpId ??
+      raw.EMPID ??
+      raw.si ??
+      raw.SI ??
+      raw.Sno ??
+      raw.SNo ??
+      raw['SI/EMP ID'] ??
+      raw['SI'] ??
+      raw['Emp No'] ??
+      raw['EmpID'] ??
+      "";
+
     let employeeid = String(possibleId ?? "").trim();
 
     // If empty and there is an SI-like numeric column, prefix EMP
     if (!employeeid) {
-      const siCand = raw.SI ?? raw.si ?? raw.Sno ?? raw.SNo ?? raw['SNo'] ?? raw['S No'] ?? "";
+      const siCand =
+        raw.SI ??
+        raw.si ??
+        raw.Sno ??
+        raw.SNo ??
+        raw['SNo'] ??
+        raw['S No'] ??
+        raw['SI/EMP ID'] ??
+        raw['Emp No'] ??
+        "";
       const sVal = String(siCand || "").trim();
-      if (/^\d+$/.test(sVal)) employeeid = `EMP${Number(sVal)}`;
+      if (/^\d+$/.test(sVal)) {
+        employeeid = `EMP${Number(sVal)}`;
+      }
     } else if (/^\d+$/.test(employeeid)) {
       // numeric only: 186 -> EMP186
       employeeid = `EMP${Number(employeeid)}`;
     } else {
-      // normalize common patterns: emp-00186 -> EMP186, remove spaces, uppercase
+      // If contains digits but no letters, extract digits
       const digits = (String(employeeid).match(/(\d+)/) || [null, null])[1];
       if (digits && !/[A-Z]/i.test(employeeid)) {
         employeeid = `EMP${Number(digits)}`;
       } else {
-        employeeid = String(employeeid).trim();
+        // cleanup common patterns: uppercase and trim
+        employeeid = String(employeeid).trim().toUpperCase();
       }
     }
 
@@ -798,12 +844,11 @@ function PreviewDailyModal({ date, rows, onClose, onSaved }) {
       const m2 = s.match(/^(\d{3,4})$/);
       if (m2) {
         const num = m2[1];
-        if (num.length === 3) {
-          return `${'0' + num[0]}:${num.slice(1)}`;
-        }
+        if (num.length === 3) return `${'0' + num[0]}:${num.slice(1)}`;
         return `${num.slice(0, num.length - 2).padStart(2, '0')}:${num.slice(-2)}`;
       }
       const asNum = Number(s);
+      // Excel time serials (0 < n < 1)
       if (!Number.isNaN(asNum) && asNum > 0 && asNum < 1) {
         const totalMin = Math.round(asNum * 24 * 60);
         const hh = Math.floor(totalMin / 60);
@@ -819,13 +864,40 @@ function PreviewDailyModal({ date, rows, onClose, onSaved }) {
     const status = String(raw.status ?? raw.Status ?? raw.attendance ?? raw.Attendance ?? "").trim();
     const remarks = String(raw.remarks ?? raw.Remarks ?? raw.note ?? raw.Note ?? "").trim();
 
-    const companyRaw = raw.company ?? raw.Company ?? raw.site ?? raw.Site ?? raw.branch ?? raw.Branch ?? raw.location ?? raw.Location ?? "";
-    const company = normalizeCompany(companyRaw);
+    // Collect possible company/site fields from many column names
+    const companyRaw =
+      raw.company ??
+      raw.Company ??
+      raw.site ??
+      raw.Site ??
+      raw.branch ??
+      raw.Branch ??
+      raw.location ??
+      raw.Location ??
+      raw['Company'] ??
+      raw['Company Name'] ??
+      raw['Branch Name'] ??
+      raw['Site'] ??
+      "";
 
-    // capture department/extra if it indicates SCM and prefer mapping
-    const extra = String(raw.dept ?? raw.department ?? raw.dept_name ?? raw.group ?? raw.Division ?? raw.DEPARTMENT ?? "").trim();
-    const companyFinal = (extra && /SCM/i.test(extra) && (!company || company === "—")) ? "SRI CHAKRA MILK" : company;
+    let company = normalizeCompany(companyRaw);
 
+    // If company still empty, try dept/group/other columns
+    if (!company || company === "") {
+      const extra = String(raw.dept ?? raw.department ?? raw.dept_name ?? raw.group ?? raw.Division ?? raw.DEPARTMENT ?? raw['Business Unit'] ?? raw['BU'] ?? "").trim();
+      if (extra) {
+        if (/SCM\b/i.test(extra) || /^SCM$/i.test(extra)) {
+          company = "SRI CHAKRA MILK";
+        }
+        if (/\bNATURE'?S?\b|\bNW\b/i.test(extra)) {
+          company = "NATURE'S WELLNESS";
+        }
+      }
+    }
+
+    if (!company) company = "";
+
+    // Work duration conversions
     let workdur = raw.workdur ?? raw.work_dur ?? raw.WorkDur ?? raw['Work Duration'] ?? raw['work_hours'] ?? raw.WorkHours ?? null;
     let workdur_hours = "";
     if (typeof workdur === "number") {
@@ -845,7 +917,7 @@ function PreviewDailyModal({ date, rows, onClose, onSaved }) {
       workdur_hours,
       status,
       remarks,
-      company: companyFinal || company || "",
+      company,
       _raw: raw,
     };
   };
@@ -870,7 +942,6 @@ function PreviewDailyModal({ date, rows, onClose, onSaved }) {
     { key: "company", label: "Company", className: "w-48" },
   ];
 
-  // update cell
   const setCell = (i, key, val) => {
     setData((prev) => {
       const next = [...prev];
@@ -879,7 +950,6 @@ function PreviewDailyModal({ date, rows, onClose, onSaved }) {
     });
   };
 
-  // helper to extract numeric part from employeeid for sorting
   const numericId = (empid) => {
     if (!empid && empid !== 0) return null;
     const s = String(empid).trim();
@@ -893,69 +963,35 @@ function PreviewDailyModal({ date, rows, onClose, onSaved }) {
 
   // items filtered & grouped by company, sorted by numeric employee id inside each company
   const items = useMemo(() => {
-    const qRaw = String(search || "").trim();
-    if (!qRaw) {
-      // produce grouping & sort for full list
-      const list = data.map((r, idx) => ({ idx, r }));
-      list.sort((a, b) => {
-        const ca = String(a.r.company || "").toUpperCase();
-        const cb = String(b.r.company || "").toUpperCase();
-        if (ca !== cb) return ca.localeCompare(cb);
-        const na = numericId(a.r.employeeid);
-        const nb = numericId(b.r.employeeid);
-        if (na != null && nb != null) {
-          if (na !== nb) return na - nb;
-          return String(a.r.employeeid || "").localeCompare(String(b.r.employeeid || ""));
-        }
-        if (na != null && nb == null) return -1;
-        if (na == null && nb != null) return 1;
-        const cmpId = String(a.r.employeeid || "").localeCompare(String(b.r.employeeid || ""));
-        if (cmpId !== 0) return cmpId;
-        return String(a.r.name || "").localeCompare(String(b.r.name || ""));
-      });
-
-      const out = [];
-      let current = "__INIT__";
-      for (const it of list) {
-        const comp = String(it.r.company || "—");
-        if (comp !== current) {
-          out.push({ type: "group", key: comp });
-          current = comp;
-        }
-        out.push({ type: "row", idx: it.idx });
-      }
-      return out;
-    }
-
-    const q = qRaw.toLowerCase();
+    const q = String(search || "").trim().toLowerCase();
     const filtered = data
       .map((r, idx) => ({ idx, r }))
       .filter(({ r }) => {
-        // 1) check employee id variants (EMP186, 186, 00186, etc.)
-        const ids = idVariants(r.employeeid || "");
-        for (const v of ids) {
-          if (String(v || "").toLowerCase().includes(q)) return true;
-        }
+        if (!q) return true;
 
-        // 2) check raw SI-like fields from original row if present (allow matching '186' to raw.SI)
+        // id variants
+        const idMatches = idVariants(r.employeeid || "").some((v) => String(v || "").toLowerCase().includes(q));
+
+        // raw SI-like fields
         const rawCandidate = r._raw || {};
         const siFields = [
           rawCandidate.si, rawCandidate.SI, rawCandidate.Sno, rawCandidate.SNo,
           rawCandidate['SNo'], rawCandidate['S No'], rawCandidate['SI/EMP ID'], rawCandidate['SI']
         ];
-        for (const v of siFields) {
-          if (v == null || v === "") continue;
-          if (String(v).toLowerCase().includes(q)) return true;
-        }
+        const rawMatch = siFields.some((v) => {
+          if (v == null || v === "") return false;
+          return String(v).toLowerCase().includes(q);
+        });
 
-        // 3) fallback to name/shift/status/remarks/company/intime/outtime
+        // fallback text match
         const textMatch = [r.name, r.shift, r.status, r.remarks, r.company, r.intime, r.outtime].some((v) =>
           String(v || "").toLowerCase().includes(q)
         );
-        return textMatch;
+
+        return idMatches || rawMatch || textMatch;
       });
 
-    // sort by company name (case-insensitive), then numeric portion of employeeid, then full employeeid, then name
+    // sort
     filtered.sort((a, b) => {
       const ca = String(a.r.company || "").toUpperCase();
       const cb = String(b.r.company || "").toUpperCase();
@@ -977,7 +1013,7 @@ function PreviewDailyModal({ date, rows, onClose, onSaved }) {
       return String(a.r.name || "").localeCompare(String(b.r.name || ""));
     });
 
-    // group by company preserving sorted order
+    // group
     const out = [];
     let current = "__INIT__";
     for (const it of filtered) {
@@ -991,7 +1027,6 @@ function PreviewDailyModal({ date, rows, onClose, onSaved }) {
     return out;
   }, [data, search]);
 
-  // validation helpers
   const isHHMM = (s) => /^\d{2}:\d{2}$/.test(String(s || ""));
   const parseWorkInputToMinutes = (v) => {
     if (v === "" || v == null) return null;
@@ -1024,7 +1059,6 @@ function PreviewDailyModal({ date, rows, onClose, onSaved }) {
   };
 
   const save = async () => {
-    // Validate times formatting
     for (const r of data) {
       if (r.intime && !isHHMM(r.intime)) { Swal.fire({ icon: "error", title: "Invalid time", text: `Invalid In Time for ${r.name || r.employeeid}. Use HH:MM.` }); return; }
       if (r.outtime && !isHHMM(r.outtime)) { Swal.fire({ icon: "error", title: "Invalid time", text: `Invalid Out Time for ${r.name || r.employeeid}. Use HH:MM.` }); return; }
@@ -1032,17 +1066,14 @@ function PreviewDailyModal({ date, rows, onClose, onSaved }) {
 
     setSaving(true);
     try {
-      // build payload: convert workdur input or compute from intime/outtime
       const payloadRows = data.map((r) => {
         const inMin = parseHHMMToMinutes(r.intime);
         const outMin = parseHHMMToMinutes(r.outtime);
         let workMinutes = null;
         if (typeof inMin === "number" && typeof outMin === "number") {
-          // simple difference: if out < in, assume next day (add 24h)
           if (outMin < inMin) workMinutes = (outMin + 24 * 60) - inMin;
           else workMinutes = outMin - inMin;
         } else {
-          // attempt to parse user-supplied workdur_hours
           workMinutes = parseWorkInputToMinutes(r.workdur_hours);
         }
         return {
@@ -1160,6 +1191,7 @@ function PreviewDailyModal({ date, rows, onClose, onSaved }) {
     </div>
   );
 }
+
 
 /* ===========================
    ANM Preview Modal (Tandur / Talakondapally)
