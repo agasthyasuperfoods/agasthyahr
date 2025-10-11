@@ -7,13 +7,11 @@ import AppHeader from "../components/AppHeader";
 import { Pencil, Trash2 } from "lucide-react";
 
 /**
- * Single-file HR Dashboard (self-contained)
- * - Companies include NATURE'S WELLNESS in selection, but paysheet cards exclude it.
- * - Aadhaar & PAN optional (validated if provided)
- * - Duplicate employee id check on create
- * - Attendance preview with precise Work (h:mm) calculation from In/Out times
- * - ANM: Tandur and Talakondapally separate modals
- * - Paysheet cards: View + Export to Excel (ASF, Tandur, Talakondapally)
+ * Full HR Dashboard (single file)
+ * - Includes NATURE'S WELLNESS and SRI CHAKRA MILK (SCM) support
+ * - Robust preview parser that normalizes many Excel export shapes
+ * - Groups preview rows by company, sorts inside each company by numeric part of employeeid
+ * - Computes Work (h:mm) when In/Out present, allows override via input
  */
 
 // Constants
@@ -24,10 +22,11 @@ const COMPANY_OPTIONS = [
   "ASF-FACTORY",
   "ANM",
   "AVION",
-  "SRI CHAKRA",
+  "SRI CHAKRA MILK",
   "NATURE'S WELLNESS",
 ];
 
+// helper date functions
 function todayIso() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -162,8 +161,9 @@ export default function Hrdashboard() {
       setUsersError("");
       const res = await fetch("/api/users");
       const j = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(j?.error || "Failed to load users");
-      setUsers(Array.isArray(j?.data) ? j.data : []);
+      // server returns { data: [...] } or array; be flexible
+      const arr = Array.isArray(j?.data) ? j.data : (Array.isArray(j) ? j : j?.data || []);
+      setUsers(Array.isArray(arr) ? arr : []);
     } catch (e) {
       setUsersError(e.message || "Failed to load users");
       setUsers([]);
@@ -280,8 +280,9 @@ export default function Hrdashboard() {
       const res = await fetch("/api/attendance/preview", { method: "POST", body: form });
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j?.error || "Preview failed");
+      // Expect server returns rows as array of objects; our PreviewDailyModal will normalize them further
       setPreviewRows(Array.isArray(j?.rows) ? j.rows : []);
-      Swal.fire({ icon: "success", title: "Parsed", text: `Found ${j?.count ?? 0} rows for ${toHumanDate(uploadDate)}.` });
+      Swal.fire({ icon: "success", title: "Parsed", text: `Found ${j?.count ?? (Array.isArray(j?.rows) ? j.rows.length : 0)} rows for ${toHumanDate(uploadDate)}.` });
     } catch (err) {
       Swal.fire({ icon: "error", title: "Preview failed", text: err?.message || "Something went wrong" });
     } finally {
@@ -314,14 +315,26 @@ export default function Hrdashboard() {
 
   // Employees filtering/pagination
   const filteredUsers = useMemo(() => {
-    const q = String(searchQuery || "").trim().toLowerCase();
-    if (!q) return users;
-    return users.filter((u) =>
-      [u.employeeid, u.name, u.email, u.role, u.company, u.number].some((v) =>
-        String(v || "").toLowerCase().includes(q)
-      )
-    );
+    const qRaw = String(searchQuery || "").trim();
+    if (!qRaw) return users;
+    const q = qRaw.toLowerCase();
+
+    return users.filter((u) => {
+      // If query is an ID or numeric, match using idVariants
+      try {
+        const empIdVariants = idVariants(u.employeeid);
+        // check id variants against query
+        for (const v of empIdVariants) {
+          if (String(v || "").toLowerCase().includes(q)) return true;
+        }
+      } catch (e) { /* ignore */ }
+
+      // also check common fields
+      const fields = [u.employeeid, u.name, u.email, u.role, u.company, u.number];
+      return fields.some((v) => String(v || "").toLowerCase().includes(q));
+    });
   }, [users, searchQuery]);
+
   const total = filteredUsers.length;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const pagedUsers = useMemo(() => {
@@ -694,6 +707,7 @@ export default function Hrdashboard() {
 
 /* -------------------------
    Paysheet Card
+   - Note: Nature's Wellness intentionally not shown as a paysheet card.
    ------------------------- */
 function PaysheetCard({ company, name, reportMonth, setReportMonth, router }) {
   return (
@@ -717,50 +731,204 @@ function PaysheetCard({ company, name, reportMonth, setReportMonth, router }) {
    PreviewDailyModal
    - Edits intime/outtime/status/remarks/workdur
    - Computes work minutes from intime/outtime and shows human H:MM
-   - On save converts H:MM/decimal -> minutes and posts to /api/attendance/save
+   - Groups rows by company and sorts inside group by numeric part of employeeid
+   - Normalizes many incoming column names and handles NW / SCM -> SRI CHAKRA MILK mapping
+   - SEARCH: matches idVariants(employeeid) and raw SI-like fields so "186" will match "EMP186"
+   =========================== */
+/* ===========================
+   PreviewDailyModal
+   - Edits intime/outtime/status/remarks/workdur
+   - Computes work minutes from intime/outtime and shows human H:MM
+   - Groups rows by company and sorts inside group by numeric part of employeeid
+   - Normalizes many incoming column names and handles NW / SCM -> SRI CHAKRA MILK mapping
+   - SEARCH: matches idVariants(employeeid) and raw SI-like fields so "186" will match "EMP186"
    =========================== */
 function PreviewDailyModal({ date, rows, onClose, onSaved }) {
-  // normalize incoming rows and ensure times are HH:MM where possible
-  const parseToHHMM = (val) => {
-    if (!val && val !== 0) return "";
-    const s = String(val).trim();
-    // accept "7:30", "07:30", "07:30:00"
-    const m = s.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
-    if (m) {
-      const hh = String(Math.max(0, Math.min(23, Number(m[1])))).padStart(2, "0");
-      const mm = String(Math.max(0, Math.min(59, Number(m[2])))).padStart(2, "0");
-      return `${hh}:${mm}`;
+  // helper: map multiple known company variants to canonical names
+  const normalizeCompany = (raw) => {
+    if (raw === null || raw === undefined) return "";
+    const s = String(raw || "").trim();
+    if (!s) return "";
+    const u = s.toUpperCase();
+
+    // NW / NATURE variants
+    if (/\bNATURE'?S?\b/.test(u) || /\bNAT\b/.test(u) || /\bNW\b/.test(u) || /^NATURES?$/i.test(s)) {
+      return "NATURE'S WELLNESS";
     }
-    return "";
+
+    // SRI CHAKRA MILK and variants, SCM short code
+    if (/SRI\s*CHAKRA\s*MILK|SRI\s*CHAKRA|SRICHAKRA|SRICH?AKRA/i.test(s)) return "SRI CHAKRA MILK";
+    if (/^\s*SCM\s*$/i.test(s) || /\bSCM\b/i.test(u)) return "SRI CHAKRA MILK";
+
+    // ASF / ASF-FACTORY
+    if (/ASF-?FACTORY|FACTORY/i.test(s)) return "ASF-FACTORY";
+    if (/\bASF\b/i.test(u) && !/FACTORY/i.test(u)) return "ASF";
+
+    if (/\bAGB\b/i.test(u)) return "AGB";
+    if (/\bANM\b/i.test(u)) return "ANM";
+    if (/\bAVION\b/i.test(u)) return "AVION";
+
+    // fallback
+    return String(raw).trim();
   };
 
-  const [data, setData] = useState(() => (rows || []).map((r) => ({
-    employeeid: String(r.employeeid ?? r.si ?? ""),
-    name: String(r.name || ""),
-    shift: r.shift || "",
-    intime: parseToHHMM(r.intime || r.inTime || r.in_time || ""),
-    outtime: parseToHHMM(r.outtime || r.outTime || r.out_time || ""),
-    workdur_hours: (typeof r.workdur === "number" && r.workdur >= 0) ? minutesToHumanHMM(r.workdur) : (r.workdur_hours ?? ""),
-    status: r.status || "",
-    remarks: r.remarks || "",
-    company: r.company || "",
-  })));
+  // Accept many column names and normalize row object
+  const normalizeRow = (raw) => {
+    if (!raw) raw = {};
+
+    // Employee id candidates (many possible column names)
+    const possibleId =
+      raw.employeeid ??
+      raw.empid ??
+      raw.EmpID ??
+      raw.EmpId ??
+      raw.EMPID ??
+      raw.si ??
+      raw.SI ??
+      raw.Sno ??
+      raw.SNo ??
+      raw['SI/EMP ID'] ??
+      raw['SI'] ??
+      raw['Emp No'] ??
+      raw['EmpID'] ??
+      "";
+
+    let employeeid = String(possibleId ?? "").trim();
+
+    // If empty and there is an SI-like numeric column, prefix EMP
+    if (!employeeid) {
+      const siCand =
+        raw.SI ??
+        raw.si ??
+        raw.Sno ??
+        raw.SNo ??
+        raw['SNo'] ??
+        raw['S No'] ??
+        raw['SI/EMP ID'] ??
+        raw['Emp No'] ??
+        "";
+      const sVal = String(siCand || "").trim();
+      if (/^\d+$/.test(sVal)) {
+        employeeid = `EMP${Number(sVal)}`;
+      }
+    } else if (/^\d+$/.test(employeeid)) {
+      // numeric only: 186 -> EMP186
+      employeeid = `EMP${Number(employeeid)}`;
+    } else {
+      // If contains digits but no letters, extract digits
+      const digits = (String(employeeid).match(/(\d+)/) || [null, null])[1];
+      if (digits && !/[A-Z]/i.test(employeeid)) {
+        employeeid = `EMP${Number(digits)}`;
+      } else {
+        // cleanup common patterns: uppercase and trim
+        employeeid = String(employeeid).trim().toUpperCase();
+      }
+    }
+
+    const name = String(raw.name ?? raw.Name ?? raw['Employee Name'] ?? raw['Emp Name'] ?? raw.NAME ?? "").trim();
+    const shift = String(raw.shift ?? raw.Shift ?? raw['Shift Name'] ?? "").trim();
+
+    const intimeRaw = raw.intime ?? raw.InTime ?? raw['In Time'] ?? raw['IN TIME'] ?? raw['IN_TIME'] ?? raw['Time In'] ?? raw['IN'] ?? raw['Time_In'] ?? "";
+    const outtimeRaw = raw.outtime ?? raw.OutTime ?? raw['Out Time'] ?? raw['OUT TIME'] ?? raw['OUT_TIME'] ?? raw['Time Out'] ?? raw['OUT'] ?? raw['Time_Out'] ?? "";
+
+    // helper to coerce various time forms (07:30, 7:30, 07:30:00, 730, Excel decimal)
+    const parseToHHMM = (val) => {
+      if (val === null || val === undefined || val === "") return "";
+      const s = String(val).trim();
+      const m = s.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+      if (m) {
+        const hh = String(Math.max(0, Math.min(23, Number(m[1])))).padStart(2, "0");
+        const mm = String(Math.max(0, Math.min(59, Number(m[2])))).padStart(2, "0");
+        return `${hh}:${mm}`;
+      }
+      const m2 = s.match(/^(\d{3,4})$/);
+      if (m2) {
+        const num = m2[1];
+        if (num.length === 3) return `${'0' + num[0]}:${num.slice(1)}`;
+        return `${num.slice(0, num.length - 2).padStart(2, '0')}:${num.slice(-2)}`;
+      }
+      const asNum = Number(s);
+      // Excel time serials (0 < n < 1)
+      if (!Number.isNaN(asNum) && asNum > 0 && asNum < 1) {
+        const totalMin = Math.round(asNum * 24 * 60);
+        const hh = Math.floor(totalMin / 60);
+        const mm = totalMin % 60;
+        return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+      }
+      return "";
+    };
+
+    const intime = parseToHHMM(intimeRaw);
+    const outtime = parseToHHMM(outtimeRaw);
+
+    const status = String(raw.status ?? raw.Status ?? raw.attendance ?? raw.Attendance ?? "").trim();
+    const remarks = String(raw.remarks ?? raw.Remarks ?? raw.note ?? raw.Note ?? "").trim();
+
+    // Collect possible company/site fields from many column names
+    const companyRaw =
+      raw.company ??
+      raw.Company ??
+      raw.site ??
+      raw.Site ??
+      raw.branch ??
+      raw.Branch ??
+      raw.location ??
+      raw.Location ??
+      raw['Company'] ??
+      raw['Company Name'] ??
+      raw['Branch Name'] ??
+      raw['Site'] ??
+      "";
+
+    let company = normalizeCompany(companyRaw);
+
+    // If company still empty, try dept/group/other columns
+    if (!company || company === "") {
+      const extra = String(raw.dept ?? raw.department ?? raw.dept_name ?? raw.group ?? raw.Division ?? raw.DEPARTMENT ?? raw['Business Unit'] ?? raw['BU'] ?? "").trim();
+      if (extra) {
+        if (/SCM\b/i.test(extra) || /^SCM$/i.test(extra)) {
+          company = "SRI CHAKRA MILK";
+        }
+        if (/\bNATURE'?S?\b|\bNW\b/i.test(extra)) {
+          company = "NATURE'S WELLNESS";
+        }
+      }
+    }
+
+    if (!company) company = "";
+
+    // Work duration conversions
+    let workdur = raw.workdur ?? raw.work_dur ?? raw.WorkDur ?? raw['Work Duration'] ?? raw['work_hours'] ?? raw.WorkHours ?? null;
+    let workdur_hours = "";
+    if (typeof workdur === "number") {
+      workdur_hours = minutesToHumanHMM(workdur);
+    } else if (workdur != null && String(workdur || "").trim()) {
+      workdur_hours = String(workdur).trim();
+    } else {
+      workdur_hours = "";
+    }
+
+    return {
+      employeeid,
+      name,
+      shift,
+      intime,
+      outtime,
+      workdur_hours,
+      status,
+      remarks,
+      company,
+      _raw: raw,
+    };
+  };
+
+  // Initialize state from rows using normalizeRow
+  const [data, setData] = useState(() => (rows || []).map((r) => normalizeRow(r)));
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
 
   useEffect(() => {
-    // if rows prop changes, reset data
-    setData((rows || []).map((r) => ({
-      employeeid: String(r.employeeid ?? r.si ?? ""),
-      name: String(r.name || ""),
-      shift: r.shift || "",
-      intime: parseToHHMM(r.intime || r.inTime || r.in_time || ""),
-      outtime: parseToHHMM(r.outtime || r.outTime || r.out_time || ""),
-      workdur_hours: (typeof r.workdur === "number" && r.workdur >= 0) ? minutesToHumanHMM(r.workdur) : (r.workdur_hours ?? ""),
-      status: r.status || "",
-      remarks: r.remarks || "",
-      company: r.company || "",
-    })));
+    setData((rows || []).map((r) => normalizeRow(r)));
   }, [rows]);
 
   const headers = [
@@ -774,7 +942,6 @@ function PreviewDailyModal({ date, rows, onClose, onSaved }) {
     { key: "company", label: "Company", className: "w-48" },
   ];
 
-  // update cell
   const setCell = (i, key, val) => {
     setData((prev) => {
       const next = [...prev];
@@ -783,37 +950,70 @@ function PreviewDailyModal({ date, rows, onClose, onSaved }) {
     });
   };
 
-  // items filtered & grouped by company
+  const numericId = (empid) => {
+    if (!empid && empid !== 0) return null;
+    const s = String(empid).trim();
+    const m = s.match(/(\d+)(?!.*\d)/);
+    if (m) {
+      const n = parseInt(m[1], 10);
+      return Number.isFinite(n) ? n : null;
+    }
+    return null;
+  };
+
+  // items filtered & grouped by company, sorted by numeric employee id inside each company
   const items = useMemo(() => {
     const q = String(search || "").trim().toLowerCase();
     const filtered = data
       .map((r, idx) => ({ idx, r }))
       .filter(({ r }) => {
         if (!q) return true;
-        return [r.employeeid, r.name, r.shift, r.status, r.remarks, r.company, r.intime, r.outtime].some((v) =>
+
+        // id variants
+        const idMatches = idVariants(r.employeeid || "").some((v) => String(v || "").toLowerCase().includes(q));
+
+        // raw SI-like fields
+        const rawCandidate = r._raw || {};
+        const siFields = [
+          rawCandidate.si, rawCandidate.SI, rawCandidate.Sno, rawCandidate.SNo,
+          rawCandidate['SNo'], rawCandidate['S No'], rawCandidate['SI/EMP ID'], rawCandidate['SI']
+        ];
+        const rawMatch = siFields.some((v) => {
+          if (v == null || v === "") return false;
+          return String(v).toLowerCase().includes(q);
+        });
+
+        // fallback text match
+        const textMatch = [r.name, r.shift, r.status, r.remarks, r.company, r.intime, r.outtime].some((v) =>
           String(v || "").toLowerCase().includes(q)
         );
+
+        return idMatches || rawMatch || textMatch;
       });
 
-    // sort by company priority then name
-    const PRIORITY = ["ASF", "AGB", "ANM"];
-    const rankCompany = (c) => {
-      const k = String(c || "").trim().toUpperCase();
-      const idx = PRIORITY.indexOf(k);
-      return idx === -1 ? PRIORITY.length : idx;
-    };
-
+    // sort
     filtered.sort((a, b) => {
-      const ra = rankCompany(a.r.company);
-      const rb = rankCompany(b.r.company);
-      if (ra !== rb) return ra - rb;
-      const na = String(a.r.name || "").toUpperCase();
-      const nb = String(b.r.name || "").toUpperCase();
-      if (na !== nb) return na.localeCompare(nb);
-      return String(a.r.employeeid || "").localeCompare(String(b.r.employeeid || ""));
+      const ca = String(a.r.company || "").toUpperCase();
+      const cb = String(b.r.company || "").toUpperCase();
+      if (ca !== cb) return ca.localeCompare(cb);
+
+      const na = numericId(a.r.employeeid);
+      const nb = numericId(b.r.employeeid);
+
+      if (na != null && nb != null) {
+        if (na !== nb) return na - nb;
+        return String(a.r.employeeid || "").localeCompare(String(b.r.employeeid || ""));
+      }
+      if (na != null && nb == null) return -1;
+      if (na == null && nb != null) return 1;
+
+      const cmpId = String(a.r.employeeid || "").localeCompare(String(b.r.employeeid || ""));
+      if (cmpId !== 0) return cmpId;
+
+      return String(a.r.name || "").localeCompare(String(b.r.name || ""));
     });
 
-    // group by company
+    // group
     const out = [];
     let current = "__INIT__";
     for (const it of filtered) {
@@ -827,12 +1027,10 @@ function PreviewDailyModal({ date, rows, onClose, onSaved }) {
     return out;
   }, [data, search]);
 
-  // validation helpers
   const isHHMM = (s) => /^\d{2}:\d{2}$/.test(String(s || ""));
   const parseWorkInputToMinutes = (v) => {
     if (v === "" || v == null) return null;
     const s = String(v).trim();
-    // accept H:MM or H.MM (where . is minutes) or decimal hours
     const mmStyle = s.match(/^(\d+):(\d{1,2})$/);
     if (mmStyle) {
       const hh = Number(mmStyle[1]);
@@ -844,7 +1042,6 @@ function PreviewDailyModal({ date, rows, onClose, onSaved }) {
       }
       return hh * 60 + mm;
     }
-    // dot minutes style H.MM -> treat .MM as minutes (not fractional hours)
     const dotStyle = s.match(/^(\d+)\.(\d{1,2})$/);
     if (dotStyle) {
       const hh = Number(dotStyle[1]);
@@ -856,14 +1053,12 @@ function PreviewDailyModal({ date, rows, onClose, onSaved }) {
       }
       return hh * 60 + mm;
     }
-    // fallback: decimal hours (7.5 => 7.5h)
     const dec = parseFloat(s.replace(",", "."));
     if (!Number.isNaN(dec)) return Math.round(dec * 60);
     return null;
   };
 
   const save = async () => {
-    // Validate times
     for (const r of data) {
       if (r.intime && !isHHMM(r.intime)) { Swal.fire({ icon: "error", title: "Invalid time", text: `Invalid In Time for ${r.name || r.employeeid}. Use HH:MM.` }); return; }
       if (r.outtime && !isHHMM(r.outtime)) { Swal.fire({ icon: "error", title: "Invalid time", text: `Invalid Out Time for ${r.name || r.employeeid}. Use HH:MM.` }); return; }
@@ -871,17 +1066,14 @@ function PreviewDailyModal({ date, rows, onClose, onSaved }) {
 
     setSaving(true);
     try {
-      // build payload: convert workdur input or compute from intime/outtime
       const payloadRows = data.map((r) => {
         const inMin = parseHHMMToMinutes(r.intime);
         const outMin = parseHHMMToMinutes(r.outtime);
         let workMinutes = null;
         if (typeof inMin === "number" && typeof outMin === "number") {
-          // simple difference: if out < in, assume next day (add 24h)
           if (outMin < inMin) workMinutes = (outMin + 24 * 60) - inMin;
           else workMinutes = outMin - inMin;
         } else {
-          // attempt to parse user-supplied workdur_hours
           workMinutes = parseWorkInputToMinutes(r.workdur_hours);
         }
         return {
@@ -968,7 +1160,7 @@ function PreviewDailyModal({ date, rows, onClose, onSaved }) {
                                 h.key === "workdur_hours" ? (
                                   <div className="flex items-center gap-2">
                                     <input type="text" value={r.workdur_hours ?? (computedWork != null ? minutesToHumanHMM(computedWork) : "")} onChange={(e) => setCell(it.idx, "workdur_hours", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1" placeholder="e.g., 7:30 or 7.30 or 7.5" />
-                                    <div className="text-xs text-gray-500">{computedWork != null ? `calc ${minutesToHumanHMM(computedWork)}` : ""}</div>
+                                    <div className="text-xs text-gray-500">{computedWork != null ? `${minutesToHumanHMM(computedWork)} (calc)` : ""}</div>
                                   </div>
                                 ) : h.key === "remarks" ? (
                                   <textarea rows={2} value={r.remarks ?? ""} onChange={(e) => setCell(it.idx, "remarks", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1" placeholder="Optional notes" />
@@ -999,6 +1191,7 @@ function PreviewDailyModal({ date, rows, onClose, onSaved }) {
     </div>
   );
 }
+
 
 /* ===========================
    ANM Preview Modal (Tandur / Talakondapally)
@@ -1262,6 +1455,7 @@ function CreateEmployeeModal({ idToName = {}, onClose, onCreated }) {
         const checkJson = await checkRes.json().catch(() => ({}));
         if (checkRes.ok && Array.isArray(checkJson?.data) && checkJson.data.length > 0) {
           Swal.fire({ icon: "error", title: "User ID already exists", text: `Employee ID ${employeeId} already exists.` });
+          setSubmitting(false);
           return;
         }
       } catch {

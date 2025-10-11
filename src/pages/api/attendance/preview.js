@@ -134,9 +134,47 @@ function parseForm(req, options = {}) {
 
 /* ---------------- rules ---------------- */
 
+// note: keep canonical strings in lowercase for allowlist checks
 const ALLOWED_COMPANIES = new Set([
   "sonf", "asf", "anm", "agb", "avion", "dwaraka contract staff", "asf-factory",
+  "sri chakra milk", "nature's wellness", "scm", "nw"
 ]);
+
+/* ---------------- company mapping ---------------- */
+
+/*
+  Normalize and map many variants into canonical company strings.
+  Ensures SCM / SRI CHAKRA MILK and NATURE'S WELLNESS are recognized.
+*/
+const mapCompany = (raw) => {
+  if (raw == null) return "";
+  const s = String(raw).trim();
+  if (!s) return "";
+  // uppercase and remove weird punctuation but keep spaces and apostrophes
+  const u = s.toUpperCase().replace(/[^A-Z0-9\s']/g, " ").replace(/\s+/g, " ").trim();
+
+  // SRI CHAKRA MILK variants
+  if (/\bSCM\b/.test(u) || /\bS\s*C\s*M\b/.test(u) || /\bSRI\b.*\bCHAKRA\b/.test(u) || /\bCHAKRA\b/.test(u)) {
+    return "SRI CHAKRA MILK";
+  }
+
+  // NATURE'S WELLNESS / NW variants
+  if (/\bNATURE\b/.test(u) || /\bNATURE'S\b/.test(u) || /\bNATURES\b/.test(u) || /\bNW\b/.test(u) || /\bNAT\b/.test(u)) {
+    return "NATURE'S WELLNESS";
+  }
+
+  // ASF / ASF-FACTORY
+  if (/\bFACTORY\b/.test(u) || /\bASF-?FACTORY\b/.test(u)) return "ASF-FACTORY";
+  if (/\bASF\b/.test(u) && !/\bFACTORY\b/.test(u)) return "ASF";
+
+  if (/\bAGB\b/.test(u)) return "AGB";
+  if (/\bANM\b/.test(u)) return "ANM";
+  if (/\bAVION\b/.test(u)) return "AVION";
+  if (/DWARAKA/i.test(u) || /^DR/i.test(String(raw).trim())) return "Dwaraka Contract Staff";
+
+  // fallback: return trimmed original (so we still capture odd but meaningful names)
+  return s;
+};
 
 /* ---------------- handler ---------------- */
 
@@ -234,15 +272,44 @@ export default async function handler(req, res) {
 
           if (!intime && workdur == null && !outtime) continue;
 
-          // company: prefer company column, else current department
+          // --- START: normalized company detection & allowlist check ---
           let companyFromCol = companyIdx !== -1 ? (next[companyIdx] || "") : "";
-          let company = companyFromCol || currentDepartment || null;
+          let rawCompany = companyFromCol || currentDepartment || "";
 
-          // DR* -> Dwaraka Contract Staff (but skip if we're in RESIGNED section above)
-          if (/^DR/i.test(employeeid)) company = "Dwaraka Contract Staff";
+          // DR* -> Dwaraka Contract Staff (explicit override)
+          if (/^DR/i.test(employeeid)) {
+            rawCompany = "Dwaraka Contract Staff";
+          }
 
-          // enforce allowed companies (normalize)
-          if (!company || !ALLOWED_COMPANIES.has(norm(company))) continue;
+          // map to canonical company (SCM -> SRI CHAKRA MILK, NW -> NATURE'S WELLNESS, etc.)
+          let normalizedCompany = mapCompany(rawCompany);
+
+          // If still empty, try department-like/extra columns from the original raw row
+          if (!normalizedCompany) {
+            const extra = String(rawNext?.dept ?? rawNext?.department ?? rawNext?.group ?? rawNext?.division ?? rawNext?.BU ?? rawNext?.['Business Unit'] ?? "").trim();
+            if (extra) normalizedCompany = mapCompany(extra);
+          }
+
+          // final skip if nothing recognized
+          if (!normalizedCompany) {
+            // temp debug (uncomment to log skipped rows)
+            // console.log('SKIP: no company for', employeeid, 'rawCompany=', rawCompany, 'extra=', rawNext);
+            continue;
+          }
+
+          // final allowlist check (use lowercase key)
+          const allowedKey = String(normalizedCompany || "").trim().toLowerCase();
+          if (!ALLOWED_COMPANIES.has(allowedKey)) {
+            // defensive: allow a few common canonical names even if missing from the set
+            if (!["sri chakra milk", "nature's wellness", "scm", "nw", "dwaraka contract staff"].includes(allowedKey)) {
+              // console.log('SKIP: not allowed company for', employeeid, 'company=', normalizedCompany);
+              continue;
+            }
+          }
+
+          // use canonical name going forward
+          const company = normalizedCompany;
+          // --- END: normalized company detection & allowlist check ---
 
           // AVION: only GS shifts
           const shiftVal = shiftIdx !== -1 ? next[shiftIdx] : "";
