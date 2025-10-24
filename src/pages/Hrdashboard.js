@@ -942,13 +942,24 @@ function PreviewDailyModal({ date, rows, onClose, onSaved }) {
     { key: "company", label: "Company", className: "w-48" },
   ];
 
-  const setCell = (i, key, val) => {
-    setData((prev) => {
-      const next = [...prev];
-      next[i] = { ...next[i], [key]: val };
-      return next;
-    });
-  };
+const setCell = (i, key, val) => {
+  setData((prev) => {
+    const next = [...prev];
+    const updated = { ...next[i], [key]: val };
+    // Mark manual override when user edits the workdur input
+    if (key === "workdur_hours") {
+      updated._manualWork = (String(val || "").trim() !== "");
+    }
+    // If user edits intime/outtime, clear manual override so computed shows again
+    if (key === "intime" || key === "outtime") {
+      // leave manual flag only if user explicitly set workdur after editing times
+      updated._manualWork = next[i]._manualWork || false; // preserve if already set
+      // but we'll keep it; below in render we treat computed prioritized unless _manualWork true
+    }
+    next[i] = updated;
+    return next;
+  });
+};
 
   const numericId = (empid) => {
     if (!empid && empid !== 0) return null;
@@ -1427,7 +1438,7 @@ function CreateEmployeeModal({ idToName = {}, onClose, onCreated }) {
   const validateLocal = () => {
     if (!employeeId || !String(employeeId).trim()) return "Employee ID is required.";
     if (!name || !name.trim()) return "Full name is required.";
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email).trim())) return "Valid email is required.";
+    // if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email).trim())) return "Valid email is required.";
     if (!company || !String(company).trim()) return "Company is required.";
     if (gross !== "" && isNaN(Number(gross))) return "Gross salary must be a number.";
     const aadDigits = String(aadhaar || "").replace(/\D/g, "");
@@ -1651,7 +1662,7 @@ function EditEmployeeModal({ idToName = {}, employee = {}, onClose, onUpdated })
 
   const validateLocal = () => {
     if (!name || !name.trim()) return "Full name is required.";
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email).trim())) return "Valid email is required.";
+    // if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email).trim())) return "Valid email is required.";
     if (!company || !String(company).trim()) return "Company is required.";
     const aadDigits = String(aadhaar || "").replace(/\D/g, "");
     if (aadhaar && aadDigits.length !== 12) return "Aadhaar must be exactly 12 digits when provided.";
