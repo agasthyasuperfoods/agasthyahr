@@ -38,7 +38,7 @@ export default function AdminHeader({
 
   const NAV = [
     { href: "/Admin", label: "Home" },
-    { href: "/Payrollsuperfoods", label: "Paysheet" },
+    { href: "/Npaysheet", label: "Paysheet" },
     { href: "/Reports", label: "Advance" },
     { href: "/OrganizationChartPage", label: "Employees" },
     { href: "/OrganizationChartPage", label: "Vechiles" },
