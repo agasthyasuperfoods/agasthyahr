@@ -40,7 +40,7 @@ export default function AdminHeader({
     { href: "/NutromilkAccounts", label: "Home" },
     { href: "/NPaysheets", label: "Paysheet" },
     { href: "/NAdvance", label: "Advance" },
-    { href: "/NEmployees", label: "Employees" },
+    { href: "/Nemployees", label: "Employees" },
     { href: "/NVechiles", label: "Vechiles" },
   ];
 
