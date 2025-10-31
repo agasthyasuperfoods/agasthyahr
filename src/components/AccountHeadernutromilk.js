@@ -5,12 +5,12 @@ import { useRouter } from "next/router";
 import { useCallback } from "react";
 
 export default function AdminHeader({
-  currentPath = "",
   adminName = "Admin",
   onProfileClick,   // optional
   onLogout,         // optional
 }) {
   const router = useRouter();
+  const currentPath = router.pathname;
 
   // Fallback logout if parent doesn't provide one
   const defaultLogout = useCallback(async () => {
@@ -37,14 +37,15 @@ export default function AdminHeader({
   const handleProfile = onProfileClick || defaultProfile;
 
   const NAV = [
-    { href: "/Admin", label: "Home" },
-    { href: "/Npaysheet", label: "Paysheet" },
-    { href: "/Reports", label: "Advance" },
-    { href: "/OrganizationChartPage", label: "Employees" },
-    { href: "/OrganizationChartPage", label: "Vechiles" },
+    { href: "/NutromilkAccounts", label: "Home" },
+    { href: "/NPaysheets", label: "Paysheet" },
+    { href: "/NAdvance", label: "Advance" },
+    { href: "/NEmployees", label: "Employees" },
+    { href: "/NVechiles", label: "Vechiles" },
   ];
 
-  const isActive = (href) => currentPath && currentPath.startsWith(href.replace(/#.*$/, ""));
+  // Simple isActive function
+  const isActive = (href) => currentPath === href;
 
   return (
     <header className="sticky top-0 z-40 bg-white/90 backdrop-blur border-b border-gray-200">
@@ -81,7 +82,6 @@ export default function AdminHeader({
 
         {/* Actions */}
         <div className="flex items-center gap-2">
-          {/* Profile is always visible, all pages, all sizes */}
           <button
             type="button"
             onClick={handleProfile}
