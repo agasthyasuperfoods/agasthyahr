@@ -47,12 +47,13 @@ export default function TalakondapallyAttendance() {
   const [loading, setLoading] = useState(true);
 
   // From API: [{ employee_id, employee_name, number, designation, status, saved_date }]
-  const [employees, setEmployees] = useState([]);
+  const [employees, setEmployees] =useState([]);
   const [attMap, setAttMap] = useState({});      // { [id]: STATUS }
   const [serverMap, setServerMap] = useState({}); // snapshot for Cancel
   const [submitted, setSubmitted] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
+  const [submittedDate, setSubmittedDate] = useState(null);
 
   // AUTH GUARD (EMP179 only)
   useEffect(() => {
@@ -115,7 +116,8 @@ export default function TalakondapallyAttendance() {
       setAttMap(nextFromServer);
 
       const locked = determineSubmittedFromApiPayload(j, date);
-      setSubmitted(locked);
+      const show = !!locked || (submittedDate === date);
+      setSubmitted(show);
       setIsEditing(!locked);
     } catch (e) {
       Swal.fire({ icon: "error", title: "Load failed", text: e.message || "Something went wrong" });
@@ -127,7 +129,7 @@ export default function TalakondapallyAttendance() {
     } finally {
       setLoading(false);
     }
-  }, [date]);
+  }, [date, submittedDate]);
 
   useEffect(() => {
     if (!ready) return;
@@ -170,6 +172,7 @@ export default function TalakondapallyAttendance() {
 
       setServerMap({ ...attMap });
       setSubmitted(true);
+      setSubmittedDate(date);
       setIsEditing(false);
 
       Swal.fire({
@@ -179,7 +182,8 @@ export default function TalakondapallyAttendance() {
         confirmButtonColor: PRIMARY_HEX,
       });
 
-      loadForDate();
+      await loadForDate();
+      setSubmitted(true);
     } catch (e) {
       Swal.fire({ icon: "error", title: "Save failed", text: e.message || "Something went wrong" });
     }
@@ -314,16 +318,17 @@ export default function TalakondapallyAttendance() {
             <div className="mx-4 mt-3 rounded-xl border border-amber-200 bg-amber-50 text-amber-800 text-sm p-3">
               This date is locked. Use <b>Update attendance</b> to enable editing.
             </div>
-            <section className="p-4">
+            {/* <-- FIX: Added pb-24 --> */}
+            <section className="p-4 pb-24">
               <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
                 <table className="min-w-full text-sm">
                   <thead className="bg-gray-50 border-b border-gray-200">
                     <tr>
                       <th className="text-left px-4 py-2 font-semibold text-gray-700">Name</th>
+                      <th className="text-left px-4 py-2 font-semibold text-gray-700">Status</th>
                       <th className="text-left px-4 py-2 font-semibold text-gray-700">Number</th>
                       <th className="text-left px-4 py-2 font-semibold text-gray-700">Designation</th>
                       <th className="text-left px-4 py-2 font-semibold text-gray-700">Location</th>
-                      <th className="text-left px-4 py-2 font-semibold text-gray-700">Status</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -335,9 +340,6 @@ export default function TalakondapallyAttendance() {
                       employees.map((e) => (
                         <tr key={e.id} className="border-t border-gray-100">
                           <td className="px-4 py-2 text-gray-900">{e.employee_name}</td>
-                          <td className="px-4 py-2 text-gray-700">{e.number || "—"}</td>
-                          <td className="px-4 py-2 text-gray-700">{e.designation || "—"}</td>
-                          <td className="px-4 py-2 text-gray-700">{LOCATION_LABEL}</td>
                           <td className="px-4 py-2">
                             <span
                               className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium
@@ -349,6 +351,9 @@ export default function TalakondapallyAttendance() {
                               {attMap[e.id] || STATUS.PRESENT}
                             </span>
                           </td>
+                          <td className="px-4 py-2 text-gray-700">{e.number || "—"}</td>
+                          <td className="px-4 py-2 text-gray-700">{e.designation || "—"}</td>
+                          <td className="px-4 py-2 text-gray-700">{LOCATION_LABEL}</td>
                         </tr>
                       ))
                     )}
@@ -359,7 +364,8 @@ export default function TalakondapallyAttendance() {
           </>
         ) : (
           // EDIT MODE CARDS
-          <section className="p-4 mb-18 space-y-3">
+          // <-- FIX: Changed mb-18 to pb-24 -->
+          <section className="p-4 pb-24 space-y-3">
             <div className="space-y-3">
               {loading ? (
                 <div className="bg-white border border-gray-200 rounded-xl p-4 text-gray-600">Loading employees…</div>
