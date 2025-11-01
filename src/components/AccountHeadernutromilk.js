@@ -41,7 +41,7 @@ export default function AdminHeader({
     { href: "/NPaysheets", label: "Paysheet" },
     { href: "/NAdvance", label: "Advance" },
     { href: "/Nemployees", label: "Employees" },
-    { href: "/NVechiles", label: "Vechiles" },
+    { href: "/NVechiles", label: "Vehicles" },
   ];
 
   // Simple isActive function

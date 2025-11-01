@@ -207,10 +207,6 @@ function Nemployeeslist() {
                       <span className="text-gray-600">Advances:</span>
                       <span className="font-semibold text-orange-600">₹{emp.advances?.toLocaleString() || '0'}</span>
                     </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Food Expenses:</span>
-                      <span className="font-semibold text-blue-600">₹{emp.food_expenses?.toLocaleString() || '0'}</span>
-                    </div>
                   </div>
                 </div>
               ))}
