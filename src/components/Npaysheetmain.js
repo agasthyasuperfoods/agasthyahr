@@ -49,12 +49,11 @@ function Npaysheetmain() {
     
     const grossSalary = Number(apiRow.gross_salary || 0);
     const advances = Number(apiRow.advances || 0);
-    const foodExpenses = Number(apiRow.food_expenses || 0);
 
     const dailyRate = grossSalary / daysInMonth;
     const unpaidAbsences = Math.max(0, absentDays - 2);
     const lossOfPay = Math.round(unpaidAbsences * dailyRate);
-    const netSalary = grossSalary - advances - lossOfPay - foodExpenses;
+    const netSalary = grossSalary - advances - lossOfPay;
 
     return {
       employeeId: apiRow.EmployeeId,
@@ -67,7 +66,6 @@ function Npaysheetmain() {
       grossSalary,
       advances,
       lossOfPay,
-      foodExpenses,
       netSalary: Math.round(netSalary),
     };
   };
@@ -125,11 +123,10 @@ function Npaysheetmain() {
         acc.gross += r.grossSalary;
         acc.adv += r.advances;
         acc.lop += r.lossOfPay;
-        acc.food += r.foodExpenses;
         acc.net += r.netSalary;
         return acc;
       },
-      { gross: 0, adv: 0, lop: 0, food: 0, net: 0 }
+      { gross: 0, adv: 0, lop: 0, net: 0 }
     );
 
   const renderPaySheetTable = (data, locationName, headerColor) => {
@@ -150,13 +147,12 @@ function Npaysheetmain() {
                 <tr className="bg-gray-100">
                   <th className="border border-gray-300 p-3 font-medium text-left">Name</th>
                   <th className="border border-gray-300 p-3 font-medium text-left">Designation</th>
-                  <th className="border border-gray-300 p-3 font-medium text-center">Total Days in Month</th>
+                  <th className="border border-gray-300 p-3 font-medium text-center">Total Days</th>
                   <th className="border border-gray-300 p-3 font-medium text-center">Working Days</th>
                   <th className="border border-gray-300 p-3 font-medium text-center">Absent Days</th>
                   <th className="border border-gray-300 p-3 font-medium text-center">Gross Salary</th>
                   <th className="border border-gray-300 p-3 font-medium text-center">Advances</th>
                   <th className="border border-gray-300 p-3 font-medium text-center">Loss of Pay</th>
-                  <th className="border border-gray-300 p-3 font-medium text-center">Food Expenses</th>
                   <th className="border border-gray-300 p-3 font-medium text-center">Net Salary</th>
                 </tr>
               </thead>
@@ -171,7 +167,6 @@ function Npaysheetmain() {
                     <td className="border border-gray-300 p-3 text-center">₹{e.grossSalary.toLocaleString()}</td>
                     <td className="border border-gray-300 p-3 text-center">₹{e.advances.toLocaleString()}</td>
                     <td className="border border-gray-300 p-3 text-center">₹{e.lossOfPay.toLocaleString()}</td>
-                    <td className="border border-gray-300 p-3 text-center">₹{e.foodExpenses.toLocaleString()}</td>
                     <td className="border border-gray-300 p-3 text-center font-bold text-green-700">
                       ₹{e.netSalary.toLocaleString()}
                     </td>
@@ -182,7 +177,6 @@ function Npaysheetmain() {
                   <td className="border border-gray-300 p-3 text-center">₹{locationTotals.gross.toLocaleString()}</td>
                   <td className="border border-gray-300 p-3 text-center">₹{locationTotals.adv.toLocaleString()}</td>
                   <td className="border border-gray-300 p-3 text-center">₹{locationTotals.lop.toLocaleString()}</td>
-                  <td className="border border-gray-300 p-3 text-center">₹{locationTotals.food.toLocaleString()}</td>
                   <td className="border border-gray-300 p-3 text-center text-green-700">₹{locationTotals.net.toLocaleString()}</td>
                 </tr>
               </tbody>
@@ -250,7 +244,7 @@ function Npaysheetmain() {
 
           {!loading && (
             <div className="space-y-8">
-              {renderPaySheetTable(operationsData, 'Delivery boys', 'bg-[#16a34a]')}
+              {renderPaySheetTable(operationsData, 'Delivery Boys', 'bg-[#16a34a]')}
               {renderPaySheetTable(tandurData, 'Tandur Farm', 'bg-[#C1272D]')}
               {renderPaySheetTable(talakondapallyData, 'Talakondapally Farm', 'bg-[#1e40af]')}
             </div>

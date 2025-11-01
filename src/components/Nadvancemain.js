@@ -8,7 +8,6 @@ function Nadvancemain() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [showDropdown, setShowDropdown] = useState(false);
-  const [expenseType, setExpenseType] = useState('advance');
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState(() => {
     const today = new Date();
@@ -86,7 +85,7 @@ function Nadvancemain() {
         body: JSON.stringify({
           location: selectedLocation,
           employeeId: selectedEmployee.id,
-          type: expenseType,
+          type: 'advance',
           amount: Number(amount),
           date,
         }),
@@ -95,17 +94,17 @@ function Nadvancemain() {
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.error || 'Failed to add expense');
+        throw new Error(data.error || 'Failed to add advance');
       }
 
-      setSuccessMsg(`${expenseType === 'advance' ? 'Advance' : 'Food Expense'} of ₹${amount} added successfully to ${data.employeeName}!`);
+      setSuccessMsg(`Advance of ₹${amount} added successfully to ${data.employeeName}!`);
       
       // Reset form
       setAmount('');
       setSelectedEmployee(null);
       setSearchQuery('');
     } catch (error) {
-      setErrorMsg(error.message || 'Failed to add expense');
+      setErrorMsg(error.message || 'Failed to add advance');
     } finally {
       setLoading(false);
     }
@@ -114,15 +113,15 @@ function Nadvancemain() {
   return (
     <>
       <Head>
-        <title>Manage Expenses • Accounts</title>
-        <meta name="description" content="Add advances and food expenses for employees" />
+        <title>Manage Advances • Accounts</title>
+        <meta name="description" content="Add salary advances for employees" />
       </Head>
 
       <div className="min-h-screen bg-gray-50 p-4 md:p-8">
         <div className="max-w-3xl mx-auto">
           <div className="mb-8">
-            <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">Manage Employee Expenses</h1>
-            <p className="text-gray-600">Add advances and food expenses for employees across all locations</p>
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">Manage Employee Advances</h1>
+            <p className="text-gray-600">Add salary advances for employees across all locations</p>
           </div>
 
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 md:p-8">
@@ -224,6 +223,7 @@ function Nadvancemain() {
                       <p className="font-semibold text-gray-900">{selectedEmployee.name}</p>
                       <p className="text-sm text-gray-600">{selectedEmployee.designation}</p>
                       <p className="text-sm text-gray-600">Gross Salary: ₹{selectedEmployee.gross_salary?.toLocaleString() || 'N/A'}</p>
+                      <p className="text-sm text-gray-600">Current Advances: ₹{selectedEmployee.advances?.toLocaleString() || '0'}</p>
                     </div>
                     <button
                       type="button"
@@ -239,48 +239,17 @@ function Nadvancemain() {
                 </div>
               )}
 
-              {/* Expense Type */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-900 mb-3">
-                  Expense Type <span className="text-red-500">*</span>
-                </label>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setExpenseType('advance')}
-                    className={`p-4 rounded-lg border-2 font-medium transition-all outline-none ${
-                      expenseType === 'advance'
-                        ? 'border-blue-600 bg-blue-600 text-white'
-                        : 'border-gray-300 hover:border-blue-600 text-gray-700'
-                    }`}
-                  >
-                    💰 Advance
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setExpenseType('food')}
-                    className={`p-4 rounded-lg border-2 font-medium transition-all outline-none ${
-                      expenseType === 'food'
-                        ? 'border-orange-600 bg-orange-600 text-white'
-                        : 'border-gray-300 hover:border-orange-600 text-gray-700'
-                    }`}
-                  >
-                    🍽️ Food Expense
-                  </button>
-                </div>
-              </div>
-
               {/* Amount */}
               <div>
                 <label htmlFor="amount" className="block text-sm font-semibold text-gray-900 mb-2">
-                  Amount (₹) <span className="text-red-500">*</span>
+                  Advance Amount (₹) <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="number"
                   id="amount"
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
-                  placeholder="Enter amount"
+                  placeholder="Enter advance amount"
                   min="1"
                   step="1"
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg outline-none focus:border-[#C1272D] transition-colors"
@@ -329,7 +298,7 @@ function Nadvancemain() {
                     Processing...
                   </span>
                 ) : (
-                  `Add ${expenseType === 'advance' ? 'Advance' : 'Food Expense'}`
+                  '💰 Add Advance'
                 )}
               </button>
             </form>
