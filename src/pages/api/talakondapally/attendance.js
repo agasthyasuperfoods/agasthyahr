@@ -2,16 +2,16 @@ import { query } from "@/lib/db";
 
 /**
  * Day-wise attendance model:
- *   public.talakondapally_attendance (
- *     "EmployeeId" INTEGER REFERENCES public.talakondapallyemployees("Employeeid") ON DELETE CASCADE,
- *     name         TEXT,   -- snapshot
- *     date         DATE    NOT NULL,
- *     status       TEXT,   -- 'Present' | 'Absent' | 'Half Day' | null
- *     PRIMARY KEY ("EmployeeId", "date")
- *   )
+ * public.talakondapally_attendance (
+ * "EmployeeId" INTEGER REFERENCES public.talakondapallyemployees("Employeeid") ON DELETE CASCADE,
+ * name         TEXT,   -- snapshot
+ * date         DATE    NOT NULL,
+ * status       TEXT,   -- 'Present' | 'Absent' | 'Half Day' | null
+ * PRIMARY KEY ("EmployeeId", "date")
+ * )
  *
  * Lock rule (for a given date):
- *   locked = (count(current employees) == count(rows for date with non-null status))
+ * locked = (count(current employees) == count(rows for date with non-null status))
  */
 
 async function ensureAttendanceTable() {
@@ -96,6 +96,7 @@ export default async function handler(req, res) {
           e."Employeeid"    AS employee_id,
           e.employee_name   AS employee_name,
           e.employee_number AS number,
+          e.designation     AS designation, -- <-- *** THIS IS THE FIX ***
           e.location        AS location,
           t.status          AS status,
           t.date            AS saved_date
@@ -185,7 +186,7 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: "Valid employee_id is required" });
       }
 
-      await ensureAttendanceTable();
+      await ensureAttendance_talakondapally();
 
       await query(
         `

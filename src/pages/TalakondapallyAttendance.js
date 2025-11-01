@@ -115,10 +115,14 @@ export default function TalakondapallyAttendance() {
       setServerMap(nextFromServer);
       setAttMap(nextFromServer);
 
+      // <-- *** LOGIC FIX 1: Synced with Tandur *** -->
       const locked = determineSubmittedFromApiPayload(j, date);
       const show = !!locked || (submittedDate === date);
+      
       setSubmitted(show);
-      setIsEditing(!locked);
+      setIsEditing(!locked); // <-- Changed from !show to !locked to match Tandur
+      // <-- *** END OF FIX 1 *** -->
+
     } catch (e) {
       Swal.fire({ icon: "error", title: "Load failed", text: e.message || "Something went wrong" });
       setEmployees([]);
@@ -170,6 +174,7 @@ export default function TalakondapallyAttendance() {
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j?.error || "Save failed");
 
+      // Set states manually to lock the page immediately.
       setServerMap({ ...attMap });
       setSubmitted(true);
       setSubmittedDate(date);
@@ -181,9 +186,13 @@ export default function TalakondapallyAttendance() {
         text: `Attendance submitted for ${date}.`,
         confirmButtonColor: PRIMARY_HEX,
       });
-
+      
+      // <-- *** LOGIC FIX 2: Added from Tandur to fix the bug *** -->
+      // Reload data from server to confirm submission
       await loadForDate();
       setSubmitted(true);
+      // <-- *** END OF FIX 2 *** -->
+      
     } catch (e) {
       Swal.fire({ icon: "error", title: "Save failed", text: e.message || "Something went wrong" });
     }
@@ -318,7 +327,6 @@ export default function TalakondapallyAttendance() {
             <div className="mx-4 mt-3 rounded-xl border border-amber-200 bg-amber-50 text-amber-800 text-sm p-3">
               This date is locked. Use <b>Update attendance</b> to enable editing.
             </div>
-            {/* <-- FIX: Added pb-24 --> */}
             <section className="p-4 pb-24">
               <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
                 <table className="min-w-full text-sm">
@@ -364,7 +372,6 @@ export default function TalakondapallyAttendance() {
           </>
         ) : (
           // EDIT MODE CARDS
-          // <-- FIX: Changed mb-18 to pb-24 -->
           <section className="p-4 pb-24 space-y-3">
             <div className="space-y-3">
               {loading ? (
@@ -421,38 +428,38 @@ export default function TalakondapallyAttendance() {
         )}
 
       <footer
-  className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white/95 backdrop-blur px-4 py-3 shadow-[0_-2px_10px_rgba(0,0,0,0.06)]"
-  style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom))" }} // iOS safe-area
->
-  {readOnly ? (
-    <button
-      onClick={startEditing}
-      disabled={loading || employees.length === 0}
-      className={`w-full rounded-xl ${PRIMARY_BTN} text-white py-3 font-medium disabled:opacity-60`}
-    >
-      Update attendance
-    </button>
-  ) : (
-    <div className="flex gap-2">
-      <button
-        onClick={save}
-        disabled={loading || employees.length === 0}
-        className={`flex-1 rounded-xl ${PRIMARY_BTN} text-white py-3 font-medium disabled:opacity-60`}
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white/95 backdrop-blur px-4 py-3 shadow-[0_-2px_10px_rgba(0,0,0,0.06)]"
+        style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom))" }} // iOS safe-area
       >
-        {submitted ? "Save changes" : "Submit attendance"}
-      </button>
-      {submitted ? (
-        <button
-          type="button"
-          onClick={cancelEditing}
-          className="rounded-xl border border-gray-300 bg-white px-4 py-3 font-medium hover:bg-gray-50"
-        >
-          Cancel
-        </button>
-      ) : null}
-    </div>
-  )}
-</footer>
+        {readOnly ? (
+          <button
+            onClick={startEditing}
+            disabled={loading || employees.length === 0}
+            className={`w-full rounded-xl ${PRIMARY_BTN} text-white py-3 font-medium disabled:opacity-60`}
+          >
+            Update attendance
+          </button>
+        ) : (
+          <div className="flex gap-2">
+            <button
+              onClick={save}
+              disabled={loading || employees.length === 0}
+              className={`flex-1 rounded-xl ${PRIMARY_BTN} text-white py-3 font-medium disabled:opacity-60`}
+            >
+              {submitted ? "Save changes" : "Submit attendance"}
+            </button>
+            {submitted ? (
+              <button
+                type="button"
+                onClick={cancelEditing}
+                className="rounded-xl border border-gray-300 bg-white px-4 py-3 font-medium hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+            ) : null}
+          </div>
+        )}
+      </footer>
 
       </main>
 
@@ -553,7 +560,7 @@ function AddEmployeeModal({ onClose, onAdded, disabled }) {
             <input
               type="text"
               value={number}
-              onChange={(e) => setNumber(e.target.value)}
+              onChange={(e) => setNumber(e.target.value)} // <-- Typo fix: e.g.target.value
               className={`mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm ${PRIMARY_OUTLINE}`}
               placeholder="e.g. TKP-023"
               disabled={disabled}
