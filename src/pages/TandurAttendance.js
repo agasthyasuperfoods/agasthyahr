@@ -252,6 +252,7 @@ export default function TandurAttendance() {
   };
 
   /* Precompute render blocks */
+  // <-- FIX 1: Reordered table cells -->
   const readOnlyRows = useMemo(() => {
     const rows = (selectedCanonical === "All" ? orderedRowsForAll : (groupedByCanonical[selectedCanonical] || []));
     return rows.map(e => {
@@ -259,12 +260,6 @@ export default function TandurAttendance() {
       return (
         <tr key={e.id} className="border-t border-gray-100">
           <td className="px-4 py-2 text-gray-900">{e.employee_name}</td>
-          <td className="px-4 py-2 text-gray-700">{e.number || "—"}</td>
-          <td className="px-4 py-2">
-            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${designationColorClasses(canonical)}`}>
-              {e.designation ? e.designation : prettyLabel(canonical)}
-            </span>
-          </td>
           <td className="px-4 py-2">
             <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium
               ${(attMap[e.id] || STATUS.PRESENT) === STATUS.PRESENT ? "bg-emerald-100 text-emerald-700" :
@@ -274,10 +269,17 @@ export default function TandurAttendance() {
               {attMap[e.id] || STATUS.PRESENT}
             </span>
           </td>
+          <td className="px-4 py-2 text-gray-700">{e.number || "—"}</td>
+          <td className="px-4 py-2">
+            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${designationColorClasses(canonical)}`}>
+              {e.designation ? e.designation : prettyLabel(canonical)}
+            </span>
+          </td>
         </tr>
       );
     });
   }, [selectedCanonical, orderedRowsForAll, groupedByCanonical, attMap]);
+  // <-- END FIX 1 -->
 
   const editModeBlocks = useMemo(() => {
     if (loading) return <div className="bg-white border border-gray-200 rounded-xl p-4 text-gray-600">Loading employees…</div>;
@@ -406,23 +408,27 @@ export default function TandurAttendance() {
         </header>
 
         {readOnly ? (
-          <section className="p-4">
+          // <-- FIX 2: Added pb-24 -->
+          <section className="p-4 pb-24">
             <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
               <table className="min-w-full text-sm">
+                {/* <-- FIX 1: Reordered headers --> */}
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
                     <th className="text-left px-4 py-2 font-semibold text-gray-700">Name</th>
+                    <th className="text-left px-4 py-2 font-semibold text-gray-700">Status</th>
                     <th className="text-left px-4 py-2 font-semibold text-gray-700">Number</th>
                     <th className="text-left px-4 py-2 font-semibold text-gray-700">Designation</th>
-                    <th className="text-left px-4 py-2 font-semibold text-gray-700">Status</th>
                   </tr>
                 </thead>
+                {/* <-- END FIX 1 --> */}
                 <tbody>{readOnlyRows}</tbody>
               </table>
             </div>
           </section>
         ) : (
-          <section className="p-4 space-y-3">
+          // <-- FIX 2: Added pb-24 -->
+          <section className="p-4 pb-24 space-y-3">
             <div className="space-y-3">{editModeBlocks}</div>
           </section>
         )}
