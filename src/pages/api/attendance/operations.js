@@ -12,9 +12,7 @@ export default async function handler(req, res) {
 
   try {
     const month = String(req.query?.month || "").trim();
-    if (!isValidMonth(month)) {
-      return res.status(400).json({ error: "month is required in YYYY-MM format" });
-    }
+    if (!isValidMonth(month)) return res.status(400).json({ error: "month is required in YYYY-MM format" });
     const monthStart = `${month}-01`;
 
     const client = await pool.connect();
@@ -25,8 +23,6 @@ export default async function handler(req, res) {
           e."Name"            AS name,
           e."Designation"     AS designation,
           e."Gross Salary"    AS gross_salary,
-          e."Advances"        AS advances,
-          COALESCE(e."Food_Expenses", 0) AS food_expenses,
           COALESCE(
             SUM(
               CASE
@@ -50,7 +46,7 @@ export default async function handler(req, res) {
          AND a.date >= $1::date
          AND a.date < ($1::date + INTERVAL '1 month')
         WHERE LOWER(COALESCE(e."Location", '')) = 'operations'
-        GROUP BY e.id, e."Name", e."Designation", e."Gross Salary", e."Advances", e."Food_Expenses"
+        GROUP BY e.id, e."Name", e."Designation", e."Gross Salary"
         ORDER BY e."Designation", e."Name";
       `;
       
@@ -61,8 +57,6 @@ export default async function handler(req, res) {
     }
   } catch (e) {
     console.error("GET /api/attendance/operations error:", e);
-    return res.status(500).json({ 
-      error: "Failed to load Operations monthly attendance"
-    });
+    return res.status(500).json({ error: "Failed to load Operations monthly attendance" });
   }
 }

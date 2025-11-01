@@ -44,16 +44,30 @@ function Npaysheetmain() {
 
   const buildRow = (apiRow, yyyyMM) => {
     const daysInMonth = getMonthDays(yyyyMM);
-    const workingDays = Number(apiRow.working_days || 0);
-    const absentDays = Number(apiRow.absent_days || 0);
+    let workingDays = Number(apiRow.working_days || 0);
+    let absentDays = Number(apiRow.absent_days || 0);
     
     const grossSalary = Number(apiRow.gross_salary || 0);
-    const advances = Number(apiRow.advances || 0);
 
+    // 🔥 AUTO-MARK SPECIFIC EMPLOYEES AS FULLY PRESENT
+    const alwaysPresentNames = ['jikriya', 'bittu milk incharge', 'bittu'];
+    const employeeName = String(apiRow.name || '').toLowerCase().trim();
+    
+    const isAlwaysPresent = alwaysPresentNames.some(name => 
+      employeeName.includes(name)
+    );
+
+    if (isAlwaysPresent) {
+      console.log(`✅ Auto-present: ${apiRow.name} - Setting ${daysInMonth} working days`);
+      workingDays = daysInMonth;
+      absentDays = 0;
+    }
+
+    // 🔥 CALCULATE NET SALARY (ONLY LOSS OF PAY DEDUCTION)
     const dailyRate = grossSalary / daysInMonth;
-    const unpaidAbsences = Math.max(0, absentDays - 2);
+    const unpaidAbsences = Math.max(0, absentDays - 2);  // Only absences > 2 days
     const lossOfPay = Math.round(unpaidAbsences * dailyRate);
-    const netSalary = grossSalary - advances - lossOfPay;
+    const netSalary = grossSalary - lossOfPay;  // Net = Gross - Loss of Pay
 
     return {
       employeeId: apiRow.EmployeeId,
@@ -64,7 +78,6 @@ function Npaysheetmain() {
       workingDays: round2(workingDays),
       absentDays: round2(absentDays),
       grossSalary,
-      advances,
       lossOfPay,
       netSalary: Math.round(netSalary),
     };
@@ -121,12 +134,11 @@ function Npaysheetmain() {
     rows.reduce(
       (acc, r) => {
         acc.gross += r.grossSalary;
-        acc.adv += r.advances;
         acc.lop += r.lossOfPay;
         acc.net += r.netSalary;
         return acc;
       },
-      { gross: 0, adv: 0, lop: 0, net: 0 }
+      { gross: 0, lop: 0, net: 0 }
     );
 
   const renderPaySheetTable = (data, locationName, headerColor) => {
@@ -151,7 +163,6 @@ function Npaysheetmain() {
                   <th className="border border-gray-300 p-3 font-medium text-center">Working Days</th>
                   <th className="border border-gray-300 p-3 font-medium text-center">Absent Days</th>
                   <th className="border border-gray-300 p-3 font-medium text-center">Gross Salary</th>
-                  <th className="border border-gray-300 p-3 font-medium text-center">Advances</th>
                   <th className="border border-gray-300 p-3 font-medium text-center">Loss of Pay</th>
                   <th className="border border-gray-300 p-3 font-medium text-center">Net Salary</th>
                 </tr>
@@ -165,7 +176,6 @@ function Npaysheetmain() {
                     <td className="border border-gray-300 p-3 text-center">{e.workingDays}</td>
                     <td className="border border-gray-300 p-3 text-center">{e.absentDays}</td>
                     <td className="border border-gray-300 p-3 text-center">₹{e.grossSalary.toLocaleString()}</td>
-                    <td className="border border-gray-300 p-3 text-center">₹{e.advances.toLocaleString()}</td>
                     <td className="border border-gray-300 p-3 text-center">₹{e.lossOfPay.toLocaleString()}</td>
                     <td className="border border-gray-300 p-3 text-center font-bold text-green-700">
                       ₹{e.netSalary.toLocaleString()}
@@ -175,7 +185,6 @@ function Npaysheetmain() {
                 <tr className="bg-gray-50 font-semibold">
                   <td className="border border-gray-300 p-3" colSpan={5}>Total</td>
                   <td className="border border-gray-300 p-3 text-center">₹{locationTotals.gross.toLocaleString()}</td>
-                  <td className="border border-gray-300 p-3 text-center">₹{locationTotals.adv.toLocaleString()}</td>
                   <td className="border border-gray-300 p-3 text-center">₹{locationTotals.lop.toLocaleString()}</td>
                   <td className="border border-gray-300 p-3 text-center text-green-700">₹{locationTotals.net.toLocaleString()}</td>
                 </tr>

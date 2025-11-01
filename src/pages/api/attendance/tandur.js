@@ -23,8 +23,6 @@ export default async function handler(req, res) {
           e.employee_name     AS name,
           e.designation       AS designation,
           e."Gross_Salary"    AS gross_salary,
-          e."Advances"        AS advances,
-          COALESCE(e."Food_Expenses"::integer, 0) AS food_expenses,
           COALESCE(
             SUM(
               CASE
@@ -47,7 +45,7 @@ export default async function handler(req, res) {
           ON a."EmployeeId" = e."Employeeid"
          AND a.date >= $1::date
          AND a.date < ($1::date + INTERVAL '1 month')
-        GROUP BY e."Employeeid", e.employee_name, e.designation, e."Gross_Salary", e."Advances", e."Food_Expenses"
+        GROUP BY e."Employeeid", e.employee_name, e.designation, e."Gross_Salary"
         ORDER BY e.designation, e.employee_name;
       `;
       const { rows } = await client.query(q, [monthStart]);
