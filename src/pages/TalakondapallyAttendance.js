@@ -15,6 +15,20 @@ const PRIMARY_OUTLINE = "focus:outline-none focus:ring-2 focus:ring-amber-400/50
 const LOCATION_LABEL = "Talakondapally";
 // --------------------------------------------------------------------
 
+// ---------- DESIGNATION LOGIC (Adapted from Tandur) ----------
+/* Priority order for Talakondapally roles */
+const DESIGNATION_PRIORITY = [
+  "farm manager",
+  "live stock manager",
+  "doctor",
+  "supervisor",
+  "bmc supervisor",
+  "milk supervisor",
+  "milker",
+  "driver",
+  "electrician",
+];
+
 function todayIso() {
   const d = new Date();
   const yyyy = d.getFullYear();
@@ -30,14 +44,87 @@ const STATUS = {
 };
 const STATUS_OPTIONS = ["", STATUS.PRESENT, STATUS.ABSENT, STATUS.HALF];
 
-function determineSubmittedFromApiPayload(j, date) {
-  if (typeof j?.locked === "boolean") return j.locked;
-  const rows = Array.isArray(j?.data) ? j.data : [];
-  if (rows.length === 0) return false;
-  const allForDate = rows.every((r) => (r.saved_date || r.date || "") === date);
-  const allHaveStatus = rows.every((r) => typeof r.status === "string" && r.status.length > 0);
-  return allForDate && allHaveStatus;
+/* Normalizes various spellings into a single key */
+function normalizeDesignation(raw) {
+  if (!raw || typeof raw !== "string") return "unassigned";
+  const s = raw.trim().toLowerCase();
+  
+  if (s.includes("farm manager")) return "farm manager";
+  if (s.includes("live stock manager")) return "live stock manager";
+  if (s.includes("doctor")) return "doctor";
+  if (s.includes("bmc supervisor")) return "bmc supervisor"; // Check *before* generic supervisor
+  if (s.includes("milk supervisor")) return "milk supervisor"; // Check *before* generic supervisor
+  if (s.includes("supervisor")) return "supervisor";
+  if (s.includes("milker")) return "milker";
+  if (s.includes("driver")) return "driver";
+  if (s.includes("electrician")) return "electrician";
+  
+  const cleaned = s.replace(/[^a-z0-9]+/g, " ").trim();
+  return cleaned.length ? cleaned : "unassigned";
 }
+
+/* Gets a clean label for display */
+function prettyLabel(canonical) {
+  if (!canonical || canonical === "unassigned") return "Unassigned";
+  if (canonical === "farm manager") return "Farm Manager";
+  if (canonical === "live stock manager") return "Live Stock Manager";
+  if (canonical === "doctor") return "Doctor";
+  if (canonical === "supervisor") return "Supervisor";
+  if (canonical === "bmc supervisor") return "BMC Supervisor";
+  if (canonical === "milk supervisor") return "Milk Supervisor";
+  if (canonical === "milker") return "Milker";
+  if (canonical === "driver") return "Driver";
+  if (canonical === "electrician") return "Electrician";
+  // Fallback for any others
+  return canonical.split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+}
+
+/* Assigns colors to each role for the pill/badge */
+function designationColorClasses(canonical) {
+  switch (canonical) {
+    case "farm manager": return "bg-indigo-100 text-indigo-800";
+    case "live stock manager": return "bg-blue-100 text-blue-800";
+    case "doctor": return "bg-red-100 text-red-800";
+    case "supervisor": return "bg-sky-100 text-sky-800";
+    case "bmc supervisor": return "bg-cyan-100 text-cyan-800";
+    case "milk supervisor": return "bg-teal-100 text-teal-800";
+    case "milker": return "bg-emerald-100 text-emerald-800";
+    case "driver": return "bg-amber-100 text-amber-800";
+    case "electrician": return "bg-yellow-100 text-yellow-800";
+    case "unassigned":
+    default: return "bg-gray-100 text-gray-700";
+  }
+}
+// ---------- END OF DESIGNATION LOGIC ---------
+function determineSubmittedFromApiPayload(j, date) {
+  // 1. Trust 'locked' boolean if the API provides it
+  if (typeof j?.locked === "boolean") return j.locked;
+
+  const rows = Array.isArray(j?.data) ? j.data : [];
+  // 2. If no employees, it's not submitted
+  if (rows.length === 0) return false;
+
+  // 3. *** THIS IS THE FIX ***
+  //    A day is locked if *ANY* employee has a saved_date (Check 1)
+  //    OR if *ANY* employee has an actual status string saved (like "Present" or "Absent"),
+  //    which means it has a length greater than 0.
+  
+  // Check 1: Does any row have a saved_date that matches?
+  const anyForDate = rows.some((r) => {
+    const saved = r.saved_date || r.date || "";
+    return saved.startsWith(date);
+  });
+  
+  // Check 2: Does any row have a status string with length > 0?
+  // This will be true for "Present", "Absent", "Half Day"
+  // It will be false for 'null', 'undefined', or "" (empty string)
+  const anyHaveRealStatus = rows.some((r) => {
+    return typeof r.status === "string" && r.status.length > 0;
+  });
+  
+  return anyForDate || anyHaveRealStatus;
+}
+// --------------------------------------------------------------------
 
 export default function TalakondapallyAttendance() {
   const router = useRouter();
@@ -47,13 +134,16 @@ export default function TalakondapallyAttendance() {
   const [loading, setLoading] = useState(true);
 
   // From API: [{ employee_id, employee_name, number, designation, status, saved_date }]
-  const [employees, setEmployees] =useState([]);
-  const [attMap, setAttMap] = useState({});      // { [id]: STATUS }
+  const [employees, setEmployees] = useState([]);
+  const [attMap, setAttMap] = useState({}); // { [id]: STATUS }
   const [serverMap, setServerMap] = useState({}); // snapshot for Cancel
   const [submitted, setSubmitted] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   const [submittedDate, setSubmittedDate] = useState(null);
+
+  // --- New state for grouping ---
+  const [selectedGroup, setSelectedGroup] = useState("All");
 
   // AUTH GUARD (EMP179 only)
   useEffect(() => {
@@ -90,6 +180,9 @@ export default function TalakondapallyAttendance() {
     }
   };
 
+  // --------------------------------------------------------------------
+  //  THIS FUNCTION MAKES THE "CALL TO THE DB" (with bug fixes)
+  // --------------------------------------------------------------------
   const loadForDate = useCallback(async () => {
     try {
       setLoading(true);
@@ -104,24 +197,22 @@ export default function TalakondapallyAttendance() {
         employee_name: r.employee_name,
         number: r.number,
         designation: r.designation || "",
-        // keep UI-only location label for visual parity with Tandur view
-        location: LOCATION_LABEL,
+        location: LOCATION_LABEL, // Keep location
         saved_date: r.saved_date || r.date || null,
       }));
       setEmployees(list);
 
+      // This sets the UI. 'null' or '""' status from DB becomes 'Present'
       const nextFromServer = {};
       for (const r of rows) nextFromServer[r.employee_id] = r.status || STATUS.PRESENT;
       setServerMap(nextFromServer);
       setAttMap(nextFromServer);
 
-      // <-- *** LOGIC FIX 1: Synced with Tandur *** -->
-      const locked = determineSubmittedFromApiPayload(j, date);
-      const show = !!locked || (submittedDate === date);
+      const locked = determineSubmittedFromApiPayload(j, date); // From DB (using new logic)
+      const show = !!locked || (submittedDate === date);      // From DB OR this session
       
       setSubmitted(show);
-      setIsEditing(!locked); // <-- Changed from !show to !locked to match Tandur
-      // <-- *** END OF FIX 1 *** -->
+      setIsEditing(!show); // <-- This respects both DB state and session state
 
     } catch (e) {
       Swal.fire({ icon: "error", title: "Load failed", text: e.message || "Something went wrong" });
@@ -134,6 +225,7 @@ export default function TalakondapallyAttendance() {
       setLoading(false);
     }
   }, [date, submittedDate]);
+  // --------------------------------------------------------------------
 
   useEffect(() => {
     if (!ready) return;
@@ -155,6 +247,52 @@ export default function TalakondapallyAttendance() {
     return { total: employees.length, present, absent, half };
   }, [employees, attMap]);
 
+  // --- Memos for grouping (from Tandur) ---
+  const groupedByCanonical = useMemo(() => {
+    const out = {};
+    for (const e of employees) {
+      const key = normalizeDesignation(e.designation);
+      if (!out[key]) out[key] = [];
+      out[key].push(e);
+    }
+    return out;
+  }, [employees]);
+
+  const orderedGroupKeys = useMemo(() => {
+    const keys = Object.keys(groupedByCanonical);
+    const setKeys = new Set(keys);
+    const priorityFound = [];
+    for (const p of DESIGNATION_PRIORITY) {
+      if (setKeys.has(p)) { priorityFound.push(p); setKeys.delete(p); }
+    }
+    const unassigned = setKeys.has("unassigned");
+    if (unassigned) setKeys.delete("unassigned");
+    const others = Array.from(setKeys).sort();
+    const result = [...priorityFound, ...others];
+    if (unassigned) result.push("unassigned");
+    return result;
+  }, [groupedByCanonical]);
+
+  const designationOptions = useMemo(() => ["All", ...orderedGroupKeys.map(k => prettyLabel(k))], [orderedGroupKeys]);
+
+  const orderedRowsForAll = useMemo(() => {
+    const out = [];
+    for (const k of orderedGroupKeys) {
+      const list = groupedByCanonical[k] || [];
+      for (const it of list) out.push(it);
+    }
+    return out;
+  }, [orderedGroupKeys, groupedByCanonical]);
+
+  const selectedCanonical = useMemo(() => {
+    if (!selectedGroup || selectedGroup === "All") return "All";
+    const found = orderedGroupKeys.find(k => prettyLabel(k) === selectedGroup);
+    if (found) return found;
+    return normalizeDesignation(selectedGroup);
+  }, [selectedGroup, orderedGroupKeys]);
+  // --- End of grouping memos ---
+
+
   const save = async () => {
     try {
       if (!date) {
@@ -163,22 +301,20 @@ export default function TalakondapallyAttendance() {
       }
       const rows = employees.map((e) => ({
         employee_id: e.id,
-        status: attMap[e.id] || null,
+        status: attMap[e.id] || null, // Sends 'null' if '— Select —' ("") is chosen
       }));
       const res = await fetch("/api/talakondapally/attendance", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        // Only send status + date; employee metadata handled via employees API
         body: JSON.stringify({ date, rows }),
       });
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j?.error || "Save failed");
 
-      // Set states manually to lock the page immediately.
       setServerMap({ ...attMap });
       setSubmitted(true);
-      setSubmittedDate(date);
-      setIsEditing(false);
+      setSubmittedDate(date); // This remembers you submitted for this date
+      setIsEditing(false); // This locks the page
 
       Swal.fire({
         icon: "success",
@@ -186,12 +322,6 @@ export default function TalakondapallyAttendance() {
         text: `Attendance submitted for ${date}.`,
         confirmButtonColor: PRIMARY_HEX,
       });
-      
-      // <-- *** LOGIC FIX 2: Added from Tandur to fix the bug *** -->
-      // Reload data from server to confirm submission
-      await loadForDate();
-      setSubmitted(true);
-      // <-- *** END OF FIX 2 *** -->
       
     } catch (e) {
       Swal.fire({ icon: "error", title: "Save failed", text: e.message || "Something went wrong" });
@@ -244,6 +374,106 @@ export default function TalakondapallyAttendance() {
     st === STATUS.HALF    ? "ring-amber-300"   :
                             "ring-gray-200";
 
+  // --- Memos for rendering (from Tandur) ---
+  const readOnlyRows = useMemo(() => {
+    const rows = (selectedCanonical === "All" ? orderedRowsForAll : (groupedByCanonical[selectedCanonical] || []));
+    if (rows.length === 0) {
+      return (
+        <tr>
+          <td colSpan="5" className="px-4 py-4 text-gray-500 text-center">
+            {selectedCanonical === "All" ? "No employees for this date." : "No employees in this group."}
+          </td>
+        </tr>
+      );
+    }
+    
+    return rows.map(e => {
+      const canonical = normalizeDesignation(e.designation);
+      const displayStatus = attMap[e.id] || STATUS.PRESENT;
+      return (
+        <tr key={e.id} className="border-t border-gray-100">
+          <td className="px-4 py-2 text-gray-900">{e.employee_name}</td>
+          <td className="px-4 py-2">
+            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium
+              ${displayStatus === STATUS.PRESENT ? "bg-emerald-100 text-emerald-700" :
+                displayStatus === STATUS.ABSENT  ? "bg-rose-100 text-rose-700"    :
+                displayStatus === STATUS.HALF    ? "bg-amber-100 text-amber-700"   :
+                                                   "bg-gray-100 text-gray-700" }`}>
+              {displayStatus}
+            </span>
+          </td>
+          <td className="px-4 py-2 text-gray-700">{e.number || "—"}</td>
+          <td className="px-4 py-2">
+            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${designationColorClasses(canonical)}`}>
+              {e.designation ? e.designation : prettyLabel(canonical)}
+            </span>
+          </td>
+          <td className="px-4 py-2 text-gray-700">{LOCATION_LABEL}</td>
+        </tr>
+      );
+    });
+  }, [selectedCanonical, orderedRowsForAll, groupedByCanonical, attMap]);
+
+  const editModeBlocks = useMemo(() => {
+    if (loading) return <div className="bg-white border border-gray-200 rounded-xl p-4 text-gray-600">Loading employees…</div>;
+    if (employees.length === 0) return <div className="bg-white border border-gray-200 rounded-xl p-6 text-center text-gray-600">No employees yet. Tap <b>+ Add</b> to add one.</div>;
+
+    const renderCard = (e) => {
+      const st = attMap[e.id] || STATUS.PRESENT;
+      const ring = selectRing(st);
+      const canonical = normalizeDesignation(e.designation);
+      return (
+        <div key={e.id} className="bg-white border border-gray-200 rounded-xl p-3">
+          <div className="flex items-start justify-between">
+            <div>
+              <div className="font-medium text-gray-900">{e.employee_name}</div>
+              <div className="text-xs text-gray-500 flex items-center gap-2 flex-wrap">
+                <span>{e.number || "—"}</span>
+                <span>•</span>
+                <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${designationColorClasses(canonical)}`}>{e.designation ? e.designation : prettyLabel(canonical)}</span>
+                <span>•</span>
+                <span>{LOCATION_LABEL}</span>
+              </div>
+            </div>
+            <button onClick={() => deleteEmployee(e)} disabled={!isEditing} className="text-xs rounded-lg border border-rose-300 text-rose-700 px-2 py-1 hover:bg-rose-50 disabled:opacity-50">Delete</button>
+          </div>
+          <div className="mt-3">
+            <label className="block text-xs text-gray-600 mb-1">Status</label>
+            <div className={`rounded-lg border border-gray-300 px-3 py-2 ring-2 ${ring} ${!isEditing ? "bg-gray-50" : ""}`}>
+              <select value={st} onChange={(ev) => setStatus(e.id, ev.target.value)} disabled={!isEditing} className="w-full bg-transparent text-sm outline-none disabled:cursor-not-allowed disabled:text-gray-500">
+                {STATUS_OPTIONS.map(opt => <option key={opt || "none"} value={opt}>{opt || "— Select —"}</option>)}
+              </select>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    if (selectedCanonical === "All") {
+      return orderedGroupKeys.map(key => {
+        const group = groupedByCanonical[key] || [];
+        if (!group.length) return null;
+        return (
+          <div key={key}>
+            <h3 className="text-sm font-semibold text-gray-800 mb-2 px-1">{prettyLabel(key)}</h3>
+            <div className="space-y-3">
+              {group.map(renderCard)}
+            </div>
+          </div>
+        );
+      });
+    }
+
+    const rows = (groupedByCanonical[selectedCanonical] || []);
+    if (rows.length === 0) {
+      return <div className="bg-white border border-gray-200 rounded-xl p-6 text-center text-gray-600">No employees in this group.</div>
+    }
+    return rows.map(renderCard);
+  }, [loading, employees, orderedGroupKeys, groupedByCanonical, selectedCanonical, attMap, isEditing]); // Removed deleteEmployee from deps
+  // --- End of rendering memos ---
+
+
+  // This conditional return MUST come AFTER all hooks
   if (!ready) {
     return (
       <>
@@ -290,8 +520,8 @@ export default function TalakondapallyAttendance() {
             </div>
           </div>
 
-          {/* Date row + Refresh + Submitted pill */}
-          <div className="px-4 pb-3 flex items-center gap-3">
+          {/* Date row + Refresh */}
+          <div className="px-4 pb-2 flex items-center gap-3">
             <input
               type="date"
               value={date}
@@ -305,8 +535,23 @@ export default function TalakondapallyAttendance() {
             >
               Refresh
             </button>
+          </div>
+          
+          {/* Filter row + Submitted pill */}
+          <div className="px-4 pb-3 flex items-center gap-3">
+            <div className="flex-1">
+              <label htmlFor="group-filter" className="sr-only">Filter by designation</label>
+              <select
+                id="group-filter"
+                value={selectedGroup}
+                onChange={(e) => setSelectedGroup(e.target.value)}
+                className={`w-full rounded-lg border border-gray-300 px-3 py-2 text-sm ${PRIMARY_OUTLINE}`}
+              >
+                {designationOptions.map(d => <option key={d} value={d}>{d}</option>)}
+              </select>
+            </div>
             {submitted ? (
-              <span className="text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-700">
+              <span className="text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-700 whitespace-nowrap">
                 Submitted for {date}
               </span>
             ) : null}
@@ -340,31 +585,7 @@ export default function TalakondapallyAttendance() {
                     </tr>
                   </thead>
                   <tbody>
-                    {employees.length === 0 ? (
-                      <tr>
-                        <td colSpan="5" className="px-4 py-4 text-gray-500">No employees for this date.</td>
-                      </tr>
-                    ) : (
-                      employees.map((e) => (
-                        <tr key={e.id} className="border-t border-gray-100">
-                          <td className="px-4 py-2 text-gray-900">{e.employee_name}</td>
-                          <td className="px-4 py-2">
-                            <span
-                              className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium
-                                ${(attMap[e.id] || STATUS.PRESENT) === STATUS.PRESENT ? "bg-emerald-100 text-emerald-700" :
-                                 (attMap[e.id] || STATUS.PRESENT) === STATUS.ABSENT  ? "bg-rose-100 text-rose-700"    :
-                                 (attMap[e.id] || STATUS.PRESENT) === STATUS.HALF    ? "bg-amber-100 text-amber-700"   :
-                                                                                        "bg-gray-100 text-gray-700" }`}
-                            >
-                              {attMap[e.id] || STATUS.PRESENT}
-                            </span>
-                          </td>
-                          <td className="px-4 py-2 text-gray-700">{e.number || "—"}</td>
-                          <td className="px-4 py-2 text-gray-700">{e.designation || "—"}</td>
-                          <td className="px-4 py-2 text-gray-700">{LOCATION_LABEL}</td>
-                        </tr>
-                      ))
-                    )}
+                    {readOnlyRows}
                   </tbody>
                 </table>
               </div>
@@ -373,57 +594,7 @@ export default function TalakondapallyAttendance() {
         ) : (
           // EDIT MODE CARDS
           <section className="p-4 pb-24 space-y-3">
-            <div className="space-y-3">
-              {loading ? (
-                <div className="bg-white border border-gray-200 rounded-xl p-4 text-gray-600">Loading employees…</div>
-              ) : employees.length === 0 ? (
-                <div className="bg-white border border-gray-200 rounded-xl p-6 text-center text-gray-600">
-                  No employees yet. Tap <b>“+ Add”</b> to add one.
-                </div>
-              ) : (
-                employees.map((e) => {
-                  const st = attMap[e.id] || STATUS.PRESENT;
-                  const ring = selectRing(st);
-                  return (
-                    <div key={e.id} className="bg-white border border-gray-200 rounded-xl p-3">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <div className="font-medium text-gray-900">{e.employee_name}</div>
-                          <div className="text-xs text-gray-500">
-                            {e.number || "—"} • {e.designation || "—"} • {LOCATION_LABEL}
-                          </div>
-                        </div>
-                        <button
-                          onClick={() => deleteEmployee(e)}
-                          disabled={!isEditing}
-                          className="text-xs rounded-lg border border-rose-300 text-rose-700 px-2 py-1 hover:bg-rose-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          Delete
-                        </button>
-                      </div>
-
-                      <div className="mt-3">
-                        <label className="block text-xs text-gray-600 mb-1">Status</label>
-                        <div className={`rounded-lg border border-gray-300 px-3 py-2 ring-2 ${ring} ${!isEditing ? "bg-gray-50" : ""}`}>
-                          <select
-                            value={st}
-                            onChange={(ev) => setStatus(e.id, ev.target.value)}
-                            disabled={!isEditing}
-                            className="w-full bg-transparent text-sm outline-none disabled:cursor-not-allowed disabled:text-gray-500"
-                          >
-                            {STATUS_OPTIONS.map((opt) => (
-                              <option key={opt || "none"} value={opt}>
-                                {opt || "— Select —"}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
+            {editModeBlocks}
           </section>
         )}
 
@@ -465,10 +636,11 @@ export default function TalakondapallyAttendance() {
 
       {showAdd && isEditing ? (
         <AddEmployeeModal
-          onClose={() => setShowAdd(false)}
+          onClose={() => { setShowAdd(false); setSelectedGroup("All"); }}
           onAdded={() => {
             setShowAdd(false);
             loadForDate();
+            setSelectedGroup("All");
           }}
           disabled={!isEditing}
         />
@@ -497,7 +669,6 @@ function AddEmployeeModal({ onClose, onAdded, disabled }) {
         employee_name,
         number: number || null,
         designation: designation || null,
-        // No location sent; server will handle if needed
       };
       if (employeeid && Number(employeeid) > 0) payload.employeeid = Number(employeeid);
 
@@ -560,7 +731,7 @@ function AddEmployeeModal({ onClose, onAdded, disabled }) {
             <input
               type="text"
               value={number}
-              onChange={(e) => setNumber(e.target.value)} // <-- Typo fix: e.g.target.value
+              onChange={(e) => setNumber(e.target.value)}
               className={`mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm ${PRIMARY_OUTLINE}`}
               placeholder="e.g. TKP-023"
               disabled={disabled}
@@ -573,7 +744,7 @@ function AddEmployeeModal({ onClose, onAdded, disabled }) {
               value={designation}
               onChange={(e) => setDesignation(e.target.value)}
               className={`mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm ${PRIMARY_OUTLINE}`}
-              placeholder="e.g. Operator / Supervisor"
+              placeholder="e.g. Doctor, Milker, Supervisor"
               disabled={disabled}
             />
           </div>
