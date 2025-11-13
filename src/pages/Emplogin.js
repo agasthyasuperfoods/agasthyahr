@@ -37,8 +37,14 @@ export default function Emplogin() {
         body: JSON.stringify({ employeeId, doj: formattedDOJ }),
       });
       const data = await response.json();
+
       if (data.success) {
-        router.push('/Edash'); // No popup, direct redirect
+        // Save login info to localStorage
+        localStorage.setItem("employeeId", employeeId);
+        if (data.employeeName) localStorage.setItem("employeeName", data.employeeName);
+        if (data.employeeEmail) localStorage.setItem("employeeEmail", data.employeeEmail);
+        // Add more fields as needed.
+        router.push('/Edash');
       } else {
         Swal.fire({
           title: 'Login Failed',
@@ -66,7 +72,9 @@ export default function Emplogin() {
           <Image src="/agasthyalogo.png" alt="Agasthya Logo" width={170} height={60} priority />
         </div>
         <h1 className="text-2xl font-bold text-center text-gray-800">Employee Login</h1>
-        <p className="text-sm text-gray-500 text-center mt-2 mb-8">Login using your Employee ID and Date of Joining</p>
+        <p className="text-sm text-gray-500 text-center mt-2 mb-8">
+          Login using your Employee ID and Date of Joining
+        </p>
         <form className="space-y-6" onSubmit={handleLogin}>
           <div>
             <label htmlFor="employeeId" className="block text-sm font-medium text-gray-700 mb-1">
@@ -96,7 +104,7 @@ export default function Emplogin() {
               required
             />
           </div>
-         <button
+          <button
             type="submit"
             disabled={isLoading}
             className="w-full py-3 px-4 bg-red-700 hover:bg-red-800 text-white font-medium rounded-lg shadow-md focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200 disabled:opacity-50"
