@@ -20,12 +20,12 @@ export default async function handler(req, res) {
     const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw);
 
     // Queries
-    const sqlById = `
-      SELECT employeeid, email, name, role, password
-      FROM public."EmployeeTable"
-      WHERE employeeid = $1
-      LIMIT 1
-    `;
+  const sqlById = `
+  SELECT employeeid, email, name, role, password
+  FROM public."EmployeeTable"
+  WHERE LOWER(employeeid) = LOWER($1)
+  LIMIT 1
+`;
     const sqlByEmail = `
       SELECT employeeid, email, name, role, password
       FROM public."EmployeeTable"
