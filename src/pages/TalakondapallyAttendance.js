@@ -1,15 +1,69 @@
-// FILE: src/pages/TalakondapallyAttendance.js
 import Head from "next/head";
 import Image from "next/image";
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useRouter } from "next/router";
-import Swal from "sweetalert2";
+import Swal from "sweetalert2"; // That is the order of designation while marking attendence please look into it
 
 // ---------- THEME ----------
 const PRIMARY_HEX = "#D97706"; // amber-600
 const PRIMARY_BTN = "bg-amber-600 hover:bg-amber-700";
 const PRIMARY_OUTLINE = "focus:outline-none focus:ring-2 focus:ring-amber-400/50";
 // ---------------------------
+
+// ---------- DESIGNATION SORT ORDER (from CSV + DB variations) ----------
+const DESIGNATION_ORDER = {
+  // HOD (1)
+  'HOD Operations': 1,
+  'HOD - Operations': 1,
+
+  // Farm Manager (2)
+  'Farm Manager': 2,
+
+  // Accountant (3)
+  'Jr Accountant F&A': 3,
+
+  // Live Stock (4)
+  'Live Stock Manager': 4,
+  'Live stock manager': 4,
+
+  // Cattle Feed (5)
+  'Cattle Feed Manager': 5,
+  'Cattle feed manager': 5,
+
+  // Supervisor (6)
+  'Farm Supervisor': 6,
+  'Supervisor': 6,
+
+  // Other Supervisors (7-9)
+  'Garden Supervisor': 7,
+  'BMC Supervisor': 8,
+  'BMC Operator': 9,
+
+  // Vet (10-12)
+  'Sr Vet Assistant': 10,
+  'Jr Vet Assistant': 11,
+  'Vet Assistant': 11, // <-- FIX: Added 'Vet Assistant' from video
+  'Vet Doctor': 12,
+  'Doctor': 12,
+
+  // Other Roles (13-17)
+  'Electrecian': 13,
+  'Poojari': 14,
+  'Milk Supervisor': 15,
+  'Milker': 17,
+
+  // Drivers (30-31)
+  'Milk Van Driver': 30,
+  'Tractor Driver': 31,
+
+  // Workers (32-34)
+  'Water Men': 32,
+  'Water men': 32, // <-- FIX: Added 'Water men' from video
+  'Farm Worker': 34,
+  'Farm worker': 34, // <-- FIX: Added 'Farm worker' from video
+  'Labour': 34,
+};
+// --------------------------------------------------------
 
 // ---------- CONSTANT LOCATION (UI-only; not sent to server) ----------
 const LOCATION_LABEL = "Talakondapally";
@@ -108,7 +162,29 @@ export default function TalakondapallyAttendance() {
         location: LOCATION_LABEL,
         saved_date: r.saved_date || r.date || null,
       }));
-      setEmployees(list);
+
+      // --- Sort list based on DESIGNATION_ORDER ---
+      list.sort((a, b) => {
+        // .trim() removes whitespace from ends (e.g. "Supervisor " becomes "Supervisor")
+        const cleanA = (a.designation || "").trim();
+        const cleanB = (b.designation || "").trim();
+        
+        // Get the sort order number for each employee
+        // Use 999 for any designation not in our map (puts them at the end)
+        const orderA = DESIGNATION_ORDER[cleanA] || 999;
+        const orderB = DESIGNATION_ORDER[cleanB] || 999;
+        
+        // If orders are different, sort by that order
+        if (orderA !== orderB) {
+          return orderA - orderB;
+        }
+        
+        // If order is the same (or both unknown), sort alphabetically by name
+        return a.employee_name.localeCompare(b.employee_name);
+      });
+      // --- END OF SORT ---
+
+      setEmployees(list); // This now sets the *sorted* list
 
       const nextFromServer = {};
       for (const r of rows) nextFromServer[r.employee_id] = r.status || STATUS.PRESENT;
@@ -301,7 +377,7 @@ export default function TalakondapallyAttendance() {
             />
             <button
               onClick={loadForDate}
-              className="whitespace-nowrap rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm hover:bg-gray-50"
+              className="whitespace-nowCrap rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm hover:bg-gray-50"
             >
               Refresh
             </button>
@@ -504,7 +580,7 @@ function AddEmployeeModal({ onClose, onAdded, disabled }) {
       const res = await fetch("/api/talakondapally/employees", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(payload), // <-- Corrected: JSON.stringify
       });
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j?.error || "Failed to add employee");
@@ -560,7 +636,7 @@ function AddEmployeeModal({ onClose, onAdded, disabled }) {
             <input
               type="text"
               value={number}
-              onChange={(e) => setNumber(e.target.value)} // <-- Typo fix: e.g.target.value
+              onChange={(e) => setNumber(e.target.value)}
               className={`mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm ${PRIMARY_OUTLINE}`}
               placeholder="e.g. TKP-023"
               disabled={disabled}
