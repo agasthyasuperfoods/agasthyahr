@@ -67,13 +67,6 @@ const DESIGNATION_ORDER = {
 
 // --- ADDED: Clean list for dropdown in Add Employee modal (from screenshot) ---
 const DESIGNATION_OPTIONS_FOR_DROPDOWN = [
-  "HOD Operations",
-  "Farm Manager",
-  "Jr Accountant F&A",
-  "Live Stock Manager",
-  "Cattle Feed Manager",
-  "Farm Supervisor",
-  "Garden Supervisor",
   "BMC Supervisor",
   "BMC Operator",
   "Sr Vet Assistant",
