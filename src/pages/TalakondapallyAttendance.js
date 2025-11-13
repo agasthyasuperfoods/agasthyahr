@@ -65,6 +65,24 @@ const DESIGNATION_ORDER = {
 };
 // --------------------------------------------------------
 
+// --- ADDED: Clean list for dropdown in Add Employee modal (from screenshot) ---
+const DESIGNATION_OPTIONS_FOR_DROPDOWN = [
+  "BMC Supervisor",
+  "BMC Operator",
+  "Sr Vet Assistant",
+  "Jr Vet Assistant",
+  "Vet Doctor",
+  "Electrecian",
+  "Poojari",
+  "Milk Supervisor",
+  "Milker",
+  "Milk Van Driver",
+  "Tractor Driver",
+  "Water Men",
+  "Farm Worker",
+];
+// -------------------------------------------------------------------------
+
 // ---------- CONSTANT LOCATION (UI-only; not sent to server) ----------
 const LOCATION_LABEL = "Talakondapally";
 // --------------------------------------------------------------------
@@ -377,7 +395,7 @@ export default function TalakondapallyAttendance() {
             />
             <button
               onClick={loadForDate}
-              className="whitespace-nowCrap rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm hover:bg-gray-50"
+              className="whitespace-nowrap rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm hover:bg-gray-50"
             >
               Refresh
             </button>
@@ -557,8 +575,14 @@ function AddEmployeeModal({ onClose, onAdded, disabled }) {
   const [employeeid, setEmployeeid] = useState("");
   const [employee_name, setEmployeeName] = useState("");
   const [number, setNumber] = useState("");
-  const [designation, setDesignation] = useState("");
+  const [designation, setDesignation] = useState(""); // Default is ""
   const [saving, setSaving] = useState(false);
+  
+  // --- ADDED: State to control the custom picker modal ---
+  const [showPicker, setShowPicker] = useState(false);
+  
+  // --- ADDED: State for the custom designation text input ---
+  const [customDesignation, setCustomDesignation] = useState("");
 
   const submit = async (e) => {
     e.preventDefault();
@@ -567,14 +591,31 @@ function AddEmployeeModal({ onClose, onAdded, disabled }) {
       Swal.fire({ icon: "warning", title: "Name required", text: "Please enter employee name." });
       return;
     }
+    
+    // --- UPDATED: Validation to check for custom designation ---
+    if (!designation) {
+      Swal.fire({ icon: "warning", title: "Designation required", text: "Please select a designation." });
+      return;
+    }
+    if (designation === "Other" && !customDesignation.trim()) {
+      Swal.fire({ icon: "warning", title: "Custom Designation required", text: "Please enter the custom designation." });
+      return;
+    }
+    // --------------------------------------------------------
+
     try {
       setSaving(true);
+      
+      // --- UPDATED: Payload to send the correct designation value ---
+      const finalDesignation = (designation === "Other" ? customDesignation.trim() : designation) || null;
+      
       const payload = {
         employee_name,
         number: number || null,
-        designation: designation || null,
-        // No location sent; server will handle if needed
+        designation: finalDesignation,
       };
+      // ------------------------------------------------------------
+      
       if (employeeid && Number(employeeid) > 0) payload.employeeid = Number(employeeid);
 
       const res = await fetch("/api/talakondapally/employees", {
@@ -600,78 +641,164 @@ function AddEmployeeModal({ onClose, onAdded, disabled }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center">
+    <>
+      <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center">
+        <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+        <div className="relative w-full md:max-w-md bg-white rounded-t-2xl md:rounded-2xl p-5 m-0 md:m-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-base font-semibold text-gray-900">Add Employee</h3>
+            <button onClick={onClose} className="text-gray-500 hover:text-gray-700">✕</button>
+          </div>
+          <form onSubmit={submit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Employee ID</label>
+              <input
+                type="number"
+                min="1"
+                value={employeeid}
+                onChange={(e) => setEmployeeid(e.target.value)}
+                className={`mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm ${PRIMARY_OUTLINE}`}
+                placeholder="Leave blank to auto-generate"
+                disabled={disabled}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Full name</label>
+              <input
+                type="text"
+                value={employee_name}
+                onChange={(e) => setEmployeeName(e.target.value)}
+                className={`mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm ${PRIMARY_OUTLINE}`}
+                placeholder="e.g. Ramesh"
+                disabled={disabled}
+              />
+            </div>
+            
+            {/* --- UPDATED: Phone Number field --- */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Phone Number</label>
+              <input
+                type="tel" // Use "tel" for phone number keypad
+                value={number}
+                onChange={(e) => setNumber(e.target.value)}
+                className={`mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm ${PRIMARY_OUTLINE}`}
+                placeholder="e.g. 9876543210" // Updated placeholder
+                disabled={disabled}
+              />
+            </div>
+            {/* --- END OF UPDATE --- */}
+            
+            {/* --- REPLACED <select> WITH A <button> THAT OPENS A MODAL --- */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Designation</label>
+              <button
+                type="button"
+                onClick={() => setShowPicker(true)}
+                disabled={disabled}
+                className={`mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-left appearance-none bg-white ${PRIMARY_OUTLINE} ${
+                  !designation ? "text-gray-500" : "text-gray-900"
+                } bg-no-repeat bg-[url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'><path stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/></svg>")] bg-[length:1.25rem_1.25rem] bg-[position:right_0.5rem_center]`}
+              >
+                {/* --- UPDATED: Button text logic --- */}
+                {designation === "Other" ? "Other (Please specify)" : (designation || "— Select Designation —")}
+              </button>
+            </div>
+            {/* --- END OF REPLACEMENT --- */}
+
+            {/* --- ADDED: Conditional text input for "Other" --- */}
+            {designation === "Other" && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Custom Designation</label>
+                <input
+                    type="text"
+                    value={customDesignation}
+                    onChange={(e) => setCustomDesignation(e.target.value)}
+                    className={`mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm ${PRIMARY_OUTLINE}`}
+                    placeholder="Enter designation"
+                    disabled={disabled}
+                />
+              </div>
+            )}
+            {/* --- END OF ADDITION --- */}
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={saving || disabled}
+                className={`rounded-lg ${PRIMARY_BTN} text-white px-4 py-2 text-sm font-medium disabled:opacity-60`}
+              >
+                {saving ? "Adding…" : "Add Employee"}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      {/* --- The Designation Picker Modal --- */}
+      {showPicker && (
+        <DesignationSelectModal
+          options={DESIGNATION_OPTIONS_FOR_DROPDOWN}
+          onClose={() => setShowPicker(false)}
+          onSelect={(selected) => {
+            setDesignation(selected);
+            // --- ADDED: Clear custom designation if a real one is picked ---
+            if (selected !== "Other") {
+              setCustomDesignation("");
+            }
+            setShowPicker(false);
+          }}
+        />
+      )}
+      {/* --- END OF MODAL --- */}
+    </>
+  );
+}
+
+// --- NEW COMPONENT: DesignationSelectModal ---
+function DesignationSelectModal({ options, onSelect, onClose }) {
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      {/* Backdrop */}
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative w-full md:max-w-md bg-white rounded-t-2xl md:rounded-2xl p-5 m-0 md:m-4">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-base font-semibold text-gray-900">Add Employee</h3>
+      
+      {/* Modal Content */}
+      <div className="relative w-full max-w-sm bg-white rounded-2xl overflow-hidden shadow-xl">
+        <div className="flex items-center justify-between p-4 border-b border-gray-200">
+          <h3 className="text-base font-semibold text-gray-900">Select Designation</h3>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-700">✕</button>
         </div>
-        <form onSubmit={submit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Employee ID</label>
-            <input
-              type="number"
-              min="1"
-              value={employeeid}
-              onChange={(e) => setEmployeeid(e.target.value)}
-              className={`mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm ${PRIMARY_OUTLINE}`}
-              placeholder="Leave blank to auto-generate"
-              disabled={disabled}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Full name</label>
-            <input
-              type="text"
-              value={employee_name}
-              onChange={(e) => setEmployeeName(e.target.value)}
-              className={`mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm ${PRIMARY_OUTLINE}`}
-              placeholder="e.g. Ramesh"
-              disabled={disabled}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Number</label>
-            <input
-              type="text"
-              value={number}
-              onChange={(e) => setNumber(e.target.value)}
-              className={`mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm ${PRIMARY_OUTLINE}`}
-              placeholder="e.g. TKP-023"
-              disabled={disabled}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Designation</label>
-            <input
-              type="text"
-              value={designation}
-              onChange={(e) => setDesignation(e.target.value)}
-              className={`mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm ${PRIMARY_OUTLINE}`}
-              placeholder="e.g. Operator / Supervisor"
-              disabled={disabled}
-            />
-          </div>
-
-          <div className="flex items-center justify-end gap-2 pt-2">
+        
+        {/* Scrollable List */}
+        <div className="max-h-[60vh] overflow-y-auto">
+          {options.map((option) => (
             <button
+              key={option}
               type="button"
-              onClick={onClose}
-              className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm hover:bg-gray-50"
+              onClick={() => onSelect(option)}
+              className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-100 border-b border-gray-100 last:border-b-0"
             >
-              Cancel
+              {option}
             </button>
-            <button
-              type="submit"
-              disabled={saving || disabled}
-              className={`rounded-lg ${PRIMARY_BTN} text-white px-4 py-2 text-sm font-medium disabled:opacity-60`}
-            >
-              {saving ? "Adding…" : "Add Employee"}
-            </button>
-          </div>
-        </form>
+          ))}
+          {/* --- ADDED: "Other" option at the end --- */}
+          <button
+            type="button"
+            onClick={() => onSelect("Other")}
+            className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-100"
+          >
+            Other
+          </button>
+          {/* --- END OF ADDITION --- */}
+        </div>
       </div>
     </div>
   );
 }
+// --- END OF NEW COMPONENT ---
