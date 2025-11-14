@@ -90,22 +90,25 @@ export default async function handler(req, res) {
       await ensureAttendanceTable();
 
       // Full roster with status for the requested date
-      const r = await query(
-        `
-        SELECT
-          e."Employeeid"    AS employee_id,
-          e.employee_name   AS employee_name,
-          e.employee_number AS number,
-          e.location        AS location,
-          t.status          AS status,
-          t.date            AS saved_date
-        FROM public.talakondapallyemployees e
-        LEFT JOIN public.talakondapally_attendance t
-               ON t."EmployeeId" = e."Employeeid" AND t.date = $1
-        ORDER BY e."Employeeid" ASC
-        `,
-        [date]
-      );
+     // IN YOUR HANDLER, inside the GET /api/talakondapally/attendance block:
+// CHANGE THIS QUERY:
+const r = await query(
+  `
+  SELECT
+    e."Employeeid"    AS employee_id,
+    e.employee_name   AS employee_name,
+    e.employee_number AS number,
+    e.location        AS location,
+    e.designation     AS designation,   -- <-- ADD THIS LINE!
+    t.status          AS status,
+    t.date            AS saved_date
+  FROM public.talakondapallyemployees e
+  LEFT JOIN public.talakondapally_attendance t
+         ON t."EmployeeId" = e."Employeeid" AND t.date = $1
+  ORDER BY e."Employeeid" ASC
+  `,
+  [date]
+);
 
       // Compute lock: all employees have a non-null status on that date
       const totals = await query(

@@ -1,9 +1,11 @@
 // FILE: src/pages/TalakondapallyAttendance.js
 import Head from "next/head";
 import Image from "next/image";
-import { useEffect, useMemo, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/router";
 import Swal from "sweetalert2";
+import MobileFooterMenu from "@/components/MobileFooterMenu";
+import { FiCalendar, FiRefreshCw, FiUserPlus } from "react-icons/fi";
 
 // ---------- THEME ----------
 const PRIMARY_HEX = "#D97706"; // amber-600
@@ -11,9 +13,66 @@ const PRIMARY_BTN = "bg-amber-600 hover:bg-amber-700";
 const PRIMARY_OUTLINE = "focus:outline-none focus:ring-2 focus:ring-amber-400/50";
 // ---------------------------
 
-// ---------- CONSTANT LOCATION (UI-only; not sent to server) ----------
+// ---------- DESIGNATION SORT ORDER ----------
+const DESIGNATION_ORDER = {
+  "HOD Operations": 1,
+  "HOD - Operations": 1,
+  "Farm Manager": 2,
+  "Jr Accountant F&A": 3,
+  "Live Stock Manager": 4,
+  "Live stock manager": 4,
+  "Cattle Feed Manager": 5,
+  "Cattle feed manager": 5,
+  "Farm Supervisor": 6,
+  "Supervisor": 6,
+  "Garden Supervisor": 7,
+  "BMC Supervisor": 8,
+  "BMC Operator": 9,
+  "Sr Vet Assistant": 10,
+  "Jr Vet Assistant": 11,
+  "Vet Assistant": 11,
+  "Vet Doctor": 12,
+  "Doctor": 12,
+  "Electrecian": 13,
+  "Poojari": 14,
+  "Milk Supervisor": 15,
+  "Milker": 17,
+  "Milk Van Driver": 30,
+  "Tractor Driver": 31,
+  "Water Men": 32,
+  "Water men": 32,
+  "Farm Worker": 34,
+  "Farm worker": 34,
+  "Labour": 34,
+};
+
+const DESIGNATION_OPTIONS_FOR_DROPDOWN = [
+  "HOD Operations",
+  "Farm Manager",
+  "Jr Accountant F&A",
+  "Live Stock Manager",
+  "Cattle Feed Manager",
+  "Supervisor",
+  "Garden Supervisor",
+  "BMC Supervisor",
+  "BMC Operator",
+  "Sr Vet Assistant",
+  "Jr Vet Assistant",
+  "Vet Assistant",
+  "Vet Doctor",
+  "Doctor",
+  "Electrecian",
+  "Poojari",
+  "Milk Supervisor",
+  "Milker",
+  "Milk Van Driver",
+  "Tractor Driver",
+  "Water Men",
+  "Farm Worker",
+  "Labour",
+  "Other"
+];
 const LOCATION_LABEL = "Talakondapally";
-// --------------------------------------------------------------------
 
 function todayIso() {
   const d = new Date();
@@ -45,11 +104,9 @@ export default function TalakondapallyAttendance() {
   const [name, setName] = useState("");
   const [date, setDate] = useState(todayIso());
   const [loading, setLoading] = useState(true);
-
-  // From API: [{ employee_id, employee_name, number, designation, status, saved_date }]
-  const [employees, setEmployees] =useState([]);
-  const [attMap, setAttMap] = useState({});      // { [id]: STATUS }
-  const [serverMap, setServerMap] = useState({}); // snapshot for Cancel
+  const [employees, setEmployees] = useState([]);
+  const [attMap, setAttMap] = useState({});
+  const [serverMap, setServerMap] = useState({});
   const [submitted, setSubmitted] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
@@ -96,18 +153,23 @@ export default function TalakondapallyAttendance() {
       const res = await fetch(`/api/talakondapally/attendance?date=${encodeURIComponent(date)}`);
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j?.error || "Failed to load attendance");
-
       const rows = Array.isArray(j?.data) ? j.data : [];
-
       const list = rows.map((r) => ({
         id: r.employee_id,
         employee_name: r.employee_name,
-        number: r.number,
         designation: r.designation || "",
-        // keep UI-only location label for visual parity with Tandur view
-        location: LOCATION_LABEL,
         saved_date: r.saved_date || r.date || null,
       }));
+
+      // SORT BY DESIGNATION ORDER, then name
+      list.sort((a, b) => {
+        const cleanA = (a.designation || "").trim();
+        const cleanB = (b.designation || "").trim();
+        const orderA = DESIGNATION_ORDER[cleanA] || 999;
+        const orderB = DESIGNATION_ORDER[cleanB] || 999;
+        if (orderA !== orderB) return orderA - orderB;
+        return a.employee_name.localeCompare(b.employee_name);
+      });
       setEmployees(list);
 
       const nextFromServer = {};
@@ -164,24 +226,15 @@ export default function TalakondapallyAttendance() {
       const res = await fetch("/api/talakondapally/attendance", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        // Only send status + date; employee metadata handled via employees API
         body: JSON.stringify({ date, rows }),
       });
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j?.error || "Save failed");
-
       setServerMap({ ...attMap });
       setSubmitted(true);
       setSubmittedDate(date);
       setIsEditing(false);
-
-      Swal.fire({
-        icon: "success",
-        title: "Submitted",
-        text: `Attendance submitted for ${date}.`,
-        confirmButtonColor: PRIMARY_HEX,
-      });
-
+      Swal.fire({ icon: "success", title: "Submitted", text: `Attendance submitted for ${date}.`, confirmButtonColor: PRIMARY_HEX });
       await loadForDate();
       setSubmitted(true);
     } catch (e) {
@@ -206,23 +259,12 @@ export default function TalakondapallyAttendance() {
         confirmButtonColor: PRIMARY_HEX,
       });
       if (!confirm.isConfirmed) return;
-
       const res = await fetch(`/api/talakondapally/employees?id=${emp.id}`, { method: "DELETE" });
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j?.error || "Delete failed");
-
       setEmployees((prev) => prev.filter((x) => x.id !== emp.id));
-      setAttMap((prev) => {
-        const next = { ...prev };
-        delete next[emp.id];
-        return next;
-      });
-      setServerMap((prev) => {
-        const next = { ...prev };
-        delete next[emp.id];
-        return next;
-      });
-
+      setAttMap((prev) => { const next = { ...prev }; delete next[emp.id]; return next; });
+      setServerMap((prev) => { const next = { ...prev }; delete next[emp.id]; return next; });
       Swal.fire({ icon: "success", title: "Deleted", text: `${emp.employee_name} removed.` });
     } catch (e) {
       Swal.fire({ icon: "error", title: "Delete failed", text: e.message || "Something went wrong" });
@@ -255,86 +297,94 @@ export default function TalakondapallyAttendance() {
         <title>Talakondapally Attendance</title>
         <meta name="robots" content="noindex" />
       </Head>
-
-      <main className="min-h-screen bg-gray-50">
+      <main className="min-h-screen bg-gray-50 pb-14">
         <header className="sticky top-0 z-20 bg-white/95 backdrop-blur border-b border-gray-200">
           <div className="px-4 py-3 flex items-center justify-between">
+            {/* logo + location on top-left */}
             <div className="flex items-center gap-3 min-w-0">
-              <div className="relative h-10 w-28 shrink-0">
-                <Image src="/logo.png" alt="Agasthya Super Foods" fill className="object-contain" priority />
+              <div className="flex items-center gap-2">
+                <div className="w-12 h-12 relative flex-shrink-0">
+                  {/* replace /logo.png with your actual logo path if different */}
+                  <Image src="/logo.png" alt="Agasthya Superfoods" width={48} height={48} className="rounded-full object-contain" />
+                </div>
               </div>
             </div>
+
+            {/* compact action icons (calendar + date input, refresh icon, add icon) */}
             <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-1.5">
+                <FiCalendar className="text-gray-500" />
+                <input
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  max={todayIso()}
+                  className={`text-sm outline-none bg-transparent ${PRIMARY_OUTLINE}`}
+                />
+              </div>
+
               <button
-                onClick={() => { if (!readOnly) setShowAdd(true); }}
-                disabled={readOnly}
-                className={`rounded-lg px-3 py-1.5 text-sm font-medium ${readOnly ? "bg-gray-200 text-gray-500 cursor-not-allowed" : `${PRIMARY_BTN} text-white`}`}
+                onClick={() => loadForDate()}
+                aria-label="Refresh"
+                title="Refresh"
+                className="rounded-lg p-2 border border-gray-200 bg-white hover:bg-gray-50"
               >
-                + Add
+                <FiRefreshCw />
               </button>
+
+              {/* Add is now always clickable (not disabled for read-only) */}
               <button
-                onClick={logout}
-                className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm hover:bg-gray-50"
+                onClick={() => setShowAdd(true)}
+                aria-label="Add employee"
+                title="Add employee"
+                className={`rounded-lg p-2 ${PRIMARY_BTN} text-white`}
               >
-                Logout
+                <FiUserPlus />
               </button>
             </div>
           </div>
 
-          {/* Date row + Refresh + Submitted pill */}
-          <div className="px-4 pb-3 flex items-center gap-3">
-            <input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              max={todayIso()}
-              className={`flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm ${PRIMARY_OUTLINE}`}
-            />
-            <button
-              onClick={loadForDate}
-              className="whitespace-nowrap rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm hover:bg-gray-50"
-            >
-              Refresh
-            </button>
-            {submitted ? (
-              <span className="text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-700">
-                Submitted for {date}
-              </span>
-            ) : null}
-          </div>
-
-          {/* Quick counts */}
           <div className="px-4 pb-3 text-xs text-gray-700 flex items-center gap-3 overflow-x-auto">
             <span>Total: <b>{counts.total}</b></span>
             <span className="text-emerald-700">Present: <b>{counts.present}</b></span>
             <span className="text-rose-700">Absent: <b>{counts.absent}</b></span>
             <span className="text-amber-700">Half Day: <b>{counts.half}</b></span>
           </div>
+
+          {/* Update attendance button above table */}
+          {readOnly ? (
+            <div className="px-4 pb-2">
+              <button
+                onClick={startEditing}
+                disabled={loading || employees.length === 0}
+                className={`w-full rounded-xl ${PRIMARY_BTN} text-white py-3 font-medium disabled:opacity-60`}
+              >
+                Update attendance
+              </button>
+            </div>
+          ) : null}
         </header>
 
-        {/* READ-ONLY TABLE WHEN LOCKED */}
+        {/* Main table and cards */}
         {readOnly ? (
           <>
             <div className="mx-4 mt-3 rounded-xl border border-amber-200 bg-amber-50 text-amber-800 text-sm p-3">
               This date is locked. Use <b>Update attendance</b> to enable editing.
             </div>
-            {/* <-- FIX: Added pb-24 --> */}
-            <section className="p-4 pb-24">
+            <section className="p-4">
               <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
                 <table className="min-w-full text-sm">
                   <thead className="bg-gray-50 border-b border-gray-200">
                     <tr>
                       <th className="text-left px-4 py-2 font-semibold text-gray-700">Name</th>
                       <th className="text-left px-4 py-2 font-semibold text-gray-700">Status</th>
-                      <th className="text-left px-4 py-2 font-semibold text-gray-700">Number</th>
                       <th className="text-left px-4 py-2 font-semibold text-gray-700">Designation</th>
-                      <th className="text-left px-4 py-2 font-semibold text-gray-700">Location</th>
                     </tr>
                   </thead>
                   <tbody>
                     {employees.length === 0 ? (
                       <tr>
-                        <td colSpan="5" className="px-4 py-4 text-gray-500">No employees for this date.</td>
+                        <td colSpan="3" className="px-4 py-4 text-gray-500">No employees for this date.</td>
                       </tr>
                     ) : (
                       employees.map((e) => (
@@ -351,9 +401,7 @@ export default function TalakondapallyAttendance() {
                               {attMap[e.id] || STATUS.PRESENT}
                             </span>
                           </td>
-                          <td className="px-4 py-2 text-gray-700">{e.number || "—"}</td>
                           <td className="px-4 py-2 text-gray-700">{e.designation || "—"}</td>
-                          <td className="px-4 py-2 text-gray-700">{LOCATION_LABEL}</td>
                         </tr>
                       ))
                     )}
@@ -363,8 +411,6 @@ export default function TalakondapallyAttendance() {
             </section>
           </>
         ) : (
-          // EDIT MODE CARDS
-          // <-- FIX: Changed mb-18 to pb-24 -->
           <section className="p-4 pb-24 space-y-3">
             <div className="space-y-3">
               {loading ? (
@@ -382,9 +428,7 @@ export default function TalakondapallyAttendance() {
                       <div className="flex items-start justify-between">
                         <div>
                           <div className="font-medium text-gray-900">{e.employee_name}</div>
-                          <div className="text-xs text-gray-500">
-                            {e.number || "—"} • {e.designation || "—"} • {LOCATION_LABEL}
-                          </div>
+                          <div className="text-xs text-gray-500">{e.designation || "—"}</div>
                         </div>
                         <button
                           onClick={() => deleteEmployee(e)}
@@ -394,7 +438,6 @@ export default function TalakondapallyAttendance() {
                           Delete
                         </button>
                       </div>
-
                       <div className="mt-3">
                         <label className="block text-xs text-gray-600 mb-1">Status</label>
                         <div className={`rounded-lg border border-gray-300 px-3 py-2 ring-2 ${ring} ${!isEditing ? "bg-gray-50" : ""}`}>
@@ -420,175 +463,234 @@ export default function TalakondapallyAttendance() {
           </section>
         )}
 
-      <footer
-  className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white/95 backdrop-blur px-4 py-3 shadow-[0_-2px_10px_rgba(0,0,0,0.06)]"
-  style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom))" }} // iOS safe-area
->
-  {readOnly ? (
-    <button
-      onClick={startEditing}
-      disabled={loading || employees.length === 0}
-      className={`w-full rounded-xl ${PRIMARY_BTN} text-white py-3 font-medium disabled:opacity-60`}
-    >
-      Update attendance
-    </button>
-  ) : (
-    <div className="flex gap-2">
-      <button
-        onClick={save}
-        disabled={loading || employees.length === 0}
-        className={`flex-1 rounded-xl ${PRIMARY_BTN} text-white py-3 font-medium disabled:opacity-60`}
-      >
-        {submitted ? "Save changes" : "Submit attendance"}
-      </button>
-      {submitted ? (
-        <button
-          type="button"
-          onClick={cancelEditing}
-          className="rounded-xl border border-gray-300 bg-white px-4 py-3 font-medium hover:bg-gray-50"
-        >
-          Cancel
-        </button>
-      ) : null}
-    </div>
-  )}
-</footer>
-
+        <MobileFooterMenu />
       </main>
 
-      {showAdd && isEditing ? (
-        <AddEmployeeModal
+      {showAdd ? (
+        <AddEmployeeModalBottom
           onClose={() => setShowAdd(false)}
           onAdded={() => {
             setShowAdd(false);
             loadForDate();
           }}
           disabled={!isEditing}
+          designationOptions={DESIGNATION_OPTIONS_FOR_DROPDOWN}
         />
       ) : null}
     </>
   );
 }
 
-function AddEmployeeModal({ onClose, onAdded, disabled }) {
-  const [employeeid, setEmployeeid] = useState("");
-  const [employee_name, setEmployeeName] = useState("");
-  const [number, setNumber] = useState("");
-  const [designation, setDesignation] = useState("");
+/* ---------------------------------------------------------------------------
+   AddEmployeeModalBottom - bottom sheet modal that covers footer
+   - anchored to bottom: 0 and overlays the footer (covers it)
+   - overlay present and modal z-index above footer
+   - constrained height with overflow-auto
+   - custom upward-opening dropdown is rendered as a full fixed panel
+     with reduced header/padding and no extra outer border for a cleaner look.
+-----------------------------------------------------------------------------*/
+
+function AddEmployeeModalBottom({ onClose, onAdded, disabled, designationOptions = [] }) {
+  const [name, setName] = useState("");
+  const [employeeId, setEmployeeId] = useState("");
+  const [designation, setDesignation] = useState(designationOptions[0] || "");
+  const [customDesignation, setCustomDesignation] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const submit = async (e) => {
-    e.preventDefault();
+  // dropdown related state
+  const [showDD, setShowDD] = useState(false);
+  const ddTriggerRef = useRef(null);
+
+  useEffect(() => {
+    setDesignation(designationOptions[0] || "");
+  }, [designationOptions]);
+
+  const isOther = designation === "Other";
+
+  const onSubmit = async (ev) => {
+    ev?.preventDefault();
     if (disabled) return;
-    if (!employee_name.trim()) {
-      Swal.fire({ icon: "warning", title: "Name required", text: "Please enter employee name." });
+    if (!employeeId.trim() || !name.trim()) {
+      Swal.fire({ icon: "warning", title: "Missing fields", text: "Please provide employee id and name." });
       return;
     }
+    const finalDesignation = isOther ? (customDesignation.trim() || "Other") : designation;
     try {
       setSaving(true);
-      const payload = {
-        employee_name,
-        number: number || null,
-        designation: designation || null,
-        // No location sent; server will handle if needed
-      };
-      if (employeeid && Number(employeeid) > 0) payload.employeeid = Number(employeeid);
-
-      const res = await fetch("/api/talakondapally/employees", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+      const res = await fetch('/api/talakondapally/employees', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ employee_id: employeeId.trim(), employee_name: name.trim(), designation: finalDesignation })
       });
       const j = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(j?.error || "Failed to add employee");
-
-      Swal.fire({
-        icon: "success",
-        title: "Added",
-        text: "Employee added successfully.",
-        confirmButtonColor: PRIMARY_HEX,
-      });
-      onAdded?.();
+      if (!res.ok) throw new Error(j?.error || 'Add failed');
+      Swal.fire({ icon: 'success', title: 'Added', text: `${name} added successfully.` });
+      setName(''); setEmployeeId(''); setDesignation(designationOptions[0] || ''); setCustomDesignation('');
+      onAdded && onAdded();
     } catch (e) {
-      Swal.fire({ icon: "error", title: "Add failed", text: e.message || "Something went wrong" });
+      Swal.fire({ icon: 'error', title: 'Add failed', text: e.message || 'Something went wrong' });
     } finally {
       setSaving(false);
     }
   };
 
+  // When dropdown is visible we render it as a fixed full-panel overlay
   return (
-    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative w-full md:max-w-md bg-white rounded-t-2xl md:rounded-2xl p-5 m-0 md:m-4">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-base font-semibold text-gray-900">Add Employee</h3>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-700">✕</button>
-        </div>
-        <form onSubmit={submit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Employee ID</label>
-            <input
-              type="number"
-              min="1"
-              value={employeeid}
-              onChange={(e) => setEmployeeid(e.target.value)}
-              className={`mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm ${PRIMARY_OUTLINE}`}
-              placeholder="Leave blank to auto-generate"
-              disabled={disabled}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Full name</label>
-            <input
-              type="text"
-              value={employee_name}
-              onChange={(e) => setEmployeeName(e.target.value)}
-              className={`mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm ${PRIMARY_OUTLINE}`}
-              placeholder="e.g. Ramesh"
-              disabled={disabled}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Number</label>
-            <input
-              type="text"
-              value={number}
-              onChange={(e) => setNumber(e.target.value)}
-              className={`mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm ${PRIMARY_OUTLINE}`}
-              placeholder="e.g. TKP-023"
-              disabled={disabled}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Designation</label>
-            <input
-              type="text"
-              value={designation}
-              onChange={(e) => setDesignation(e.target.value)}
-              className={`mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm ${PRIMARY_OUTLINE}`}
-              placeholder="e.g. Operator / Supervisor"
-              disabled={disabled}
-            />
-          </div>
+    <>
+      <div className="fixed inset-0 z-50 flex items-end justify-center">
+        {/* overlay (covers whole screen, including footer) */}
+        <div className="absolute inset-0 bg-black/40 z-40" onClick={() => {
+          // close dropdown first if open, otherwise close modal
+          if (showDD) setShowDD(false);
+          else onClose && onClose();
+        }} />
 
-          <div className="flex items-center justify-end gap-2 pt-2">
+        {/* bottom sheet modal (anchored to bottom: covers footer) */}
+        <form
+          onSubmit={onSubmit}
+          className="relative z-50 w-full max-w-md bg-white rounded-t-xl shadow-xl overflow-auto max-h-[86vh] mb-0"
+          role="dialog"
+          aria-modal="true"
+          style={{ marginBottom: 0 }}
+        >
+          <div className="flex items-center justify-between px-3 py-2 border-b border-transparent">
+            <div className="text-sm font-medium text-gray-800">Add employee</div>
             <button
               type="button"
-              onClick={onClose}
-              className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm hover:bg-gray-50"
+              onClick={() => onClose && onClose()}
+              aria-label="Close"
+              className="p-2 rounded-md hover:bg-gray-100 text-gray-600"
             >
-              Cancel
+              ✕
             </button>
-            <button
-              type="submit"
-              disabled={saving || disabled}
-              className={`rounded-lg ${PRIMARY_BTN} text-white px-4 py-2 text-sm font-medium disabled:opacity-60`}
-            >
-              {saving ? "Adding…" : "Add Employee"}
-            </button>
+          </div>
+
+          <div className="p-3 space-y-3">
+            <div>
+              <label className="block text-xs text-gray-600">Employee ID</label>
+              <input
+                value={employeeId}
+                onChange={(e) => setEmployeeId(e.target.value)}
+                disabled={disabled || saving}
+                placeholder="EMP123"
+                className="w-full mt-1 px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs text-gray-600">Name</label>
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                disabled={disabled || saving}
+                placeholder="Full name"
+                className="w-full mt-1 px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none"
+              />
+            </div>
+
+            {/* --- DESIGNATION FIELD (opens a fixed full panel) --- */}
+            <div className="relative">
+              <label className="block text-xs text-gray-600">Designation</label>
+
+              {/* Trigger button */}
+              <button
+                ref={ddTriggerRef}
+                type="button"
+                disabled={disabled || saving}
+                onClick={() => setShowDD((p) => !p)}
+                className="w-full text-left mt-1 px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white"
+              >
+                {designation || "Select designation"}
+              </button>
+
+              {/* If showDD is true, render a fixed full-panel dropdown that escapes modal clipping */}
+              {showDD && (
+                <div className="fixed inset-0 z-60 flex items-center justify-center pointer-events-none">
+                  {/* transparent backdrop for dropdown; clicking closes dropdown */}
+                  <div
+                    className="absolute inset-0"
+                    onClick={() => setShowDD(false)}
+                    aria-hidden
+                  />
+
+                  {/* the dropdown panel: aligned to modal width, reduced padding, NO outer border for cleaner look */}
+                  <div
+                    className="relative w-full max-w-md mx-4 pointer-events-auto"
+                    style={{ marginBottom: '8vh' }}
+                  >
+                    <div className="bg-white rounded-lg shadow-xl max-h-[82vh] overflow-auto">
+                      {/* compact header inside dropdown */}
+                      <div className="flex items-center justify-between px-3 py-2">
+                        <div className="text-sm font-medium">Select designation</div>
+                        <button
+                          type="button"
+                          onClick={() => setShowDD(false)}
+                          className="p-1 rounded-md hover:bg-gray-100 text-gray-600 text-sm"
+                        >
+                          ✕
+                        </button>
+                      </div>
+
+                      {/* options list — larger clickable rows, reduced extra borders */}
+                      <div>
+                        {designationOptions.map((d) => (
+                          <div
+                            key={d}
+                            onClick={() => { setDesignation(d); setShowDD(false); }}
+                            className="px-4 py-3 text-sm hover:bg-gray-50 cursor-pointer"
+                          >
+                            {d}
+                          </div>
+                        ))}
+
+                        {/* Ensure "Other" option exists and is selectable */}
+                        {!designationOptions.includes("Other") && (
+                          <div
+                            onClick={() => { setDesignation("Other"); setShowDD(false); }}
+                            className="px-4 py-3 text-sm hover:bg-gray-50 cursor-pointer"
+                          >
+                            Other
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+            </div>
+
+            {/* Custom designation input when "Other" is selected */}
+            {designation === "Other" && (
+              <input
+                value={customDesignation}
+                onChange={(e) => setCustomDesignation(e.target.value)}
+                disabled={disabled || saving}
+                placeholder="Custom designation"
+                className="w-full mt-2 px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none"
+              />
+            )}
+
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => onClose && onClose()}
+                className="mr-2 px-4 py-2 rounded-lg border border-gray-200 text-sm text-gray-700 hover:bg-gray-50"
+                disabled={saving}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={disabled || saving}
+                className="px-4 py-2 rounded-lg bg-amber-600 text-white text-sm hover:bg-amber-700"
+              >
+                {saving ? "Saving…" : "Save"}
+              </button>
+            </div>
           </div>
         </form>
       </div>
-    </div>
+    </>
   );
 }
