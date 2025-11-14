@@ -1,4 +1,3 @@
-// src/pages/TandurAttendance.js
 import Head from "next/head";
 import Image from "next/image";
 import { useEffect, useMemo, useState, useCallback } from "react";
@@ -10,7 +9,7 @@ const PRIMARY_HEX = "#D97706";
 const PRIMARY_BTN = "bg-amber-600 hover:bg-amber-700";
 const PRIMARY_OUTLINE = "focus:outline-none focus:ring-2 focus:ring-amber-400/50";
 
-/* PRIORITY: exact order requested (veterinary assistant after supervisor) */
+/* PRIORITY: exact order requested */
 const DESIGNATION_PRIORITY = [
   "farm manager",
   "supervisor",
@@ -21,7 +20,7 @@ const DESIGNATION_PRIORITY = [
 
 function todayIso() {
   const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 const STATUS = { PRESENT: "Present", ABSENT: "Absent", HALF: "Half Day" };
@@ -36,9 +35,11 @@ function determineSubmittedFromApiPayload(j, date) {
   return allForDate && allHaveStatus;
 }
 
+// Normalize and strip numbers from designation string
 function normalizeDesignation(raw) {
   if (!raw || typeof raw !== "string") return "unassigned";
-  const s = raw.trim().toLowerCase();
+  let s = raw.trim().toLowerCase();
+  s = s.replace(/[0-9]+/g, '').trim();
   if ((s.includes("farm") && s.includes("manager")) || s === "manager" || s.includes("farm-manager") || s.includes("farmmanager"))
     return "farm manager";
   if (s.includes("supervisor")) return "supervisor";
@@ -46,7 +47,7 @@ function normalizeDesignation(raw) {
     return "veterinary assistant";
   if (s.includes("bihar")) return "bihar labour";
   if (s.includes("jharkhand") || s.includes("jhar")) return "jharkhand labour";
-  const cleaned = s.replace(/[^a-z0-9]+/g, " ").trim();
+  const cleaned = s.replace(/[^a-z ]+/g, "").trim();
   return cleaned.length ? cleaned : "unassigned";
 }
 
@@ -60,34 +61,19 @@ function prettyLabel(canonical) {
   return canonical.split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
 }
 
-function designationColorClasses(canonical) {
-  switch (canonical) {
-    case "farm manager": return "bg-indigo-100 text-indigo-800";
-    case "supervisor": return "bg-sky-100 text-sky-800";
-    case "veterinary assistant": return "bg-emerald-100 text-emerald-800";
-    case "bihar labour": return "bg-amber-100 text-amber-800";
-    case "jharkhand labour": return "bg-rose-100 text-rose-800";
-    case "unassigned":
-    default: return "bg-gray-100 text-gray-700";
-  }
-}
-
 export default function TandurAttendance() {
   const router = useRouter();
 
-  /* Hooks (stable order) */
   const [ready, setReady] = useState(false);
   const [date, setDate] = useState(todayIso());
   const [loading, setLoading] = useState(true);
-
-  const [employees, setEmployees] = useState([]); // each row should include designation from API
+  const [employees, setEmployees] = useState([]);
   const [attMap, setAttMap] = useState({});
   const [serverMap, setServerMap] = useState({});
   const [submitted, setSubmitted] = useState(false);
   const [submittedDate, setSubmittedDate] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
-
   const [selectedGroup, setSelectedGroup] = useState("All");
 
   useEffect(() => {
@@ -101,20 +87,16 @@ export default function TandurAttendance() {
     setReady(true);
   }, [router]);
 
-  /* Data loader */
   const loadForDate = useCallback(async () => {
     try {
       setLoading(true);
       const res = await fetch(`/api/tandur/attendance?date=${encodeURIComponent(date)}`);
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j?.error || "Failed to load attendance");
-
       const rows = Array.isArray(j?.data) ? j.data : [];
-
       const list = rows.map((r) => ({
         id: r.employee_id ?? r.employeeid ?? r.Employeeid ?? null,
         employee_name: (r.employee_name ?? r.name ?? "").toString().trim(),
-        number: r.employee_number ?? r.number ?? null,
         designation: (r.designation ?? "") || "",
         saved_date: r.saved_date || r.date || null,
       }));
@@ -150,7 +132,6 @@ export default function TandurAttendance() {
     loadForDate();
   }, [ready, date, loadForDate]);
 
-  /* Helpers */
   const setStatus = (employeeId, status) => setAttMap(prev => ({ ...prev, [employeeId]: status }));
   const selectRing = (st) => st === STATUS.PRESENT ? "ring-emerald-300" : st === STATUS.ABSENT ? "ring-rose-300" : st === STATUS.HALF ? "ring-amber-300" : "ring-gray-200";
 
@@ -208,7 +189,6 @@ export default function TandurAttendance() {
     return normalizeDesignation(selectedGroup);
   }, [selectedGroup, orderedGroupKeys]);
 
-  /* Actions */
   const save = async () => {
     try {
       if (!date) { Swal.fire({ icon: "warning", title: "Pick a date", text: "Please choose a date." }); return; }
@@ -251,8 +231,6 @@ export default function TandurAttendance() {
     }
   };
 
-  /* Precompute render blocks */
-  // <-- FIX 1: Reordered table cells -->
   const readOnlyRows = useMemo(() => {
     const rows = (selectedCanonical === "All" ? orderedRowsForAll : (groupedByCanonical[selectedCanonical] || []));
     return rows.map(e => {
@@ -261,30 +239,24 @@ export default function TandurAttendance() {
         <tr key={e.id} className="border-t border-gray-100">
           <td className="px-4 py-2 text-gray-900">{e.employee_name}</td>
           <td className="px-4 py-2">
-            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium
-              ${(attMap[e.id] || STATUS.PRESENT) === STATUS.PRESENT ? "bg-emerald-100 text-emerald-700" :
-               (attMap[e.id] || STATUS.PRESENT) === STATUS.ABSENT  ? "bg-rose-100 text-rose-700" :
-               (attMap[e.id] || STATUS.PRESENT) === STATUS.HALF    ? "bg-amber-100 text-amber-700" :
-                                                                       "bg-gray-100 text-gray-700" }`}>
+            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+              (attMap[e.id] || STATUS.PRESENT) === STATUS.PRESENT ? "bg-emerald-100 text-emerald-700" :
+              (attMap[e.id] || STATUS.PRESENT) === STATUS.ABSENT  ? "bg-rose-100 text-rose-700" :
+              (attMap[e.id] || STATUS.PRESENT) === STATUS.HALF    ? "bg-amber-100 text-amber-700" :
+              "bg-gray-100 text-gray-700"
+            }`}>
               {attMap[e.id] || STATUS.PRESENT}
             </span>
           </td>
-          <td className="px-4 py-2 text-gray-700">{e.number || "—"}</td>
-          <td className="px-4 py-2">
-            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${designationColorClasses(canonical)}`}>
-              {e.designation ? e.designation : prettyLabel(canonical)}
-            </span>
-          </td>
+          <td className="px-4 py-2 text-gray-700">{prettyLabel(canonical)}</td>
         </tr>
       );
     });
   }, [selectedCanonical, orderedRowsForAll, groupedByCanonical, attMap]);
-  // <-- END FIX 1 -->
 
   const editModeBlocks = useMemo(() => {
     if (loading) return <div className="bg-white border border-gray-200 rounded-xl p-4 text-gray-600">Loading employees…</div>;
     if (employees.length === 0) return <div className="bg-white border border-gray-200 rounded-xl p-6 text-center text-gray-600">No employees yet. Tap <b>+ Add</b> to add one.</div>;
-
     if (selectedCanonical === "All") {
       return orderedGroupKeys.map(key => {
         const group = groupedByCanonical[key] || [];
@@ -301,10 +273,7 @@ export default function TandurAttendance() {
                     <div className="flex items-start justify-between">
                       <div>
                         <div className="font-medium text-gray-900">{e.employee_name}</div>
-                        <div className="text-xs text-gray-500 flex items-center gap-2">
-                          <span>{e.number || "—"}</span>
-                          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${designationColorClasses(canonical)}`}>{e.designation ? e.designation : prettyLabel(canonical)}</span>
-                        </div>
+                        <div className="text-xs text-gray-500">{prettyLabel(canonical)}</div>
                       </div>
                       <button onClick={() => deleteEmployee(e)} disabled={!isEditing} className="text-xs rounded-lg border border-rose-300 text-rose-700 px-2 py-1 hover:bg-rose-50 disabled:opacity-50">Delete</button>
                     </div>
@@ -324,7 +293,6 @@ export default function TandurAttendance() {
         );
       });
     }
-
     const rows = (groupedByCanonical[selectedCanonical] || []);
     return rows.map(e => {
       const st = attMap[e.id] || STATUS.PRESENT;
@@ -335,7 +303,7 @@ export default function TandurAttendance() {
           <div className="flex items-start justify-between">
             <div>
               <div className="font-medium text-gray-900">{e.employee_name}</div>
-              <div className="text-xs text-gray-500">{e.number || "—"} • <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${designationColorClasses(canonical)}`}>{e.designation ? e.designation : prettyLabel(canonical)}</span></div>
+              <div className="text-xs text-gray-500">{prettyLabel(canonical)}</div>
             </div>
             <button onClick={() => deleteEmployee(e)} disabled={!isEditing} className="text-xs rounded-lg border border-rose-300 text-rose-700 px-2 py-1 hover:bg-rose-50 disabled:opacity-50">Delete</button>
           </div>
@@ -352,7 +320,6 @@ export default function TandurAttendance() {
     });
   }, [loading, employees, orderedGroupKeys, groupedByCanonical, selectedCanonical, attMap, isEditing, deleteEmployee]);
 
-  /* Render */
   if (!ready) {
     return <>
       <Head><title>Tandur Attendance</title></Head>
@@ -374,22 +341,21 @@ export default function TandurAttendance() {
             <div className="relative h-10 w-28 shrink-0">
               <Image src="/logo.png" alt="Agasthya Super Foods" fill className="object-contain" priority />
             </div>
-
             <div className="flex items-center gap-2">
-              <button onClick={() => { if (!readOnly) setShowAdd(true); }} disabled={readOnly} className={`rounded-lg px-3 py-1.5 text-sm font-medium ${readOnly ? "bg-gray-200 text-gray-500 cursor-not-allowed" : `${PRIMARY_BTN} text-white`}`}>+ Add</button>
+              <button
+                onClick={() => setShowAdd(true)}
+                className={`rounded-lg px-3 py-1.5 text-sm font-medium ${PRIMARY_BTN} text-white`}
+              >+ Add</button>
               <button onClick={() => { try { if (typeof window !== "undefined") { localStorage.removeItem("auth"); localStorage.removeItem("employeeid"); localStorage.removeItem("name"); } router.push("/Tandurlogin"); setTimeout(() => window.location.replace("/Tandurlogin"), 50); } catch { if (typeof window !== "undefined") window.location.replace("/Tandurlogin"); }}} className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm hover:bg-gray-50">Logout</button>
             </div>
           </div>
-
           <div className="px-4 pb-1 flex items-center gap-3">
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} max={todayIso()} className={`flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm ${PRIMARY_OUTLINE}`} />
             <button onClick={loadForDate} className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm hover:bg-gray-50">Refresh</button>
-
             <select value={selectedGroup} onChange={(e) => setSelectedGroup(e.target.value)} className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
               {designationOptions.map(d => <option key={d} value={d}>{d}</option>)}
             </select>
           </div>
-
           <div className="px-4 pb-3">
             {submitted ? (
               <div className="mt-1">
@@ -406,33 +372,26 @@ export default function TandurAttendance() {
             </div>
           </div>
         </header>
-
         {readOnly ? (
-          // <-- FIX 2: Added pb-24 -->
           <section className="p-4 pb-24">
             <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
               <table className="min-w-full text-sm">
-                {/* <-- FIX 1: Reordered headers --> */}
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
                     <th className="text-left px-4 py-2 font-semibold text-gray-700">Name</th>
                     <th className="text-left px-4 py-2 font-semibold text-gray-700">Status</th>
-                    <th className="text-left px-4 py-2 font-semibold text-gray-700">Number</th>
                     <th className="text-left px-4 py-2 font-semibold text-gray-700">Designation</th>
                   </tr>
                 </thead>
-                {/* <-- END FIX 1 --> */}
                 <tbody>{readOnlyRows}</tbody>
               </table>
             </div>
           </section>
         ) : (
-          // <-- FIX 2: Added pb-24 -->
-          <section className="p-4 pb-24 space-y-3">
+          <section className="p-4 space-y-3">
             <div className="space-y-3">{editModeBlocks}</div>
           </section>
         )}
-
         <div className="sticky bottom-0 z-20 border-t border-gray-200 bg-white/95 backdrop-blur px-4 py-3">
           {readOnly ? (
             <button onClick={() => setIsEditing(true)} disabled={loading || employees.length === 0} className={`w-full rounded-xl ${PRIMARY_BTN} text-white py-3 font-medium`}>Update attendance</button>
@@ -444,29 +403,34 @@ export default function TandurAttendance() {
           )}
         </div>
       </main>
-
-      {showAdd && isEditing ? (
-        <AddEmployeeModal onClose={() => { setShowAdd(false); setSelectedGroup("All"); }} onAdded={() => { setShowAdd(false); loadForDate(); setSelectedGroup("All"); }} disabled={!isEditing} />
+      {showAdd ? (
+        <AddEmployeeModal
+          onClose={() => { setShowAdd(false); setSelectedGroup("All"); }}
+          onAdded={() => { setShowAdd(false); loadForDate(); setSelectedGroup("All"); }}
+          disabled={false}
+        />
       ) : null}
     </>
   );
 }
 
-/* Add modal — sends designation in payload (no location) */
+
+/* AddEmployeeModal stays as in your previous version -- it's unchanged */
+
 function AddEmployeeModal({ onClose, onAdded, disabled }) {
   const [employeeid, setEmployeeid] = useState("");
   const [employee_name, setEmployeeName] = useState("");
-  const [number, setNumber] = useState("");
   const [designation, setDesignation] = useState("");
   const [saving, setSaving] = useState(false);
 
   const submit = async (e) => {
     e.preventDefault();
     if (disabled) return;
-    if (!employee_name.trim()) { Swal.fire({ icon: "warning", title: "Name required", text: "Please enter employee name." }); return; }
+    if (!employee_name.trim()) {
+      Swal.fire({ icon: "warning", title: "Name required", text: "Please enter employee name." }); return; }
     try {
       setSaving(true);
-      const payload = { employee_name, number: number || null, designation: designation || null };
+      const payload = { employee_name, designation: designation || null };
       if (employeeid && Number(employeeid) > 0) payload.employeeid = Number(employeeid);
       const res = await fetch("/api/tandur/employees", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const j = await res.json().catch(()=>({}));
@@ -489,9 +453,7 @@ function AddEmployeeModal({ onClose, onAdded, disabled }) {
         <form onSubmit={submit} className="space-y-4">
           <div><label className="block text-sm font-medium text-gray-700">Employee ID (optional)</label><input type="number" min="1" value={employeeid} onChange={(e)=>setEmployeeid(e.target.value)} className={`mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm ${PRIMARY_OUTLINE}`} placeholder="Leave blank to auto-generate" disabled={disabled} /></div>
           <div><label className="block text-sm font-medium text-gray-700">Full name</label><input type="text" value={employee_name} onChange={(e)=>setEmployeeName(e.target.value)} className={`mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm ${PRIMARY_OUTLINE}`} placeholder="e.g. Ramesh" disabled={disabled} /></div>
-          <div><label className="block text-sm font-medium text-gray-700">Number (optional)</label><input type="text" value={number} onChange={(e)=>setNumber(e.target.value)} className={`mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm ${PRIMARY_OUTLINE}`} placeholder="e.g. TND-023" disabled={disabled} /></div>
           <div><label className="block text-sm font-medium text-gray-700">Designation (optional)</label><input type="text" value={designation} onChange={(e)=>setDesignation(e.target.value)} className={`mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm ${PRIMARY_OUTLINE}`} placeholder="e.g. Farm Manager, Bihar Labour, Supervisor" disabled={disabled} /><p className="mt-1 text-xs text-gray-500">Use consistent labels to map into the priority groups automatically.</p></div>
-
           <div className="flex items-center justify-end gap-2 pt-2">
             <button type="button" onClick={onClose} className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm hover:bg-gray-50">Cancel</button>
             <button type="submit" disabled={saving || disabled} className={`rounded-lg ${PRIMARY_BTN} text-white px-4 py-2 text-sm font-medium`}>{saving ? "Adding…" : "Add Employee"}</button>

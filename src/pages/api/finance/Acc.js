@@ -21,9 +21,10 @@ pool = global._pgpool;
 const SQL_FIND_EMPLOYEE = `
   SELECT employeeid, password, name, role
   FROM public."EmployeeTable"
-  WHERE "employeeid" = $1
+  WHERE LOWER("employeeid") = LOWER($1)
   LIMIT 1
 `;
+
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ message: "Method not allowed" });
