@@ -1,5 +1,6 @@
 // FILE: src/pages/ProfileTalakondapally.js
-import Head from "next/head";
+import Head from "next/head";import Image from "next/image";
+
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import Swal from "sweetalert2";
@@ -112,8 +113,9 @@ export default function ProfileTalakondapally() {
       <main className="min-h-screen bg-gray-50 pb-14">
         <header className="sticky top-0 z-10 bg-white/95 backdrop-blur border-b border-gray-200">
           <div className="px-4 py-3">
-            <div className="text-lg font-semibold text-gray-900">Profile</div>
-            <div className="text-xs text-gray-500">Talakondapally</div>
+            <div className="w-12 h-12 relative flex-shrink-0">
+                            <Image src="/logo.png" alt="Agasthya Superfoods" width={48} height={48} className="rounded-full object-contain" />
+                          </div>
           </div>
         </header>
 
@@ -127,7 +129,6 @@ export default function ProfileTalakondapally() {
                 </div>
                 <div>
                   <div className="text-sm font-medium text-gray-900">{name || "—"}</div>
-                  <div className="text-xs text-gray-500">{designation || "—"}</div>
                 </div>
               </div>
             </div>
@@ -147,7 +148,7 @@ export default function ProfileTalakondapally() {
                 <label className="block text-xs text-gray-600">Designation</label>
                 <input
                   className={`w-full mt-1 px-3 py-2 border border-gray-200 rounded-lg text-sm bg-gray-50 ${INPUT_FOCUS}`}
-                  value={designation}
+                  value='Farm Manager'
                   readOnly
                 />
               </div>

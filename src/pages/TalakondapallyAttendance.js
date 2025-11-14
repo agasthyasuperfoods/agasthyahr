@@ -275,6 +275,7 @@ export default function TalakondapallyAttendanceReadOnly() {
           <span className="inline-block h-6 w-6 mr-2 animate-spin rounded-full border-2 border-gray-300 border-t-transparent" />
           Loading…
         </div>
+        
       </>
     );
   }
@@ -292,7 +293,6 @@ export default function TalakondapallyAttendanceReadOnly() {
       <main className={`min-h-screen bg-gray-50 ${isLocked ? 'pb-14' : 'pb-32'}`}>
         <header className="sticky top-0 z-20 bg-white/95 backdrop-blur border-b border-gray-200">
           <div className="px-4 py-3 flex items-center justify-between">
-            {/* logo + location on top-left */}
             <div className="flex items-center gap-3 min-w-0">
               <div className="flex items-center gap-2">
                 <div className="w-12 h-12 relative flex-shrink-0">
@@ -303,6 +303,8 @@ export default function TalakondapallyAttendanceReadOnly() {
 
             {/* compact action icons (calendar + date input, refresh icon) */}
             <div className="flex items-center gap-2">
+              
+              {/* CALENDAR/DATE INPUT */}
               <div className="flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-1.5">
                 <FiCalendar className="text-gray-500" />
                 <input
@@ -311,16 +313,19 @@ export default function TalakondapallyAttendanceReadOnly() {
                   onChange={(e) => setDate(e.target.value)}
                   max={todayIso()}
                   className={`text-sm outline-none bg-transparent ${PRIMARY_OUTLINE}`}
+                  disabled={loading} 
                 />
               </div>
 
+              {/* REFRESH BUTTON */}
               <button
                 onClick={() => loadForDate(date)}
                 aria-label="Refresh"
                 title="Refresh"
                 className="rounded-lg p-2 border border-gray-200 bg-white hover:bg-gray-50"
+                disabled={loading} 
               >
-                <FiRefreshCw />
+                <FiRefreshCw className={loading ? 'animate-spin' : ''} />
               </button>
             </div>
           </div>
