@@ -1,11 +1,8 @@
-// FILE: src/pages/TalakondapallyAttendance.js
 import Head from "next/head";
 import Image from "next/image";
 import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/router";
-import Swal from "sweetalert2";
-import MobileFooterMenu from "@/components/MobileFooterMenu";
-import { FiCalendar, FiRefreshCw, FiUserPlus } from "react-icons/fi";
+import Swal from "sweetalert2"; // That is the order of designation while marking attendence please look into it
 
 // ---------- THEME ----------
 const PRIMARY_HEX = "#D97706"; // amber-600
@@ -13,54 +10,68 @@ const PRIMARY_BTN = "bg-amber-600 hover:bg-amber-700";
 const PRIMARY_OUTLINE = "focus:outline-none focus:ring-2 focus:ring-amber-400/50";
 // ---------------------------
 
-// ---------- DESIGNATION SORT ORDER ----------
+// ---------- DESIGNATION SORT ORDER (from CSV + DB variations) ----------
 const DESIGNATION_ORDER = {
-  "HOD Operations": 1,
-  "HOD - Operations": 1,
-  "Farm Manager": 2,
-  "Jr Accountant F&A": 3,
-  "Live Stock Manager": 4,
-  "Live stock manager": 4,
-  "Cattle Feed Manager": 5,
-  "Cattle feed manager": 5,
-  "Farm Supervisor": 6,
-  "Supervisor": 6,
-  "Garden Supervisor": 7,
-  "BMC Supervisor": 8,
-  "BMC Operator": 9,
-  "Sr Vet Assistant": 10,
-  "Jr Vet Assistant": 11,
-  "Vet Assistant": 11,
-  "Vet Doctor": 12,
-  "Doctor": 12,
-  "Electrecian": 13,
-  "Poojari": 14,
-  "Milk Supervisor": 15,
-  "Milker": 17,
-  "Milk Van Driver": 30,
-  "Tractor Driver": 31,
-  "Water Men": 32,
-  "Water men": 32,
-  "Farm Worker": 34,
-  "Farm worker": 34,
-  "Labour": 34,
-};
+  // HOD (1)
+  'HOD Operations': 1,
+  'HOD - Operations': 1,
 
+  // Farm Manager (2)
+  'Farm Manager': 2,
+
+  // Accountant (3)
+  'Jr Accountant F&A': 3,
+
+  // Live Stock (4)
+  'Live Stock Manager': 4,
+  'Live stock manager': 4,
+
+  // Cattle Feed (5)
+  'Cattle Feed Manager': 5,
+  'Cattle feed manager': 5,
+
+  // Supervisor (6)
+  'Farm Supervisor': 6,
+  'Supervisor': 6,
+
+  // Other Supervisors (7-9)
+  'Garden Supervisor': 7,
+  'BMC Supervisor': 8,
+  'BMC Operator': 9,
+
+  // Vet (10-12)
+  'Sr Vet Assistant': 10,
+  'Jr Vet Assistant': 11,
+  'Vet Assistant': 11, // <-- FIX: Added 'Vet Assistant' from video
+  'Vet Doctor': 12,
+  'Doctor': 12,
+
+  // Other Roles (13-17)
+  'Electrecian': 13,
+  'Poojari': 14,
+  'Milk Supervisor': 15,
+  'Milker': 17,
+
+  // Drivers (30-31)
+  'Milk Van Driver': 30,
+  'Tractor Driver': 31,
+
+  // Workers (32-34)
+  'Water Men': 32,
+  'Water men': 32, // <-- FIX: Added 'Water men' from video
+  'Farm Worker': 34,
+  'Farm worker': 34, // <-- FIX: Added 'Farm worker' from video
+  'Labour': 34,
+};
+// --------------------------------------------------------
+
+// --- ADDED: Clean list for dropdown in Add Employee modal (from screenshot) ---
 const DESIGNATION_OPTIONS_FOR_DROPDOWN = [
-  "HOD Operations",
-  "Farm Manager",
-  "Jr Accountant F&A",
-  "Live Stock Manager",
-  "Cattle Feed Manager",
-  "Supervisor",
-  "Garden Supervisor",
   "BMC Supervisor",
   "BMC Operator",
   "Sr Vet Assistant",
   "Jr Vet Assistant",
-  "Vet Assistant",
   "Vet Doctor",
-  "Doctor",
   "Electrecian",
   "Poojari",
   "Milk Supervisor",
@@ -69,9 +80,10 @@ const DESIGNATION_OPTIONS_FOR_DROPDOWN = [
   "Tractor Driver",
   "Water Men",
   "Farm Worker",
-  "Labour",
-  "Other"
 ];
+// -------------------------------------------------------------------------
+
+// ---------- CONSTANT LOCATION (UI-only; not sent to server) ----------
 const LOCATION_LABEL = "Talakondapally";
 
 function todayIso() {
@@ -161,26 +173,42 @@ export default function TalakondapallyAttendance() {
         saved_date: r.saved_date || r.date || null,
       }));
 
-      // SORT BY DESIGNATION ORDER, then name
+      // --- Sort list based on DESIGNATION_ORDER ---
       list.sort((a, b) => {
+        // .trim() removes whitespace from ends (e.g. "Supervisor " becomes "Supervisor")
         const cleanA = (a.designation || "").trim();
         const cleanB = (b.designation || "").trim();
+        
+        // Get the sort order number for each employee
+        // Use 999 for any designation not in our map (puts them at the end)
         const orderA = DESIGNATION_ORDER[cleanA] || 999;
         const orderB = DESIGNATION_ORDER[cleanB] || 999;
-        if (orderA !== orderB) return orderA - orderB;
+        
+        // If orders are different, sort by that order
+        if (orderA !== orderB) {
+          return orderA - orderB;
+        }
+        
+        // If order is the same (or both unknown), sort alphabetically by name
         return a.employee_name.localeCompare(b.employee_name);
       });
-      setEmployees(list);
+      // --- END OF SORT ---
+
+      setEmployees(list); // This now sets the *sorted* list
 
       const nextFromServer = {};
       for (const r of rows) nextFromServer[r.employee_id] = r.status || STATUS.PRESENT;
       setServerMap(nextFromServer);
       setAttMap(nextFromServer);
 
+      // <-- *** LOGIC FIX 1: Synced with Tandur *** -->
       const locked = determineSubmittedFromApiPayload(j, date);
       const show = !!locked || (submittedDate === date);
+      
       setSubmitted(show);
-      setIsEditing(!locked);
+      setIsEditing(!locked); // <-- Changed from !show to !locked to match Tandur
+      // <-- *** END OF FIX 1 *** -->
+
     } catch (e) {
       Swal.fire({ icon: "error", title: "Load failed", text: e.message || "Something went wrong" });
       setEmployees([]);
@@ -230,13 +258,26 @@ export default function TalakondapallyAttendance() {
       });
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j?.error || "Save failed");
+
+      // Set states manually to lock the page immediately.
       setServerMap({ ...attMap });
       setSubmitted(true);
       setSubmittedDate(date);
       setIsEditing(false);
-      Swal.fire({ icon: "success", title: "Submitted", text: `Attendance submitted for ${date}.`, confirmButtonColor: PRIMARY_HEX });
+
+      Swal.fire({
+        icon: "success",
+        title: "Submitted",
+        text: `Attendance submitted for ${date}.`,
+        confirmButtonColor: PRIMARY_HEX,
+      });
+      
+      // <-- *** LOGIC FIX 2: Added from Tandur to fix the bug *** -->
+      // Reload data from server to confirm submission
       await loadForDate();
       setSubmitted(true);
+      // <-- *** END OF FIX 2 *** -->
+      
     } catch (e) {
       Swal.fire({ icon: "error", title: "Save failed", text: e.message || "Something went wrong" });
     }
@@ -371,7 +412,7 @@ export default function TalakondapallyAttendance() {
             <div className="mx-4 mt-3 rounded-xl border border-amber-200 bg-amber-50 text-amber-800 text-sm p-3">
               This date is locked. Use <b>Update attendance</b> to enable editing.
             </div>
-            <section className="p-4">
+            <section className="p-4 pb-24">
               <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
                 <table className="min-w-full text-sm">
                   <thead className="bg-gray-50 border-b border-gray-200">
@@ -411,6 +452,7 @@ export default function TalakondapallyAttendance() {
             </section>
           </>
         ) : (
+          // EDIT MODE CARDS
           <section className="p-4 pb-24 space-y-3">
             <div className="space-y-3">
               {loading ? (
@@ -463,7 +505,40 @@ export default function TalakondapallyAttendance() {
           </section>
         )}
 
-        <MobileFooterMenu />
+      <footer
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white/95 backdrop-blur px-4 py-3 shadow-[0_-2px_10px_rgba(0,0,0,0.06)]"
+        style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom))" }} // iOS safe-area
+      >
+        {readOnly ? (
+          <button
+            onClick={startEditing}
+            disabled={loading || employees.length === 0}
+            className={`w-full rounded-xl ${PRIMARY_BTN} text-white py-3 font-medium disabled:opacity-60`}
+          >
+            Update attendance
+          </button>
+        ) : (
+          <div className="flex gap-2">
+            <button
+              onClick={save}
+              disabled={loading || employees.length === 0}
+              className={`flex-1 rounded-xl ${PRIMARY_BTN} text-white py-3 font-medium disabled:opacity-60`}
+            >
+              {submitted ? "Save changes" : "Submit attendance"}
+            </button>
+            {submitted ? (
+              <button
+                type="button"
+                onClick={cancelEditing}
+                className="rounded-xl border border-gray-300 bg-white px-4 py-3 font-medium hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+            ) : null}
+          </div>
+        )}
+      </footer>
+
       </main>
 
       {showAdd ? (
@@ -481,21 +556,18 @@ export default function TalakondapallyAttendance() {
   );
 }
 
-/* ---------------------------------------------------------------------------
-   AddEmployeeModalBottom - bottom sheet modal that covers footer
-   - anchored to bottom: 0 and overlays the footer (covers it)
-   - overlay present and modal z-index above footer
-   - constrained height with overflow-auto
-   - custom upward-opening dropdown is rendered as a full fixed panel
-     with reduced header/padding and no extra outer border for a cleaner look.
------------------------------------------------------------------------------*/
-
-function AddEmployeeModalBottom({ onClose, onAdded, disabled, designationOptions = [] }) {
-  const [name, setName] = useState("");
-  const [employeeId, setEmployeeId] = useState("");
-  const [designation, setDesignation] = useState(designationOptions[0] || "");
-  const [customDesignation, setCustomDesignation] = useState("");
+function AddEmployeeModal({ onClose, onAdded, disabled }) {
+  const [employeeid, setEmployeeid] = useState("");
+  const [employee_name, setEmployeeName] = useState("");
+  const [number, setNumber] = useState("");
+  const [designation, setDesignation] = useState(""); // Default is ""
   const [saving, setSaving] = useState(false);
+  
+  // --- ADDED: State to control the custom picker modal ---
+  const [showPicker, setShowPicker] = useState(false);
+  
+  // --- ADDED: State for the custom designation text input ---
+  const [customDesignation, setCustomDesignation] = useState("");
 
   // dropdown related state
   const [showDD, setShowDD] = useState(false);
@@ -514,13 +586,37 @@ function AddEmployeeModalBottom({ onClose, onAdded, disabled, designationOptions
       Swal.fire({ icon: "warning", title: "Missing fields", text: "Please provide employee id and name." });
       return;
     }
-    const finalDesignation = isOther ? (customDesignation.trim() || "Other") : designation;
+    
+    // --- UPDATED: Validation to check for custom designation ---
+    if (!designation) {
+      Swal.fire({ icon: "warning", title: "Designation required", text: "Please select a designation." });
+      return;
+    }
+    if (designation === "Other" && !customDesignation.trim()) {
+      Swal.fire({ icon: "warning", title: "Custom Designation required", text: "Please enter the custom designation." });
+      return;
+    }
+    // --------------------------------------------------------
+
     try {
       setSaving(true);
-      const res = await fetch('/api/talakondapally/employees', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ employee_id: employeeId.trim(), employee_name: name.trim(), designation: finalDesignation })
+      
+      // --- UPDATED: Payload to send the correct designation value ---
+      const finalDesignation = (designation === "Other" ? customDesignation.trim() : designation) || null;
+      
+      const payload = {
+        employee_name,
+        number: number || null,
+        designation: finalDesignation,
+      };
+      // ------------------------------------------------------------
+      
+      if (employeeid && Number(employeeid) > 0) payload.employeeid = Number(employeeid);
+
+      const res = await fetch("/api/talakondapally/employees", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload), // <-- Corrected: JSON.stringify
       });
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j?.error || 'Add failed');
@@ -537,160 +633,163 @@ function AddEmployeeModalBottom({ onClose, onAdded, disabled, designationOptions
   // When dropdown is visible we render it as a fixed full-panel overlay
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-end justify-center">
-        {/* overlay (covers whole screen, including footer) */}
-        <div className="absolute inset-0 bg-black/40 z-40" onClick={() => {
-          // close dropdown first if open, otherwise close modal
-          if (showDD) setShowDD(false);
-          else onClose && onClose();
-        }} />
-
-        {/* bottom sheet modal (anchored to bottom: covers footer) */}
-        <form
-          onSubmit={onSubmit}
-          className="relative z-50 w-full max-w-md bg-white rounded-t-xl shadow-xl overflow-auto max-h-[86vh] mb-0"
-          role="dialog"
-          aria-modal="true"
-          style={{ marginBottom: 0 }}
-        >
-          <div className="flex items-center justify-between px-3 py-2 border-b border-transparent">
-            <div className="text-sm font-medium text-gray-800">Add employee</div>
-            <button
-              type="button"
-              onClick={() => onClose && onClose()}
-              aria-label="Close"
-              className="p-2 rounded-md hover:bg-gray-100 text-gray-600"
-            >
-              ✕
-            </button>
+      <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center">
+        <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+        <div className="relative w-full md:max-w-md bg-white rounded-t-2xl md:rounded-2xl p-5 m-0 md:m-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-base font-semibold text-gray-900">Add Employee</h3>
+            <button onClick={onClose} className="text-gray-500 hover:text-gray-700">✕</button>
           </div>
-
-          <div className="p-3 space-y-3">
+          <form onSubmit={submit} className="space-y-4">
             <div>
-              <label className="block text-xs text-gray-600">Employee ID</label>
+              <label className="block text-sm font-medium text-gray-700">Employee ID</label>
               <input
-                value={employeeId}
-                onChange={(e) => setEmployeeId(e.target.value)}
-                disabled={disabled || saving}
-                placeholder="EMP123"
-                className="w-full mt-1 px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none"
+                type="number"
+                min="1"
+                value={employeeid}
+                onChange={(e) => setEmployeeid(e.target.value)}
+                className={`mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm ${PRIMARY_OUTLINE}`}
+                placeholder="Leave blank to auto-generate"
+                disabled={disabled}
               />
             </div>
-
             <div>
-              <label className="block text-xs text-gray-600">Name</label>
+              <label className="block text-sm font-medium text-gray-700">Full name</label>
               <input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                disabled={disabled || saving}
-                placeholder="Full name"
-                className="w-full mt-1 px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none"
+                type="text"
+                value={employee_name}
+                onChange={(e) => setEmployeeName(e.target.value)}
+                className={`mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm ${PRIMARY_OUTLINE}`}
+                placeholder="e.g. Ramesh"
+                disabled={disabled}
               />
             </div>
-
-            {/* --- DESIGNATION FIELD (opens a fixed full panel) --- */}
-            <div className="relative">
-              <label className="block text-xs text-gray-600">Designation</label>
-
-              {/* Trigger button */}
+            
+            {/* --- UPDATED: Phone Number field --- */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Phone Number</label>
+              <input
+                type="tel" // Use "tel" for phone number keypad
+                value={number}
+                onChange={(e) => setNumber(e.target.value)}
+                className={`mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm ${PRIMARY_OUTLINE}`}
+                placeholder="e.g. 9876543210" // Updated placeholder
+                disabled={disabled}
+              />
+            </div>
+            {/* --- END OF UPDATE --- */}
+            
+            {/* --- REPLACED <select> WITH A <button> THAT OPENS A MODAL --- */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Designation</label>
               <button
-                ref={ddTriggerRef}
                 type="button"
-                disabled={disabled || saving}
-                onClick={() => setShowDD((p) => !p)}
-                className="w-full text-left mt-1 px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white"
+                onClick={() => setShowPicker(true)}
+                disabled={disabled}
+                className={`mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-left appearance-none bg-white ${PRIMARY_OUTLINE} ${
+                  !designation ? "text-gray-500" : "text-gray-900"
+                } bg-no-repeat bg-[url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'><path stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/></svg>")] bg-[length:1.25rem_1.25rem] bg-[position:right_0.5rem_center]`}
               >
-                {designation || "Select designation"}
+                {/* --- UPDATED: Button text logic --- */}
+                {designation === "Other" ? "Other (Please specify)" : (designation || "— Select Designation —")}
               </button>
-
-              {/* If showDD is true, render a fixed full-panel dropdown that escapes modal clipping */}
-              {showDD && (
-                <div className="fixed inset-0 z-60 flex items-center justify-center pointer-events-none">
-                  {/* transparent backdrop for dropdown; clicking closes dropdown */}
-                  <div
-                    className="absolute inset-0"
-                    onClick={() => setShowDD(false)}
-                    aria-hidden
-                  />
-
-                  {/* the dropdown panel: aligned to modal width, reduced padding, NO outer border for cleaner look */}
-                  <div
-                    className="relative w-full max-w-md mx-4 pointer-events-auto"
-                    style={{ marginBottom: '8vh' }}
-                  >
-                    <div className="bg-white rounded-lg shadow-xl max-h-[82vh] overflow-auto">
-                      {/* compact header inside dropdown */}
-                      <div className="flex items-center justify-between px-3 py-2">
-                        <div className="text-sm font-medium">Select designation</div>
-                        <button
-                          type="button"
-                          onClick={() => setShowDD(false)}
-                          className="p-1 rounded-md hover:bg-gray-100 text-gray-600 text-sm"
-                        >
-                          ✕
-                        </button>
-                      </div>
-
-                      {/* options list — larger clickable rows, reduced extra borders */}
-                      <div>
-                        {designationOptions.map((d) => (
-                          <div
-                            key={d}
-                            onClick={() => { setDesignation(d); setShowDD(false); }}
-                            className="px-4 py-3 text-sm hover:bg-gray-50 cursor-pointer"
-                          >
-                            {d}
-                          </div>
-                        ))}
-
-                        {/* Ensure "Other" option exists and is selectable */}
-                        {!designationOptions.includes("Other") && (
-                          <div
-                            onClick={() => { setDesignation("Other"); setShowDD(false); }}
-                            className="px-4 py-3 text-sm hover:bg-gray-50 cursor-pointer"
-                          >
-                            Other
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
             </div>
+            {/* --- END OF REPLACEMENT --- */}
 
-            {/* Custom designation input when "Other" is selected */}
+            {/* --- ADDED: Conditional text input for "Other" --- */}
             {designation === "Other" && (
-              <input
-                value={customDesignation}
-                onChange={(e) => setCustomDesignation(e.target.value)}
-                disabled={disabled || saving}
-                placeholder="Custom designation"
-                className="w-full mt-2 px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none"
-              />
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Custom Designation</label>
+                <input
+                    type="text"
+                    value={customDesignation}
+                    onChange={(e) => setCustomDesignation(e.target.value)}
+                    className={`mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm ${PRIMARY_OUTLINE}`}
+                    placeholder="Enter designation"
+                    disabled={disabled}
+                />
+              </div>
             )}
+            {/* --- END OF ADDITION --- */}
 
-            <div className="flex justify-end">
+            <div className="flex items-center justify-end gap-2 pt-2">
               <button
                 type="button"
-                onClick={() => onClose && onClose()}
-                className="mr-2 px-4 py-2 rounded-lg border border-gray-200 text-sm text-gray-700 hover:bg-gray-50"
-                disabled={saving}
+                onClick={onClose}
+                className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm hover:bg-gray-50"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                disabled={disabled || saving}
-                className="px-4 py-2 rounded-lg bg-amber-600 text-white text-sm hover:bg-amber-700"
+                disabled={saving || disabled}
+                className={`rounded-lg ${PRIMARY_BTN} text-white px-4 py-2 text-sm font-medium disabled:opacity-60`}
               >
-                {saving ? "Saving…" : "Save"}
+                {saving ? "Adding…" : "Add Employee"}
               </button>
             </div>
-          </div>
-        </form>
+          </form>
+        </div>
+      </div>
+
+      {/* --- The Designation Picker Modal --- */}
+      {showPicker && (
+        <DesignationSelectModal
+          options={DESIGNATION_OPTIONS_FOR_DROPDOWN}
+          onClose={() => setShowPicker(false)}
+          onSelect={(selected) => {
+            setDesignation(selected);
+            // --- ADDED: Clear custom designation if a real one is picked ---
+            if (selected !== "Other") {
+              setCustomDesignation("");
+            }
+            setShowPicker(false);
+          }}
+        />
+      )}
+      {/* --- END OF MODAL --- */}
+    </>
+  );
+}
+
+// --- NEW COMPONENT: DesignationSelectModal ---
+function DesignationSelectModal({ options, onSelect, onClose }) {
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      
+      {/* Modal Content */}
+      <div className="relative w-full max-w-sm bg-white rounded-2xl overflow-hidden shadow-xl">
+        <div className="flex items-center justify-between p-4 border-b border-gray-200">
+          <h3 className="text-base font-semibold text-gray-900">Select Designation</h3>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-700">✕</button>
+        </div>
+        
+        {/* Scrollable List */}
+        <div className="max-h-[60vh] overflow-y-auto">
+          {options.map((option) => (
+            <button
+              key={option}
+              type="button"
+              onClick={() => onSelect(option)}
+              className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-100 border-b border-gray-100 last:border-b-0"
+            >
+              {option}
+            </button>
+          ))}
+          {/* --- ADDED: "Other" option at the end --- */}
+          <button
+            type="button"
+            onClick={() => onSelect("Other")}
+            className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-100"
+          >
+            Other
+          </button>
+          {/* --- END OF ADDITION --- */}
+        </div>
       </div>
     </>
   );
 }
+// --- END OF NEW COMPONENT ---

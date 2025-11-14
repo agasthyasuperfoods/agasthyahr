@@ -2,16 +2,16 @@ import { query } from "@/lib/db";
 
 /**
  * Day-wise attendance model:
- *   public.talakondapally_attendance (
- *     "EmployeeId" INTEGER REFERENCES public.talakondapallyemployees("Employeeid") ON DELETE CASCADE,
- *     name         TEXT,   -- snapshot
- *     date         DATE    NOT NULL,
- *     status       TEXT,   -- 'Present' | 'Absent' | 'Half Day' | null
- *     PRIMARY KEY ("EmployeeId", "date")
- *   )
+ * public.talakondapally_attendance (
+ * "EmployeeId" INTEGER REFERENCES public.talakondapallyemployees("Employeeid") ON DELETE CASCADE,
+ * name         TEXT,   -- snapshot
+ * date         DATE    NOT NULL,
+ * status       TEXT,   -- 'Present' | 'Absent' | 'Half Day' | null
+ * PRIMARY KEY ("EmployeeId", "date")
+ * )
  *
  * Lock rule (for a given date):
- *   locked = (count(current employees) == count(rows for date with non-null status))
+ * locked = (count(current employees) == count(rows for date with non-null status))
  */
 
 async function ensureAttendanceTable() {
@@ -90,25 +90,23 @@ export default async function handler(req, res) {
       await ensureAttendanceTable();
 
       // Full roster with status for the requested date
-     // IN YOUR HANDLER, inside the GET /api/talakondapally/attendance block:
-// CHANGE THIS QUERY:
-const r = await query(
-  `
-  SELECT
-    e."Employeeid"    AS employee_id,
-    e.employee_name   AS employee_name,
-    e.employee_number AS number,
-    e.location        AS location,
-    e.designation     AS designation,   -- <-- ADD THIS LINE!
-    t.status          AS status,
-    t.date            AS saved_date
-  FROM public.talakondapallyemployees e
-  LEFT JOIN public.talakondapally_attendance t
-         ON t."EmployeeId" = e."Employeeid" AND t.date = $1
-  ORDER BY e."Employeeid" ASC
-  `,
-  [date]
-);
+      const r = await query(
+        `
+        SELECT
+          e."Employeeid"    AS employee_id,
+          e.employee_name   AS employee_name,
+          e.employee_number AS number,
+          e.designation     AS designation, -- <-- *** THIS IS THE FIX ***
+          e.location        AS location,
+          t.status          AS status,
+          t.date            AS saved_date
+        FROM public.talakondapallyemployees e
+        LEFT JOIN public.talakondapally_attendance t
+               ON t."EmployeeId" = e."Employeeid" AND t.date = $1
+        ORDER BY e."Employeeid" ASC
+        `,
+        [date]
+      );
 
       // Compute lock: all employees have a non-null status on that date
       const totals = await query(
@@ -188,7 +186,7 @@ const r = await query(
         return res.status(400).json({ error: "Valid employee_id is required" });
       }
 
-      await ensureAttendanceTable();
+      await ensureAttendance_talakondapally();
 
       await query(
         `
