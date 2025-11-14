@@ -1,96 +1,58 @@
-import { query } from "@/lib/db";
-
-const FIXED_LOCATION = "Talakondapally";
+// pages/api/talakondapally/employees.js
+import pool from "@/lib/db";
 
 export default async function handler(req, res) {
-  try {
-    if (req.method === "GET") {
-      const r = await query(
-        `SELECT "Employeeid" AS id,
-                employee_name,
-                employee_number AS number,
-                location
-           FROM public.talakondapallyemployees
-          ORDER BY "Employeeid" ASC`
-      );
-      return res.status(200).json({ data: r.rows });
-    }
+  if (req.method === "POST") {
+    try {
+      console.log("[POST] /api/talakondapally/employees body:", req.body);
 
-    if (req.method === "POST") {
-      // frontend sends: { employeeid?, employee_name, number?, location? }
-      const { employeeid, employee_name, number } = req.body || {};
+      const rawEmployeeId = req.body.employee_id;
+      const rawName = req.body.employee_name;
+      const rawDesignation = req.body.designation ?? null;
 
-      const name = (employee_name || "").trim();
-      if (!name) return res.status(400).json({ error: "employee_name is required" });
-
-      const num = (number || "").trim() || null;
-      // Enforce fixed location server-side
-      const loc = FIXED_LOCATION;
-
-      let inserted;
-      if (employeeid !== undefined && employeeid !== null && String(employeeid).trim() !== "") {
-        const eid = Number(employeeid);
-        if (!Number.isInteger(eid) || eid <= 0) {
-          return res.status(400).json({ error: "employeeid must be a positive integer" });
-        }
-        inserted = await query(
-          `INSERT INTO public.talakondapallyemployees ("Employeeid", employee_name, employee_number, location)
-           VALUES ($1, $2, $3, $4)
-           RETURNING "Employeeid" AS id, employee_name, employee_number AS number, location`,
-          [eid, name, num, loc]
-        );
-      } else {
-        inserted = await query(
-          `INSERT INTO public.talakondapallyemployees (employee_name, employee_number, location)
-           VALUES ($1, $2, $3)
-           RETURNING "Employeeid" AS id, employee_name, employee_number AS number, location`,
-          [name, num, loc]
-        );
+      if (!rawEmployeeId || !rawName || typeof rawEmployeeId !== "string" || typeof rawName !== "string") {
+        return res.status(400).json({ error: "employee_id and employee_name required" });
       }
 
-      // keep sequence aligned with max id
-      await query(
-        `SELECT setval(
-           pg_get_serial_sequence('public.talakondapallyemployees', 'Employeeid'),
-           GREATEST(COALESCE((SELECT MAX("Employeeid") FROM public.talakondapallyemployees), 0), 0)
-         )`
-      );
+      const employee_number = rawEmployeeId.trim();
+      const employee_name = rawName.trim();
+      // normalize designation: trim and convert empty string -> null
+      const designation = (typeof rawDesignation === "string" && rawDesignation.trim().length > 0)
+        ? rawDesignation.trim()
+        : null;
 
-      return res.status(201).json({ data: inserted.rows[0] });
+      const q = `
+        INSERT INTO public.talakondapallyemployees (employee_number, employee_name, designation)
+        VALUES ($1, $2, NULLIF(TRIM($3), ''))
+        RETURNING "Employeeid", employee_number, employee_name, designation
+      `;
+      const values = [employee_number, employee_name, designation];
+
+      const { rows } = await pool.query(q, values);
+
+      console.log("[DB] inserted employee:", rows[0]);
+
+      return res.status(200).json({ success: true, employee: rows[0] });
+    } catch (e) {
+      console.error("[ERR] POST /api/talakondapally/employees:", e);
+      return res.status(500).json({ error: "Failed to add employee", details: e.message });
     }
-
-    if (req.method === "DELETE") {
-      // id can come from ?id= or body.id
-      const idRaw = (req.query?.id ?? req.body?.id ?? "").toString().trim();
-      const id = Number(idRaw);
-      if (!id || !Number.isInteger(id) || id <= 0) {
-        return res.status(400).json({ error: "Valid id is required" });
-      }
-
-      // delete row
-      const del = await query(
-        `DELETE FROM public.talakondapallyemployees WHERE "Employeeid" = $1 RETURNING "Employeeid" AS id`,
-        [id]
-      );
-      if (del.rowCount === 0) {
-        return res.status(404).json({ error: "Employee not found" });
-      }
-
-      // re-align sequence after delete (safe to run)
-      await query(
-        `SELECT setval(
-           pg_get_serial_sequence('public.talakondapallyemployees', 'Employeeid'),
-           GREATEST(COALESCE((SELECT MAX("Employeeid") FROM public.talakondapallyemployees), 0), 0)
-         )`
-      );
-
-      return res.status(200).json({ ok: true, id });
-    }
-
-    res.setHeader("Allow", ["GET", "POST", "DELETE"]);
-    return res.status(405).json({ error: "Method not allowed" });
-  } catch (e) {
-    console.error("talakondapally/employees error:", e);
-    return res.status(500).json({ error: e?.detail || e?.message || "Internal server error" });
   }
+
+  if (req.method === "DELETE") {
+    try {
+      const id = req.query.id;
+      if (!id) return res.status(400).json({ error: "id required" });
+      // allow deleting by employee_number or Employeeid
+      const q = `DELETE FROM public.talakondapallyemployees WHERE employee_number = $1 OR "Employeeid"::text = $1 RETURNING "Employeeid"`;
+      const { rows } = await pool.query(q, [id]);
+      if (rows.length === 0) return res.status(404).json({ error: "Not found" });
+      return res.status(200).json({ success: true });
+    } catch (e) {
+      console.error("[ERR] DELETE /api/talakondapally/employees:", e);
+      return res.status(500).json({ error: "Delete failed", details: e.message });
+    }
+  }
+
+  return res.status(405).json({ error: "Method not allowed" });
 }
