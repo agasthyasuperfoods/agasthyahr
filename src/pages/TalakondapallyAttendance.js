@@ -1,4 +1,4 @@
-// FILE: src/pages/TandurAttendance.js
+// FILE: src/pages/talakondapallyAttendance.js
 import Head from "next/head";
 import Image from "next/image";
 import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
@@ -26,7 +26,7 @@ const DESIGNATION_ORDER = {
 };
 const STATUS = { PRESENT: "Present", ABSENT: "Absent", HALF: "Half Day" };
 const STATUS_OPTIONS = ["", STATUS.PRESENT, STATUS.ABSENT, STATUS.HALF];
-const LOCATION_LABEL = "Tandur";
+const LOCATION_LABEL = "talakondapally";
 
 // ----------- HELPER -----------
 function todayIso() {
@@ -47,7 +47,7 @@ function determineSubmittedFromApiPayload(j, date) {
 }
 
 // ----------- MAIN COMPONENT -----------
-export default function TandurAttendance() {
+export default function talakondapallyAttendance() {
   const router = useRouter();
   const [date, setDate] = useState(todayIso());
   const [loading, setLoading] = useState(true);
@@ -63,7 +63,7 @@ export default function TandurAttendance() {
   const loadForDate = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch(`/api/tandur/attendance?date=${encodeURIComponent(date)}`);
+      const res = await fetch(`/api/talakondapally/attendance?date=${encodeURIComponent(date)}`);
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j?.error || "Failed to load attendance");
       const rows = Array.isArray(j?.data) ? j.data : [];
@@ -139,7 +139,7 @@ export default function TandurAttendance() {
         employee_id: e.id,
         status: attMap[e.id] || null,
       }));
-      const res = await fetch("/api/tandur/attendance", {
+      const res = await fetch("/api/talakondapally/attendance", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ date, rows }),
@@ -178,7 +178,7 @@ export default function TandurAttendance() {
         confirmButtonColor: PRIMARY_HEX,
       });
       if (!confirm.isConfirmed) return;
-      const res = await fetch(`/api/tandur/employees?id=${emp.id}`, { method: "DELETE" });
+      const res = await fetch(`/api/talakondapally/employees?id=${emp.id}`, { method: "DELETE" });
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j?.error || "Delete failed");
       setEmployees((prev) => prev.filter((x) => x.id !== emp.id));
@@ -400,7 +400,7 @@ function AddEmployeeModalBottom({ onClose, onAdded, disabled, designationOptions
     const finalDesignation = isOther ? (customDesignation.trim() || "Other") : designation;
     try {
       setSaving(true);
-      const res = await fetch('/api/tandur/employees', {
+      const res = await fetch('/api/talakondapally/employees', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ employee_id: employeeId.trim(), employee_name: name.trim(), designation: finalDesignation }),
