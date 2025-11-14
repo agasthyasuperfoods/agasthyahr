@@ -1,79 +1,34 @@
-// FILE: src/pages/TalakondapallyAttendance.js
+// FILE: src/pages/TandurAttendance.js
 import Head from "next/head";
 import Image from "next/image";
 import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/router";
 import Swal from "sweetalert2";
-import MobileFooterMenu from "@/components/MobileFooterMenu";
 import { FiCalendar, FiRefreshCw, FiUserPlus } from "react-icons/fi";
 
-// ---------- THEME ----------
-const PRIMARY_HEX = "#D97706"; // amber-600
+// ----------- THEME -----------
+const PRIMARY_HEX = "#D97706";
 const PRIMARY_BTN = "bg-amber-600 hover:bg-amber-700";
 const PRIMARY_OUTLINE = "focus:outline-none focus:ring-2 focus:ring-amber-400/50";
-// ---------------------------
 
-// ---------- DESIGNATION SORT ORDER ----------
-const DESIGNATION_ORDER = {
-  "HOD Operations": 1,
-  "HOD - Operations": 1,
-  "Farm Manager": 2,
-  "Jr Accountant F&A": 3,
-  "Live Stock Manager": 4,
-  "Live stock manager": 4,
-  "Cattle Feed Manager": 5,
-  "Cattle feed manager": 5,
-  "Farm Supervisor": 6,
-  "Supervisor": 6,
-  "Garden Supervisor": 7,
-  "BMC Supervisor": 8,
-  "BMC Operator": 9,
-  "Sr Vet Assistant": 10,
-  "Jr Vet Assistant": 11,
-  "Vet Assistant": 11,
-  "Vet Doctor": 12,
-  "Doctor": 12,
-  "Electrecian": 13,
-  "Poojari": 14,
-  "Milk Supervisor": 15,
-  "Milker": 17,
-  "Milk Van Driver": 30,
-  "Tractor Driver": 31,
-  "Water Men": 32,
-  "Water men": 32,
-  "Farm Worker": 34,
-  "Farm worker": 34,
-  "Labour": 34,
-};
-
-const DESIGNATION_OPTIONS_FOR_DROPDOWN = [
-  "HOD Operations",
-  "Farm Manager",
-  "Jr Accountant F&A",
-  "Live Stock Manager",
-  "Cattle Feed Manager",
-  "Supervisor",
-  "Garden Supervisor",
-  "BMC Supervisor",
-  "BMC Operator",
-  "Sr Vet Assistant",
-  "Jr Vet Assistant",
-  "Vet Assistant",
-  "Vet Doctor",
-  "Doctor",
-  "Electrecian",
-  "Poojari",
-  "Milk Supervisor",
-  "Milker",
-  "Milk Van Driver",
-  "Tractor Driver",
-  "Water Men",
-  "Farm Worker",
-  "Labour",
-  "Other"
+const DESIGNATION_OPTIONS = [
+  "HOD Operations", "Farm Manager", "Jr Accountant F&A", "Live Stock Manager", "Cattle Feed Manager",
+  "Supervisor", "Garden Supervisor", "BMC Supervisor", "BMC Operator", "Sr Vet Assistant", "Jr Vet Assistant",
+  "Vet Assistant", "Vet Doctor", "Doctor", "Electrecian", "Poojari", "Milk Supervisor", "Milker",
+  "Milk Van Driver", "Tractor Driver", "Water Men", "Farm Worker", "Labour", "Other"
 ];
-const LOCATION_LABEL = "Talakondapally";
+const DESIGNATION_ORDER = {
+  "HOD Operations": 1, "Farm Manager": 2, "Jr Accountant F&A": 3, "Live Stock Manager": 4, "Cattle Feed Manager": 5,
+  "Supervisor": 6, "Garden Supervisor": 7, "BMC Supervisor": 8, "BMC Operator": 9, "Sr Vet Assistant": 10,
+  "Jr Vet Assistant": 11, "Vet Assistant": 11, "Vet Doctor": 12, "Doctor": 12, "Electrecian": 13, "Poojari": 14,
+  "Milk Supervisor": 15, "Milker": 17, "Milk Van Driver": 30, "Tractor Driver": 31, "Water Men": 32,
+  "Farm Worker": 34, "Labour": 34
+};
+const STATUS = { PRESENT: "Present", ABSENT: "Absent", HALF: "Half Day" };
+const STATUS_OPTIONS = ["", STATUS.PRESENT, STATUS.ABSENT, STATUS.HALF];
+const LOCATION_LABEL = "Tandur";
 
+// ----------- HELPER -----------
 function todayIso() {
   const d = new Date();
   const yyyy = d.getFullYear();
@@ -81,13 +36,6 @@ function todayIso() {
   const dd = String(d.getDate()).padStart(2, "0");
   return [yyyy, mm, dd].join("-");
 }
-
-const STATUS = {
-  PRESENT: "Present",
-  ABSENT: "Absent",
-  HALF: "Half Day",
-};
-const STATUS_OPTIONS = ["", STATUS.PRESENT, STATUS.ABSENT, STATUS.HALF];
 
 function determineSubmittedFromApiPayload(j, date) {
   if (typeof j?.locked === "boolean") return j.locked;
@@ -98,10 +46,9 @@ function determineSubmittedFromApiPayload(j, date) {
   return allForDate && allHaveStatus;
 }
 
-export default function TalakondapallyAttendance() {
+// ----------- MAIN COMPONENT -----------
+export default function TandurAttendance() {
   const router = useRouter();
-  const [ready, setReady] = useState(false);
-  const [name, setName] = useState("");
   const [date, setDate] = useState(todayIso());
   const [loading, setLoading] = useState(true);
   const [employees, setEmployees] = useState([]);
@@ -112,45 +59,11 @@ export default function TalakondapallyAttendance() {
   const [showAdd, setShowAdd] = useState(false);
   const [submittedDate, setSubmittedDate] = useState(null);
 
-  // AUTH GUARD (EMP179 only)
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const authed = localStorage.getItem("auth") === "1";
-    const id = localStorage.getItem("employeeid");
-    if (!authed || id !== "EMP179") {
-      router.replace("/Talakondapallylogin");
-      return;
-    }
-    setName(localStorage.getItem("name") || "EMP179");
-    setReady(true);
-  }, [router]);
-
-  const logout = () => {
-    try {
-      if (typeof window !== "undefined") {
-        localStorage.removeItem("auth");
-        localStorage.removeItem("remember");
-        localStorage.removeItem("name");
-        localStorage.removeItem("email");
-        localStorage.removeItem("employeeid");
-        localStorage.removeItem("role");
-        localStorage.removeItem("hr_auth");
-        localStorage.removeItem("hr_role");
-        localStorage.removeItem("hr_name");
-        localStorage.removeItem("hr_email");
-        localStorage.removeItem("hr_employeeid");
-      }
-      router.push("/Talakondapallylogin");
-      setTimeout(() => window.location.replace("/Talakondapallylogin"), 50);
-    } catch {
-      if (typeof window !== "undefined") window.location.replace("/Talakondapallylogin");
-    }
-  };
-
+  // ----------- LOAD DATA -----------
   const loadForDate = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch(`/api/talakondapally/attendance?date=${encodeURIComponent(date)}`);
+      const res = await fetch(`/api/tandur/attendance?date=${encodeURIComponent(date)}`);
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j?.error || "Failed to load attendance");
       const rows = Array.isArray(j?.data) ? j.data : [];
@@ -160,8 +73,7 @@ export default function TalakondapallyAttendance() {
         designation: r.designation || "",
         saved_date: r.saved_date || r.date || null,
       }));
-
-      // SORT BY DESIGNATION ORDER, then name
+      // SORT BY DESIGNATION, then name
       list.sort((a, b) => {
         const cleanA = (a.designation || "").trim();
         const cleanB = (b.designation || "").trim();
@@ -171,12 +83,10 @@ export default function TalakondapallyAttendance() {
         return a.employee_name.localeCompare(b.employee_name);
       });
       setEmployees(list);
-
       const nextFromServer = {};
       for (const r of rows) nextFromServer[r.employee_id] = r.status || STATUS.PRESENT;
       setServerMap(nextFromServer);
       setAttMap(nextFromServer);
-
       const locked = determineSubmittedFromApiPayload(j, date);
       const show = !!locked || (submittedDate === date);
       setSubmitted(show);
@@ -193,15 +103,12 @@ export default function TalakondapallyAttendance() {
     }
   }, [date, submittedDate]);
 
-  useEffect(() => {
-    if (!ready) return;
-    loadForDate();
-  }, [ready, date, loadForDate]);
+  useEffect(() => { loadForDate(); }, [date, loadForDate]);
 
+  // ----------- STATUS CONTROLS -----------
   const setStatus = (employeeId, status) => {
     setAttMap((prev) => ({ ...prev, [employeeId]: status }));
   };
-
   const counts = useMemo(() => {
     let present = 0, absent = 0, half = 0;
     for (const e of employees) {
@@ -212,7 +119,16 @@ export default function TalakondapallyAttendance() {
     }
     return { total: employees.length, present, absent, half };
   }, [employees, attMap]);
+  const selectRing = (st) =>
+    st === STATUS.PRESENT
+      ? "ring-emerald-300"
+      : st === STATUS.ABSENT
+      ? "ring-rose-300"
+      : st === STATUS.HALF
+      ? "ring-amber-300"
+      : "ring-gray-200";
 
+  // ----------- CRUD: SUBMIT, EDIT, CANCEL, DELETE -----------
   const save = async () => {
     try {
       if (!date) {
@@ -223,7 +139,7 @@ export default function TalakondapallyAttendance() {
         employee_id: e.id,
         status: attMap[e.id] || null,
       }));
-      const res = await fetch("/api/talakondapally/attendance", {
+      const res = await fetch("/api/tandur/attendance", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ date, rows }),
@@ -234,20 +150,23 @@ export default function TalakondapallyAttendance() {
       setSubmitted(true);
       setSubmittedDate(date);
       setIsEditing(false);
-      Swal.fire({ icon: "success", title: "Submitted", text: `Attendance submitted for ${date}.`, confirmButtonColor: PRIMARY_HEX });
+      Swal.fire({
+        icon: "success",
+        title: "Submitted",
+        text: `Attendance submitted for ${date}.`,
+        confirmButtonColor: PRIMARY_HEX,
+      });
       await loadForDate();
       setSubmitted(true);
     } catch (e) {
       Swal.fire({ icon: "error", title: "Save failed", text: e.message || "Something went wrong" });
     }
   };
-
   const startEditing = () => setIsEditing(true);
   const cancelEditing = () => {
     setAttMap({ ...serverMap });
     setIsEditing(false);
   };
-
   const deleteEmployee = async (emp) => {
     try {
       const confirm = await Swal.fire({
@@ -259,58 +178,44 @@ export default function TalakondapallyAttendance() {
         confirmButtonColor: PRIMARY_HEX,
       });
       if (!confirm.isConfirmed) return;
-      const res = await fetch(`/api/talakondapally/employees?id=${emp.id}`, { method: "DELETE" });
+      const res = await fetch(`/api/tandur/employees?id=${emp.id}`, { method: "DELETE" });
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j?.error || "Delete failed");
       setEmployees((prev) => prev.filter((x) => x.id !== emp.id));
-      setAttMap((prev) => { const next = { ...prev }; delete next[emp.id]; return next; });
-      setServerMap((prev) => { const next = { ...prev }; delete next[emp.id]; return next; });
+      setAttMap((prev) => {
+        const next = { ...prev };
+        delete next[emp.id];
+        return next;
+      });
+      setServerMap((prev) => {
+        const next = { ...prev };
+        delete next[emp.id];
+        return next;
+      });
       Swal.fire({ icon: "success", title: "Deleted", text: `${emp.employee_name} removed.` });
     } catch (e) {
       Swal.fire({ icon: "error", title: "Delete failed", text: e.message || "Something went wrong" });
     }
   };
 
-  const selectRing = (st) =>
-    st === STATUS.PRESENT ? "ring-emerald-300" :
-    st === STATUS.ABSENT  ? "ring-rose-300"    :
-    st === STATUS.HALF    ? "ring-amber-300"   :
-                            "ring-gray-200";
-
-  if (!ready) {
-    return (
-      <>
-        <Head><title>Talakondapally Attendance</title></Head>
-        <div className="min-h-screen flex items-center justify-center text-gray-600">
-          <span className="inline-block h-6 w-6 mr-2 animate-spin rounded-full border-2 border-gray-300 border-t-transparent" />
-          Loading…
-        </div>
-      </>
-    );
-  }
-
+  // ----------- RENDER -----------
   const readOnly = submitted && !isEditing;
-
   return (
     <>
       <Head>
-        <title>Talakondapally Attendance</title>
+        <title>{LOCATION_LABEL} Attendance</title>
         <meta name="robots" content="noindex" />
       </Head>
       <main className="min-h-screen bg-gray-50 pb-14">
         <header className="sticky top-0 z-20 bg-white/95 backdrop-blur border-b border-gray-200">
           <div className="px-4 py-3 flex items-center justify-between">
-            {/* logo + location on top-left */}
+            {/* logo */}
             <div className="flex items-center gap-3 min-w-0">
-              <div className="flex items-center gap-2">
-                <div className="w-12 h-12 relative flex-shrink-0">
-                  {/* replace /logo.png with your actual logo path if different */}
-                  <Image src="/logo.png" alt="Agasthya Superfoods" width={48} height={48} className="rounded-full object-contain" />
-                </div>
+              <div className="w-12 h-12 relative flex-shrink-0">
+                <Image src="/logo.png" alt="Agasthya Superfoods" width={48} height={48} className="rounded-full object-contain" />
               </div>
             </div>
-
-            {/* compact action icons (calendar + date input, refresh icon, add icon) */}
+            {/* action bar */}
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-1.5">
                 <FiCalendar className="text-gray-500" />
@@ -322,36 +227,20 @@ export default function TalakondapallyAttendance() {
                   className={`text-sm outline-none bg-transparent ${PRIMARY_OUTLINE}`}
                 />
               </div>
-
-              <button
-                onClick={() => loadForDate()}
-                aria-label="Refresh"
-                title="Refresh"
-                className="rounded-lg p-2 border border-gray-200 bg-white hover:bg-gray-50"
-              >
+              <button onClick={() => loadForDate()} aria-label="Refresh" title="Refresh" className="rounded-lg p-2 border border-gray-200 bg-white hover:bg-gray-50">
                 <FiRefreshCw />
               </button>
-
-              {/* Add is now always clickable (not disabled for read-only) */}
-              <button
-                onClick={() => setShowAdd(true)}
-                aria-label="Add employee"
-                title="Add employee"
-                className={`rounded-lg p-2 ${PRIMARY_BTN} text-white`}
-              >
+              <button onClick={() => setShowAdd(true)} aria-label="Add employee" title="Add employee" className={`rounded-lg p-2 ${PRIMARY_BTN} text-white`}>
                 <FiUserPlus />
               </button>
             </div>
           </div>
-
           <div className="px-4 pb-3 text-xs text-gray-700 flex items-center gap-3 overflow-x-auto">
             <span>Total: <b>{counts.total}</b></span>
             <span className="text-emerald-700">Present: <b>{counts.present}</b></span>
             <span className="text-rose-700">Absent: <b>{counts.absent}</b></span>
             <span className="text-amber-700">Half Day: <b>{counts.half}</b></span>
           </div>
-
-          {/* Update attendance button above table */}
           {readOnly ? (
             <div className="px-4 pb-2">
               <button
@@ -364,8 +253,6 @@ export default function TalakondapallyAttendance() {
             </div>
           ) : null}
         </header>
-
-        {/* Main table and cards */}
         {readOnly ? (
           <>
             <div className="mx-4 mt-3 rounded-xl border border-amber-200 bg-amber-50 text-amber-800 text-sm p-3">
@@ -392,11 +279,15 @@ export default function TalakondapallyAttendance() {
                           <td className="px-4 py-2 text-gray-900">{e.employee_name}</td>
                           <td className="px-4 py-2">
                             <span
-                              className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium
-                                ${(attMap[e.id] || STATUS.PRESENT) === STATUS.PRESENT ? "bg-emerald-100 text-emerald-700" :
-                                 (attMap[e.id] || STATUS.PRESENT) === STATUS.ABSENT  ? "bg-rose-100 text-rose-700"    :
-                                 (attMap[e.id] || STATUS.PRESENT) === STATUS.HALF    ? "bg-amber-100 text-amber-700"   :
-                                                                                        "bg-gray-100 text-gray-700" }`}
+                              className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                                (attMap[e.id] || STATUS.PRESENT) === STATUS.PRESENT
+                                  ? "bg-emerald-100 text-emerald-700"
+                                  : (attMap[e.id] || STATUS.PRESENT) === STATUS.ABSENT
+                                  ? "bg-rose-100 text-rose-700"
+                                  : (attMap[e.id] || STATUS.PRESENT) === STATUS.HALF
+                                  ? "bg-amber-100 text-amber-700"
+                                  : "bg-gray-100 text-gray-700"
+                              }`}
                             >
                               {attMap[e.id] || STATUS.PRESENT}
                             </span>
@@ -459,54 +350,46 @@ export default function TalakondapallyAttendance() {
                   );
                 })
               )}
+              {isEditing && employees.length > 0 && (
+                <div className="flex justify-end space-x-2 pt-2">
+                  <button onClick={cancelEditing} type="button"
+                    className="px-5 py-2 rounded-lg border border-gray-200 text-sm text-gray-700 hover:bg-gray-50">
+                    Cancel
+                  </button>
+                  <button onClick={save} type="button"
+                    className={`px-5 py-2 rounded-lg ${PRIMARY_BTN} text-white text-sm hover:bg-amber-700`}>
+                    Save
+                  </button>
+                </div>
+              )}
             </div>
           </section>
         )}
-
-        <MobileFooterMenu />
+        {showAdd ? (
+          <AddEmployeeModalBottom
+            onClose={() => setShowAdd(false)}
+            onAdded={() => { setShowAdd(false); loadForDate(); }}
+            disabled={!isEditing}
+            designationOptions={DESIGNATION_OPTIONS}
+          />
+        ) : null}
       </main>
-
-      {showAdd ? (
-        <AddEmployeeModalBottom
-          onClose={() => setShowAdd(false)}
-          onAdded={() => {
-            setShowAdd(false);
-            loadForDate();
-          }}
-          disabled={!isEditing}
-          designationOptions={DESIGNATION_OPTIONS_FOR_DROPDOWN}
-        />
-      ) : null}
     </>
   );
 }
 
-/* ---------------------------------------------------------------------------
-   AddEmployeeModalBottom - bottom sheet modal that covers footer
-   - anchored to bottom: 0 and overlays the footer (covers it)
-   - overlay present and modal z-index above footer
-   - constrained height with overflow-auto
-   - custom upward-opening dropdown is rendered as a full fixed panel
-     with reduced header/padding and no extra outer border for a cleaner look.
------------------------------------------------------------------------------*/
-
+// ----------- MODAL: ADD EMPLOYEE -----------
 function AddEmployeeModalBottom({ onClose, onAdded, disabled, designationOptions = [] }) {
   const [name, setName] = useState("");
   const [employeeId, setEmployeeId] = useState("");
   const [designation, setDesignation] = useState(designationOptions[0] || "");
   const [customDesignation, setCustomDesignation] = useState("");
   const [saving, setSaving] = useState(false);
-
-  // dropdown related state
   const [showDD, setShowDD] = useState(false);
   const ddTriggerRef = useRef(null);
 
-  useEffect(() => {
-    setDesignation(designationOptions[0] || "");
-  }, [designationOptions]);
-
+  useEffect(() => { setDesignation(designationOptions[0] || ""); }, [designationOptions]);
   const isOther = designation === "Other";
-
   const onSubmit = async (ev) => {
     ev?.preventDefault();
     if (disabled) return;
@@ -517,10 +400,10 @@ function AddEmployeeModalBottom({ onClose, onAdded, disabled, designationOptions
     const finalDesignation = isOther ? (customDesignation.trim() || "Other") : designation;
     try {
       setSaving(true);
-      const res = await fetch('/api/talakondapally/employees', {
+      const res = await fetch('/api/tandur/employees', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ employee_id: employeeId.trim(), employee_name: name.trim(), designation: finalDesignation })
+        body: JSON.stringify({ employee_id: employeeId.trim(), employee_name: name.trim(), designation: finalDesignation }),
       });
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j?.error || 'Add failed');
@@ -529,23 +412,14 @@ function AddEmployeeModalBottom({ onClose, onAdded, disabled, designationOptions
       onAdded && onAdded();
     } catch (e) {
       Swal.fire({ icon: 'error', title: 'Add failed', text: e.message || 'Something went wrong' });
-    } finally {
-      setSaving(false);
-    }
+    } finally { setSaving(false); }
   };
 
-  // When dropdown is visible we render it as a fixed full-panel overlay
   return (
     <>
       <div className="fixed inset-0 z-50 flex items-end justify-center">
-        {/* overlay (covers whole screen, including footer) */}
-        <div className="absolute inset-0 bg-black/40 z-40" onClick={() => {
-          // close dropdown first if open, otherwise close modal
-          if (showDD) setShowDD(false);
-          else onClose && onClose();
-        }} />
-
-        {/* bottom sheet modal (anchored to bottom: covers footer) */}
+        {/* overlay */}
+        <div className="absolute inset-0 bg-black/40 z-40" onClick={() => { if (showDD) setShowDD(false); else onClose && onClose(); }} />
         <form
           onSubmit={onSubmit}
           className="relative z-50 w-full max-w-md bg-white rounded-t-xl shadow-xl overflow-auto max-h-[86vh] mb-0"
@@ -555,136 +429,61 @@ function AddEmployeeModalBottom({ onClose, onAdded, disabled, designationOptions
         >
           <div className="flex items-center justify-between px-3 py-2 border-b border-transparent">
             <div className="text-sm font-medium text-gray-800">Add employee</div>
-            <button
-              type="button"
-              onClick={() => onClose && onClose()}
-              aria-label="Close"
-              className="p-2 rounded-md hover:bg-gray-100 text-gray-600"
-            >
-              ✕
-            </button>
+            <button type="button" onClick={() => onClose && onClose()} aria-label="Close" className="p-2 rounded-md hover:bg-gray-100 text-gray-600">✕</button>
           </div>
-
           <div className="p-3 space-y-3">
             <div>
               <label className="block text-xs text-gray-600">Employee ID</label>
-              <input
-                value={employeeId}
-                onChange={(e) => setEmployeeId(e.target.value)}
-                disabled={disabled || saving}
-                placeholder="EMP123"
-                className="w-full mt-1 px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none"
-              />
+              <input value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} disabled={disabled || saving}
+                placeholder="EMP123" className="w-full mt-1 px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none" />
             </div>
-
             <div>
               <label className="block text-xs text-gray-600">Name</label>
-              <input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                disabled={disabled || saving}
-                placeholder="Full name"
-                className="w-full mt-1 px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none"
-              />
+              <input value={name} onChange={(e) => setName(e.target.value)} disabled={disabled || saving}
+                placeholder="Full name" className="w-full mt-1 px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none" />
             </div>
-
-            {/* --- DESIGNATION FIELD (opens a fixed full panel) --- */}
+            {/* --- DESIGNATION FIELD (modal panel dropdown) --- */}
             <div className="relative">
               <label className="block text-xs text-gray-600">Designation</label>
-
-              {/* Trigger button */}
-              <button
-                ref={ddTriggerRef}
-                type="button"
-                disabled={disabled || saving}
-                onClick={() => setShowDD((p) => !p)}
+              <button ref={ddTriggerRef} type="button" disabled={disabled || saving} onClick={() => setShowDD((p) => !p)}
                 className="w-full text-left mt-1 px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white"
               >
                 {designation || "Select designation"}
               </button>
-
-              {/* If showDD is true, render a fixed full-panel dropdown that escapes modal clipping */}
               {showDD && (
                 <div className="fixed inset-0 z-60 flex items-center justify-center pointer-events-none">
-                  {/* transparent backdrop for dropdown; clicking closes dropdown */}
-                  <div
-                    className="absolute inset-0"
-                    onClick={() => setShowDD(false)}
-                    aria-hidden
-                  />
-
-                  {/* the dropdown panel: aligned to modal width, reduced padding, NO outer border for cleaner look */}
-                  <div
-                    className="relative w-full max-w-md mx-4 pointer-events-auto"
-                    style={{ marginBottom: '8vh' }}
-                  >
+                  <div className="absolute inset-0" onClick={() => setShowDD(false)} aria-hidden />
+                  <div className="relative w-full max-w-md mx-4 pointer-events-auto" style={{ marginBottom: '8vh' }}>
                     <div className="bg-white rounded-lg shadow-xl max-h-[82vh] overflow-auto">
-                      {/* compact header inside dropdown */}
                       <div className="flex items-center justify-between px-3 py-2">
                         <div className="text-sm font-medium">Select designation</div>
-                        <button
-                          type="button"
-                          onClick={() => setShowDD(false)}
-                          className="p-1 rounded-md hover:bg-gray-100 text-gray-600 text-sm"
-                        >
-                          ✕
-                        </button>
+                        <button type="button" onClick={() => setShowDD(false)} className="p-1 rounded-md hover:bg-gray-100 text-gray-600 text-sm">✕</button>
                       </div>
-
-                      {/* options list — larger clickable rows, reduced extra borders */}
                       <div>
                         {designationOptions.map((d) => (
-                          <div
-                            key={d}
-                            onClick={() => { setDesignation(d); setShowDD(false); }}
-                            className="px-4 py-3 text-sm hover:bg-gray-50 cursor-pointer"
-                          >
-                            {d}
-                          </div>
+                          <div key={d} onClick={() => { setDesignation(d); setShowDD(false); }}
+                            className="px-4 py-3 text-sm hover:bg-gray-50 cursor-pointer">{d}</div>
                         ))}
-
-                        {/* Ensure "Other" option exists and is selectable */}
                         {!designationOptions.includes("Other") && (
-                          <div
-                            onClick={() => { setDesignation("Other"); setShowDD(false); }}
-                            className="px-4 py-3 text-sm hover:bg-gray-50 cursor-pointer"
-                          >
-                            Other
-                          </div>
+                          <div onClick={() => { setDesignation("Other"); setShowDD(false); }}
+                            className="px-4 py-3 text-sm hover:bg-gray-50 cursor-pointer">Other</div>
                         )}
                       </div>
                     </div>
                   </div>
                 </div>
               )}
-
             </div>
-
-            {/* Custom designation input when "Other" is selected */}
             {designation === "Other" && (
-              <input
-                value={customDesignation}
-                onChange={(e) => setCustomDesignation(e.target.value)}
-                disabled={disabled || saving}
-                placeholder="Custom designation"
-                className="w-full mt-2 px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none"
-              />
+              <input value={customDesignation} onChange={(e) => setCustomDesignation(e.target.value)} disabled={disabled || saving}
+                placeholder="Custom designation" className="w-full mt-2 px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none" />
             )}
-
             <div className="flex justify-end">
-              <button
-                type="button"
-                onClick={() => onClose && onClose()}
+              <button type="button" onClick={() => onClose && onClose()}
                 className="mr-2 px-4 py-2 rounded-lg border border-gray-200 text-sm text-gray-700 hover:bg-gray-50"
-                disabled={saving}
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={disabled || saving}
-                className="px-4 py-2 rounded-lg bg-amber-600 text-white text-sm hover:bg-amber-700"
-              >
+                disabled={saving}>Cancel</button>
+              <button type="submit" disabled={disabled || saving}
+                className="px-4 py-2 rounded-lg bg-amber-600 text-white text-sm hover:bg-amber-700">
                 {saving ? "Saving…" : "Save"}
               </button>
             </div>
