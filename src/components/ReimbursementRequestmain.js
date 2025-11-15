@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { IoMdAttach } from 'react-icons/io';
 import { MdClear } from 'react-icons/md';
+import Swal from 'sweetalert2';
 
 function ReimbursementRequestmain() {
   const [form, setForm] = useState({
@@ -66,8 +67,8 @@ function ReimbursementRequestmain() {
     e.preventDefault();
     setSubmitting(true);
 
-    // 1. Upload files to SharePoint
     let fileUrls = [];
+    // Only upload invoices if there are any
     if (form.invoices.length > 0) {
       const fileFormData = new FormData();
       form.invoices.forEach(file => fileFormData.append('invoices', file));
@@ -78,21 +79,24 @@ function ReimbursementRequestmain() {
       const uploadData = await uploadRes.json();
       if (!uploadData.success) {
         setSubmitting(false);
-        alert("Attachment upload failed: " + uploadData.message);
+        Swal.fire("Attachment upload failed!", uploadData.message, "error");
         return;
       }
       fileUrls = uploadData.fileUrls;
     }
 
-    // 2. Save reimbursement entry to DB
+    // Prepare the payload; omit 'description' if empty
     const details = {
       date: form.date,
       employeeName: form.employeeName,
       employeeId: form.employeeId,
       amount: form.amount,
-      description: form.description,
-      fileUrls, // sent as array
+      fileUrls, // array, may be empty
     };
+    if (form.description && form.description.trim() !== "") {
+      details.description = form.description;
+    }
+    // Send to reimbursement backend
     const res = await fetch("/api/reimbursement", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -101,7 +105,7 @@ function ReimbursementRequestmain() {
     const data = await res.json();
     setSubmitting(false);
     if (data.success) {
-      alert("Submitted successfully!\n URLs:\n" + fileUrls.join('\n'));
+      Swal.fire("Success!", "Reimbursement request submitted.", "success");
       setForm({
         date: '',
         employeeName: form.employeeName,
@@ -111,7 +115,7 @@ function ReimbursementRequestmain() {
         invoices: [],
       });
     } else {
-      alert("Error (save to DB): " + data.message);
+      Swal.fire("Error", data.message, "error");
     }
   };
 
@@ -158,9 +162,6 @@ function ReimbursementRequestmain() {
           </div>
           <div className="relative">
             <label className="block text-gray-700 font-medium mb-1">Amount</label>
-            <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 text-lg pointer-events-none">
-              ₹
-            </span>
             <input
               type="number"
               name="amount"
@@ -177,12 +178,11 @@ function ReimbursementRequestmain() {
         {/* Right Side */}
         <div className="flex flex-col space-y-6">
           <div>
-            <label className="block text-gray-700 font-medium mb-1">Description</label>
+            <label className="block text-gray-700 font-medium mb-1">Description (optional)</label>
             <textarea
               name="description"
               value={form.description}
               onChange={handleChange}
-              required
               placeholder="Description of expense"
               rows={3}
               className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-700 resize-y"
