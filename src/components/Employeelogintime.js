@@ -61,7 +61,7 @@ function Employeelogintime() {
   }
 
   return (
-    <div className="w-full mx-auto py-4 pb-[70px] px-2">
+    <div className="w-full mx-auto py-4  px-2">
       <h2 className="text-lg md:text-2xl font-bold text-gray-800 mb-4 text-center">Attendance</h2>
       {/* MOBILE: CARDS */}
       <div className="block md:hidden space-y-3 mb-2">
