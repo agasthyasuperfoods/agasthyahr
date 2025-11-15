@@ -269,7 +269,6 @@ export default function TandurAttendance() {
               {attMap[e.id] || STATUS.PRESENT}
             </span>
           </td>
-          <td className="px-4 py-2 text-gray-700">{e.number || "—"}</td>
           <td className="px-4 py-2">
             <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${designationColorClasses(canonical)}`}>
               {e.designation ? e.designation : prettyLabel(canonical)}
@@ -302,7 +301,6 @@ export default function TandurAttendance() {
                       <div>
                         <div className="font-medium text-gray-900">{e.employee_name}</div>
                         <div className="text-xs text-gray-500 flex items-center gap-2">
-                          <span>{e.number || "—"}</span>
                           <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${designationColorClasses(canonical)}`}>{e.designation ? e.designation : prettyLabel(canonical)}</span>
                         </div>
                       </div>
@@ -335,7 +333,7 @@ export default function TandurAttendance() {
           <div className="flex items-start justify-between">
             <div>
               <div className="font-medium text-gray-900">{e.employee_name}</div>
-              <div className="text-xs text-gray-500">{e.number || "—"} • <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${designationColorClasses(canonical)}`}>{e.designation ? e.designation : prettyLabel(canonical)}</span></div>
+              <div className="text-xs text-gray-500"> <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${designationColorClasses(canonical)}`}>{e.designation ? e.designation : prettyLabel(canonical)}</span></div>
             </div>
             <button onClick={() => deleteEmployee(e)} disabled={!isEditing} className="text-xs rounded-lg border border-rose-300 text-rose-700 px-2 py-1 hover:bg-rose-50 disabled:opacity-50">Delete</button>
           </div>
@@ -417,7 +415,6 @@ export default function TandurAttendance() {
                   <tr>
                     <th className="text-left px-4 py-2 font-semibold text-gray-700">Name</th>
                     <th className="text-left px-4 py-2 font-semibold text-gray-700">Status</th>
-                    <th className="text-left px-4 py-2 font-semibold text-gray-700">Number</th>
                     <th className="text-left px-4 py-2 font-semibold text-gray-700">Designation</th>
                   </tr>
                 </thead>
