@@ -5,13 +5,12 @@ import React from 'react'
 
 function Loginstime() {
   return (
-    <div><EmployeeHeader />
-    
-        <Employeelogintime />
-    <Employeefooter />
-      
+    <div className="min-h-screen pb-[70px] bg-white"> {/* ← add padding here */}
+      <EmployeeHeader />
+      <Employeelogintime />
+      <Employeefooter />
     </div>
-  )
+  );
 }
 
-export default Loginstime
+export default Loginstime;
