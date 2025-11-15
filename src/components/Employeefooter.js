@@ -3,7 +3,7 @@ import { useRouter } from 'next/router';
 import { FaMoneyBillAlt, FaFileInvoiceDollar, FaUserCheck, FaCalendarAlt } from 'react-icons/fa';
 
 const navItems = [
-  { label: "Pay Sheets", icon: <FaMoneyBillAlt />, href: "/Edash" },
+  { label: "Payslips", icon: <FaMoneyBillAlt />, href: "/Edash" },
   { label: "Reimbursement", icon: <FaFileInvoiceDollar />, href: "/ReimbursementRequest" },
   { label: "Logins", icon: <FaUserCheck />, href: "/Loginstime" },
   { label: "Leaves", icon: <FaCalendarAlt />, href: "/Employeeleaves" }

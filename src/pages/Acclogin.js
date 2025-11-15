@@ -59,7 +59,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen w-full bg-gray-50 flex items-center justify-center p-4">
+    <div className="min-h-screen w-full bg-gray-50 flex items-center justify-center">
       <div className="bg-white p-10 sm:p-12 rounded-2xl shadow-xl w-full max-w-md">
         <div className="flex justify-center mb-6">
           <Image src="/agasthyalogo.png" alt="Agasthya Logo" width={170} height={60} priority />
