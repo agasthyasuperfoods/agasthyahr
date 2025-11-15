@@ -209,10 +209,7 @@ export default function EmployeeHeader({
   const handleProfile = onProfileClick || defaultProfile;
 
   const NAV = [
-    { href: "/Edash", label: "Payslip" },
-    { href: "/ReimbursementRequest", label: "Reimbursement" },
-    { href: "/Timesheet", label: "Timesheet" },
-    { href: "/Leaves", label: "Leaves" },
+
   ];
 
   const isActive = (href) => currentPath === href;

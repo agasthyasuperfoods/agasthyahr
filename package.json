@@ -9,7 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@azure/msal-node": "^3.8.1",
+    "@azure/msal-node": "^3.8.2",
     "bcryptjs": "^3.0.2",
     "docx-preview": "^0.3.6",
     "formidable": "^3.5.4",
