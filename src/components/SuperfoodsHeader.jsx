@@ -1,8 +1,10 @@
-// /src/components/SuperfoodsHeader.jsx
+import React, { useCallback, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/router";
-import { useCallback } from "react";
+import Swal from "sweetalert2";
+
+// --- Paste your EmployeeProfileModal component here ---
 
 export default function SuperfoodsHeader({
   adminName = "Admin",
@@ -11,6 +13,7 @@ export default function SuperfoodsHeader({
 }) {
   const router = useRouter();
   const currentPath = router.pathname;
+  const [profileOpen, setProfileOpen] = useState(false);
 
   // Default logout behavior
   const defaultLogout = useCallback(async () => {
@@ -28,17 +31,14 @@ export default function SuperfoodsHeader({
     }
   }, [router]);
 
-  // Default profile redirection
-  const defaultProfile = useCallback(() => {
-    router.push("/Superfoods/profile");
-  }, [router]);
+  // Change default profile—now opens a modal
+  const defaultProfile = useCallback(() => setProfileOpen(true), []);
 
   const handleLogout = onLogout || defaultLogout;
   const handleProfile = onProfileClick || defaultProfile;
 
-  // Updated Superfoods navigation
   const NAV = [
-    { href: "/Accountsmodule", label: "Paysheets" },
+    { href: "/Accountsmodule", label: "Paysheet" },
     { href: "/SuperfoodsPayslips", label: "Payslips" },
     { href: "/SuperfoodsReimbursement", label: "Reimbursement" },
     { href: "/AccEmployees", label: "Employees" },
@@ -62,7 +62,6 @@ export default function SuperfoodsHeader({
             />
           </div>
         </div>
-
         {/* Navigation */}
         <nav className="hidden md:flex items-center gap-1">
           {NAV.map((n) => (
@@ -79,7 +78,6 @@ export default function SuperfoodsHeader({
             </Link>
           ))}
         </nav>
-
         {/* Profile + Logout */}
         <div className="flex items-center gap-2">
           <button
@@ -90,7 +88,6 @@ export default function SuperfoodsHeader({
           >
             Profile
           </button>
-
           <button
             type="button"
             onClick={handleLogout}
@@ -101,6 +98,8 @@ export default function SuperfoodsHeader({
           </button>
         </div>
       </div>
+      {/* Modal Profile */}
+      <EmployeeProfileModal open={profileOpen} onClose={() => setProfileOpen(false)} />
     </header>
   );
 }

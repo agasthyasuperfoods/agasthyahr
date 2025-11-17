@@ -1,176 +1,174 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 
-// Sample data
-const sampleData = [
-  {
-    id: 1,
-    employee: 'Dinitha',
-    date: '2025-11-01',
-    category: 'Travel',
-    purpose: 'Client meeting in Hyderabad',
-    amount: 1500,
-    mdApproved: true,
-    paid: false,
-    receipts: ['receipt1.png', 'receipt2.pdf'],
-  },
-  {
-    id: 2,
-    employee: 'John',
-    date: '2025-11-03',
-    category: 'Office Supplies',
-    purpose: 'Stationery for project team',
-    amount: 500,
-    mdApproved: false,
-    paid: false,
-    receipts: [],
-  },
-];
+function formatDate(d) {
+  if (!d) return "-";
+  try { return new Date(d).toLocaleDateString(); } catch { return d; }
+}
 
 function SuperfoodsReimbursementMain() {
-  const [fortnight, setFortnight] = useState('first'); // 'first' => 1-15, 'second' => 16-end
-  const [reimbursements, setReimbursements] = useState(sampleData);
+  const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [payingId, setPayingId] = useState(null); // Show skeleton for row being paid
 
-  const handlePay = (id) => {
-    setReimbursements((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, paid: true } : r))
-    );
+  // Load data
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  async function fetchData() {
+    setLoading(true);
+    const res = await fetch('/api/Accreimbursements');
+    const body = await res.json();
+    setData(body.success ? body.data : []);
+    setLoading(false);
+  }
+
+  // Mark payment done (PATCH to API + skeleton reload)
+  const handlePay = async (id) => {
+    setPayingId(id);
+    try {
+      await fetch('/api/Accreimbursements', {
+        method: 'PATCH',
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id })
+      });
+      await fetchData();
+    } finally {
+      setPayingId(null);
+    }
   };
 
-  const filteredData = reimbursements.filter((r) =>
-    fortnight === 'first' ? new Date(r.date).getDate() <= 15 : new Date(r.date).getDate() > 15
-  );
-
   return (
-    <div style={{ padding: '30px', fontFamily: 'Arial, sans-serif', background: '#f5f5f5', minHeight: '100vh' }}>
-      <h1 style={{ textAlign: 'center', marginBottom: '20px', color: '#333' }}>Superfoods Reimbursement Dashboard</h1>
-
-      {/* Fortnight Filter */}
-      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '30px', gap: '10px' }}>
-        <button
-          onClick={() => setFortnight('first')}
-          style={{
-            padding: '10px 20px',
-            borderRadius: '5px',
-            border: fortnight === 'first' ? '2px solid #007bff' : '1px solid #ccc',
-            background: fortnight === 'first' ? '#e6f0ff' : '#fff',
-            cursor: 'pointer',
-          }}
-        >
-          1st - 15th
-        </button>
-        <button
-          onClick={() => setFortnight('second')}
-          style={{
-            padding: '10px 20px',
-            borderRadius: '5px',
-            border: fortnight === 'second' ? '2px solid #007bff' : '1px solid #ccc',
-            background: fortnight === 'second' ? '#e6f0ff' : '#fff',
-            cursor: 'pointer',
-          }}
-        >
-          16th - End
-        </button>
-      </div>
-
-      {/* Reimbursement Cards */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-        {filteredData.length === 0 && (
-          <div style={{ textAlign: 'center', color: '#666' }}>No reimbursement requests for this period.</div>
-        )}
-
-        {filteredData.map((r) => (
-          <div
-            key={r.id}
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              padding: '20px',
-              background: '#fff',
-              borderRadius: '8px',
-              boxShadow: '0 2px 5px rgba(0,0,0,0.1)',
-            }}
-          >
-            {/* Header Row */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px', flexWrap: 'wrap' }}>
-              <div style={{ fontWeight: 'bold', fontSize: '16px', color: '#333' }}>{r.employee}</div>
-              <div style={{ fontSize: '14px', color: '#666' }}>{r.date}</div>
-            </div>
-
-            {/* Details Row */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
-              <div style={{ flex: 2 }}>
-                <div style={{ fontSize: '14px', color: '#555' }}>Category: <strong>{r.category}</strong></div>
-                <div style={{ fontSize: '14px', color: '#555' }}>Purpose: {r.purpose}</div>
-              </div>
-
-              <div style={{ flex: 1, fontWeight: 'bold', fontSize: '16px', color: '#333', textAlign: 'center' }}>
-                ₹{r.amount}
-              </div>
-
-              {/* MD Approval Status */}
-              <div style={{ flex: 1, textAlign: 'center' }}>
-                <span
-                  style={{
-                    padding: '5px 10px',
-                    borderRadius: '15px',
-                    background: r.mdApproved ? '#d4edda' : '#fff3cd',
-                    color: r.mdApproved ? '#155724' : '#856404',
-                    fontWeight: 'bold',
-                  }}
-                >
-                  {r.mdApproved ? 'Approved by MD' : 'Pending MD Approval'}
-                </span>
-              </div>
-
-              {/* Receipts */}
-              <div style={{ flex: 2, textAlign: 'center' }}>
-                {r.receipts.length > 0
-                  ? r.receipts.map((file, idx) => (
-                      <a
-                        key={idx}
-                        href={`#`} // Replace with actual download URL
-                        download={file}
-                        style={{
-                          marginRight: '8px',
-                          textDecoration: 'none',
-                          color: '#007bff',
-                          fontWeight: 'bold',
-                        }}
-                      >
-                        {file}
-                      </a>
-                    ))
-                  : 'No attachments'}
-              </div>
-
-              {/* Action Button */}
-              <div style={{ flex: 1, textAlign: 'center' }}>
-                {r.mdApproved && !r.paid ? (
-                  <button
-                    onClick={() => handlePay(r.id)}
-                    style={{
-                      padding: '8px 15px',
-                      background: '#007bff',
-                      color: '#fff',
-                      border: 'none',
-                      borderRadius: '5px',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Mark as Paid
-                  </button>
-                ) : r.paid ? (
-                  <span style={{ fontWeight: 'bold', color: '#28a745' }}>Paid</span>
-                ) : (
-                  <span style={{ fontWeight: 'bold', color: '#ffc107' }}>Pending</span>
-                )}
-              </div>
-            </div>
-          </div>
-        ))}
+    <div style={{
+      padding: '30px',
+      fontFamily: 'Arial, sans-serif',
+      background: '#f5f5f5',
+      minHeight: '100vh'
+    }}>
+      <h1 style={{
+        textAlign: 'center',
+        marginBottom: '20px',
+        color: '#333'
+      }}>
+        Superfoods Reimbursement Dashboard (Accountant)
+      </h1>
+      <div style={{
+        background:'#fff',
+        borderRadius:'8px',
+        boxShadow:'0 2px 5px rgba(0,0,0,0.08)',
+        padding:'16px',
+        overflowX: 'auto'
+      }}>
+        <table style={{
+          minWidth: '950px', width: '100%',
+          borderCollapse: 'collapse',
+        }}>
+          <thead>
+            <tr style={{background:'#f9f9f9'}}>
+              <th style={th}>Employee</th>
+              <th style={th}>Date</th>
+              <th style={th}>Description</th>
+              <th style={th}>Amount (₹)</th>
+              <th style={th}>Attachment</th>
+              <th style={th}>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              Array.from({ length: 5 }).map((_, i) => (
+                <tr key={i}>
+                  {Array.from({length:6}).map((_,j)=>(
+                    <td key={j}><div style={{background:'#e6e6e6',height:20,margin:5,borderRadius:5}}/></td>
+                  ))}
+                </tr>
+              ))
+            ) : data.length === 0 ? (
+              <tr>
+                <td colSpan={6} style={{ textAlign: 'center', color: '#999', padding: '24px' }}>
+                  No submitted reimbursements pending payment.
+                </td>
+              </tr>
+            ) : data.map((r) => (
+              <tr key={r.id}>
+                <td style={td}>{r.employeename}</td>
+                <td style={td}>{formatDate(r.date)}</td>
+                <td style={td}>{r.description}</td>
+                <td style={td}>₹{r.amount}</td>
+                <td style={td}>
+                  {r.invoice_url ? (
+                    <a
+                      href={r.invoice_url}
+                      target="_blank"
+                      download
+                      style={downloadBtn}
+                      rel="noopener noreferrer"
+                    >
+                      Download
+                    </a>
+                  ) : "No file"}
+                </td>
+                {/* Accountant Action */}
+                <td style={td}>
+                  {payingId === r.id ? (
+                    <div style={{
+                      display:'flex',alignItems:'center',
+                      justifyContent:'center'
+                    }}>
+                      <div style={{
+                        background:'#e6e6e6',height:20,width:80,borderRadius:5
+                      }}>&nbsp;</div>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => handlePay(r.id)}
+                      style={{
+                        padding: '8px 15px',
+                        background: '#009688',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '5px',
+                        cursor: 'pointer',
+                        fontWeight:600,
+                      }}
+                    >
+                      Mark Payment Done
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );
 }
+
+const th = {
+  textAlign: 'left',
+  padding: '10px 14px',
+  fontSize: '15px',
+  fontWeight: 600,
+  color: '#555',
+  background: '#f9f9f9',
+  borderBottom: '2px solid #eee'
+};
+const td = {
+  padding: '16px 14px',
+  fontSize: '14px',
+  color: '#333',
+  background: '#fff',
+  borderBottom: '1px solid #f2f2f2'
+};
+const downloadBtn = {
+  padding:'7px 13px',
+  background:'#e2e6ea',
+  color:'#007bff',
+  border:'none',
+  borderRadius:'5px',
+  cursor:'pointer',
+  fontWeight:600,
+  textDecoration:'none'
+};
 
 export default SuperfoodsReimbursementMain;
