@@ -13,22 +13,13 @@ export default async function handler(req, res) {
   const { month } = req.query;
 
   if (!month) {
-    return res.status(400).json({ message: 'Month is required' });
+    return res.status(200).json({ error: 'Month parameter is required' });
   }
-
   const client = await pool.connect();
 
   try {
-    // --- THE DIRTY DATA FIX ---
-    // We use a chain of cleaning functions:
-    // 1. CAST(x AS TEXT)       -> Ensure it's text
-    // 2. REPLACE(x, ',', '')   -> Remove commas (e.g., "40,000" -> "40000")
-    // 3. TRIM(x)               -> Remove spaces (e.g., " 500 " -> "500")
-    // 4. NULLIF(x, '')         -> Handle empty strings
-    // 5. NULLIF(x, '-')        -> Handle dashes used as zeros
-    // 6. ::numeric             -> Finally convert to number
-    
-    const cleanNum = (col) => `NULLIF(NULLIF(TRIM(REPLACE(CAST(${col} AS TEXT), ',', '')), ''), '-')::numeric`;
+    // Helper: Safely cleans currency strings -> numbers
+    const cleanNum = (col) => `NULLIF(REGEXP_REPLACE(${col}::text, '[^0-9.]', '', 'g'), '')::numeric`;
 
     const query = `
       SELECT 
@@ -39,40 +30,44 @@ export default async function handler(req, res) {
         
         a.id,
 
-        -- GROSS SALARY: Cleaned
+        -- 1. GROSS SALARY (FIXED HERE)
+        -- We check 'gross_salary' in the monthly table (a), and 'grosssalary' in the master table (e)
         COALESCE(
-            ${cleanNum('a.gross_salary')}, 
-            ${cleanNum('e.grosssalary')}, 
-            0
+          ${cleanNum('a.gross_salary')}, 
+          ${cleanNum('e.grosssalary')}, 
+          0
         ) AS "grossSalary",
         
+        -- 2. LEAVES CF
+        COALESCE(${cleanNum('a.leaves_cf')}, ${cleanNum('e."Leaves_cf"')}, 0) AS "Leaves_cf",
+
+        -- 3. ATTENDANCE
         COALESCE(a.actual_working_days, 30) AS "requiredDays",
         COALESCE(a.working_days, 0) AS "workingDays",
         COALESCE(a.leaves_taken, 0) AS "absent",
         COALESCE(a.lop_days, 0) AS "lopDaysCount",
         
-        -- LEAVES CF: Cleaned (Case Sensitive column)
-        COALESCE(
-            ${cleanNum('a.leaves_cf')}, 
-            ${cleanNum('e."Leaves_cf"')}, 
-            0
-        ) AS "Leaves_cf",
-        
+        -- 4. DEDUCTIONS
         COALESCE(${cleanNum('a.pf')}, 0) AS pf,
         COALESCE(${cleanNum('a.pt')}, 0) AS pt,
         
-        -- OTHER EXPENSES: Cleaned (Most common fail point)
+        -- 5. OTHER
         COALESCE(${cleanNum('a.other_expenses')}, 0) AS "otherExpenses",
         
+        -- 6. NET PAY
         COALESCE(${cleanNum('a.net_pay')}, 0) AS "netSalary",
         
+        -- 7. EXTRAS
         COALESCE(a.current_month_eligibility, 0) AS current_month_eligibility,
         COALESCE(a.late_adj_days, 0) AS late_adj_days
 
       FROM "EmployeeTable" e
       LEFT JOIN asfho a 
-        ON TRIM(e.employeeid) = TRIM(a.employeeid) 
+        ON TRIM(e.employeeid::text) = TRIM(a.employeeid::text) 
         AND a.month = $1
+      
+      WHERE (TRIM(e.company::text) = 'ASF' OR TRIM(e."Location"::text) = 'HO')
+      
       ORDER BY e.name ASC;
     `;
 
@@ -82,7 +77,7 @@ export default async function handler(req, res) {
       ...row,
       grossSalary: Number(row.grossSalary) || 0,
       Leaves_cf: Number(row.Leaves_cf) || 0,
-      requiredDays: Number(row.requiredDays) || 0,
+      requiredDays: Number(row.requiredDays) || 30,
       absent: Number(row.absent) || 0,
       workingDays: Number(row.workingDays) || 0,
       lopDaysCount: Number(row.lopDaysCount) || 0,
@@ -93,19 +88,17 @@ export default async function handler(req, res) {
     }));
 
     res.status(200).json({ 
-      success: true, 
+      title: `Main Employee Pay Sheet - ${month}`,
       employees 
     });
 
   } catch (error) {
-    console.error('[API ERROR] Paysheet Fetch Failed:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: error.message || 'Database Error',
-      details: error.detail 
+    console.error('[API ERROR]', error);
+    res.status(200).json({ 
+      error: 'Database Error', 
+      details: error.message 
     });
   } finally {
     client.release();
   }
 }
-//                             

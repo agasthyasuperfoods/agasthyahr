@@ -8,14 +8,12 @@ import {
   Edit,        
   X,
   CheckCircle,
-  Save 
+  Save,
+  AlertTriangle,
+  Check,
+  Info
 } from 'lucide-react';
-import * as XLSX from 'xlsx';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
-import Swal from 'sweetalert2'; 
 
-// --- HELPERS ---
 const formatCurrency = (amount) => {
   if (amount === undefined || amount === null || amount === '') return '₹0';
   const num = Number(amount);
@@ -23,17 +21,6 @@ const formatCurrency = (amount) => {
   return new Intl.NumberFormat('en-IN', {
     style: 'currency',    
     currency: 'INR',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(num);
-};
-
-const formatCurrencyForPDF = (amount) => {
-  if (amount === undefined || amount === null || amount === '') return '0';
-  const num = Number(amount);
-  if (isNaN(num)) return '0';
-  return new Intl.NumberFormat('en-IN', {
-    style: 'decimal', 
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(num);
@@ -124,31 +111,55 @@ const calculateSalary = (employees, daysInMonth) => {
   return employees.map(emp => recalculateEmployee(emp, daysInMonth));
 };
 
-// --- 3. NEW "LIGHT GLASS" ANIMATION ---
+// --- 3. ANIMATIONS & MODALS ---
 const SubmitOverlay = () => (
   <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-white/80 backdrop-blur-md transition-all duration-500">
     <div className="flex flex-col items-center animate-in fade-in zoom-in duration-300">
-      
-      {/* Pulsing Ripple Effect */}
       <div className="relative flex items-center justify-center h-24 w-24 mb-6">
-         {/* Outer expanding ring */}
          <span className="absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-20 animate-ping"></span>
-         
-         {/* Middle static ring */}
          <div className="relative inline-flex rounded-full h-20 w-20 bg-white items-center justify-center border-4 border-green-100 shadow-lg">
-            {/* Spinning Arc */}
             <div className="absolute inset-0 rounded-full border-4 border-green-500 border-t-transparent animate-spin"></div>
-            
-            {/* Center Brand Dot */}
             <div className="h-6 w-6 bg-red-600 rounded-full shadow-md animate-pulse"></div>
          </div>
       </div>
-
       <h3 className="text-2xl font-bold text-gray-800 tracking-tight">Saving Changes</h3>
       <p className="text-gray-500 text-sm mt-2 font-medium animate-pulse">Syncing securely with database...</p>
     </div>
   </div>
 );
+
+const NotificationModal = ({ type, title, message, onClose }) => {
+  const styles = {
+    success: { bg: 'bg-green-50', border: 'border-green-200', icon: <Check className="h-6 w-6 text-green-600" />, btn: 'bg-green-600 hover:bg-green-700' },
+    error: { bg: 'bg-red-50', border: 'border-red-200', icon: <X className="h-6 w-6 text-red-600" />, btn: 'bg-red-600 hover:bg-red-700' },
+    warning: { bg: 'bg-yellow-50', border: 'border-yellow-200', icon: <AlertTriangle className="h-6 w-6 text-yellow-600" />, btn: 'bg-yellow-600 hover:bg-yellow-700' },
+    info: { bg: 'bg-blue-50', border: 'border-blue-200', icon: <Info className="h-6 w-6 text-blue-600" />, btn: 'bg-blue-600 hover:bg-blue-700' },
+  };
+  
+  const style = styles[type] || styles.info;
+
+  return (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+      <div className={`w-full max-w-md rounded-lg shadow-2xl p-6 border ${style.bg} ${style.border} transform transition-all scale-100`}>
+        <div className="flex items-start gap-4">
+          <div className={`p-2 rounded-full bg-white shadow-sm`}>{style.icon}</div>
+          <div className="flex-1">
+            <h3 className="text-lg font-bold text-gray-900">{title}</h3>
+            <div className="mt-2 text-sm text-gray-600 whitespace-pre-wrap max-h-60 overflow-y-auto">{message}</div>
+          </div>
+        </div>
+        <div className="mt-6 flex justify-end">
+          <button 
+            onClick={onClose} 
+            className={`px-4 py-2 text-white text-sm font-medium rounded shadow-md transition-colors ${style.btn}`}
+          >
+            {type === 'warning' ? 'I will fix them' : 'Close'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 // --- 4. TABLE COMPONENT ---
 const PaysheetTable = ({ title, employees, onEmployeeChange, isEditMode }) => {
@@ -160,6 +171,7 @@ const PaysheetTable = ({ title, employees, onEmployeeChange, isEditMode }) => {
   const totalNet = getColumnTotal(employees, 'netSalary');
 
   const headers = [
+    { name: "S.No", width: "w-[4%]", align: "text-center" }, // S.No Column
     { name: "ID", width: "w-[5%]", align: "text-left" }, 
     { name: "Name", width: "w-[16%]", align: "text-left" }, 
     { name: "Desg", width: "w-[9%]", align: "text-left" }, 
@@ -185,14 +197,17 @@ const PaysheetTable = ({ title, employees, onEmployeeChange, isEditMode }) => {
   const inputRight = "w-full p-1 border border-blue-300 rounded bg-blue-50 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 text-right hover:bg-blue-100 transition-colors font-medium text-gray-700";
 
   return (
-    <div className="bg-white rounded shadow-lg border border-gray-300 overflow-x-auto">
-      <div className="px-4 py-3 bg-green-700 text-white border-b border-green-800">
+    <div className="bg-white rounded shadow-lg border border-gray-300 overflow-x-auto print:shadow-none print:border-none">
+      <div className="px-4 py-3 bg-green-700 text-white border-b border-green-800 print:hidden">
         <h2 className="text-lg font-bold uppercase tracking-wide">{title}</h2>
+      </div>
+      <div className="hidden print:block text-center mb-4">
+        <h1 className="text-2xl font-bold">{title}</h1>
       </div>
       
       <table className="min-w-full table-fixed border-collapse">
         <thead>
-          <tr className="bg-gray-100">
+          <tr className="bg-gray-100 print:bg-gray-200">
             {headers.map((header, idx) => (
               <th key={idx} className={`px-1 py-3 border border-gray-300 text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap ${header.width} ${header.align}`}>
                 {header.name}
@@ -204,6 +219,9 @@ const PaysheetTable = ({ title, employees, onEmployeeChange, isEditMode }) => {
           {employees && employees.length > 0 ? (
             employees.map((emp, index) => (
               <tr key={emp.employeeid || index} className="hover:bg-gray-50">
+                {/* S.No Column */}
+                <td className={`${cellBase} text-center font-bold text-gray-500`}>{index + 1}</td>
+
                 {/* Read-Only Columns */}
                 <td className={`${cellBase} text-left font-bold text-gray-700`}>{emp.employeeid}</td>
                 <td className={`${cellBase} text-left font-medium text-gray-900`} title={emp.name}>{emp.name}</td>
@@ -289,7 +307,7 @@ const PaysheetTable = ({ title, employees, onEmployeeChange, isEditMode }) => {
           {/* Footer */}
           {employees && employees.length > 0 && (
             <tr className="bg-gray-100 font-bold border-t-2 border-gray-400">
-              <td colSpan={7} className="px-2 py-3 border border-gray-300 text-center text-gray-800 uppercase text-xs">Total Values</td>
+              <td colSpan={8} className="px-2 py-3 border border-gray-300 text-center text-gray-800 uppercase text-xs">Total Values</td>
               <td className="px-2 py-3 border border-gray-300 text-right text-xs">{formatCurrency(totalGross)}</td>
               <td className="px-2 py-3 border border-gray-300 text-right text-red-700 text-xs">{formatCurrency(totalLossOfPay)}</td>
               <td className="px-2 py-3 border border-gray-300 text-right text-gray-600 text-xs">{formatCurrency(totalPF)}</td>
@@ -321,6 +339,9 @@ export default function PaysheetPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Notification State
+  const [notification, setNotification] = useState(null); // { type, title, message }
 
   const fetchData = (date) => {
     setIsLoading(true);
@@ -396,30 +417,26 @@ export default function PaysheetPage() {
     });
 
     if (count > 0) {
-      Swal.fire({
+      setNotification({
+        type: 'warning',
         title: 'Validation Issues Found',
-        html: `<div style="text-align: left; max-height: 200px; overflow-y: auto;">${issues.join('<br>')}</div>`,
-        icon: 'warning',
-        confirmButtonText: 'I will fix them'
+        message: issues.join('\n')
       });
     } else {
-      Swal.fire({
+      setNotification({
+        type: 'success',
         title: 'All Good!',
-        text: 'Data looks valid. You can proceed to submit.',
-        icon: 'success',
-        confirmButtonColor: '#16a34a', 
-        confirmButtonText: 'Great'
+        message: 'Data looks valid. You can proceed to submit.'
       });
     }
   };
+
   const handleSaveLocal = () => {
     setIsEditMode(false);
-    Swal.fire({
+    setNotification({
+      type: 'info',
       title: 'View Saved',
-      text: 'Changes are now visible in the table. Click "Submit" to save to database.',
-      icon: 'info',
-      timer: 2000,
-      showConfirmButton: false
+      message: 'Changes are now visible in the table. Click "Submit" to save to database.'
     });
   };
 
@@ -475,13 +492,10 @@ export default function PaysheetPage() {
       const responseJson = await response.json();
       if (!response.ok) throw new Error(responseJson.message || 'Failed to submit changes.');
       
-      Swal.fire({ 
-        icon: 'success', 
-        title: 'Saved Successfully', 
-        text: 'Paysheet data has been updated.', 
-        timer: 1500, 
-        showConfirmButton: false,
-        confirmButtonColor: '#16a34a' 
+      setNotification({
+        type: 'success',
+        title: 'Saved Successfully',
+        message: 'Paysheet data has been updated.'
       });
       
       setTimeout(() => { fetchData(selectedDate); }, 500);
@@ -489,7 +503,11 @@ export default function PaysheetPage() {
     } catch (err) {
       console.error('Submit error:', err);
       setError(err.message);
-      Swal.fire({ icon: 'error', title: 'Error', text: `Error saving changes: ${err.message}` });
+      setNotification({
+        type: 'error',
+        title: 'Error',
+        message: `Error saving changes: ${err.message}`
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -502,39 +520,60 @@ export default function PaysheetPage() {
   };
 
   const handleDownloadExcel = () => {
-    const dataForSheet = employees.map(emp => ({
-      "Employee ID": emp.employeeid, "Name": emp.name, "Designation": emp.designation,
-      "Leaves CF": emp.Leaves_cf || 0, "Total Days": emp.requiredDays, "Present": emp.workingDays,
-      "Absent": emp.absent, "Gross Salary": emp.grossSalary, "Loss of Pay": emp.lossOfPay,
-      "PF": emp.pf, "PT": emp.pt, "Other Exp": emp.otherExpenses, "Net Salary": emp.netSalary,
-    }));
-    const ws = XLSX.utils.json_to_sheet(dataForSheet);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Paysheet");
-    XLSX.writeFile(wb, `Paysheet_${formatDateToYearMonth(selectedDate)}.xlsx`);
+    // Simple CSV Export (Browser Native)
+    const headers = ["S.No", "Employee ID", "Name", "Designation", "Leaves CF", "Total Days", "Present", "Absent", "Gross Salary", "Loss of Pay", "PF", "PT", "Other Exp", "Net Salary"];
+    const csvRows = [headers.join(",")];
+
+    employees.forEach((emp, index) => {
+      const row = [
+        index + 1,
+        emp.employeeid,
+        `"${emp.name}"`, // Escape commas
+        `"${emp.designation}"`,
+        emp.Leaves_cf || 0,
+        emp.requiredDays,
+        emp.workingDays,
+        emp.absent,
+        emp.grossSalary,
+        emp.lossOfPay,
+        emp.pf,
+        emp.pt,
+        emp.otherExpenses,
+        emp.netSalary
+      ];
+      csvRows.push(row.join(","));
+    });
+    const csvContent = "data:text/csv;charset=utf-8," + csvRows.join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `Paysheet_${formatDateToYearMonth(selectedDate)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const handleDownloadPDF = () => {
-    const doc = new jsPDF('l', 'mm', 'a4'); 
-    doc.text(title, 14, 20);
-    const tableHeaders = ["ID","Name", "Desg.", "Leaves CF", "Total Days", "Present", "Absent", "Gross", "LoP", "PF", "PT", "Other", "Net Salary"];
-    const tableBody = employees.map(emp => [
-      emp.employeeid, emp.name, emp.designation, emp.Leaves_cf || 0, emp.requiredDays,
-      emp.workingDays, emp.absent, formatCurrencyForPDF(emp.grossSalary), formatCurrencyForPDF(emp.lossOfPay),
-      formatCurrencyForPDF(emp.pf), formatCurrencyForPDF(emp.pt), formatCurrencyForPDF(emp.otherExpenses), formatCurrencyForPDF(emp.netSalary),
-    ]);
-    autoTable(doc, { startY: 25, head: [tableHeaders], body: tableBody, theme: 'grid', styles: { fontSize: 8, cellPadding: 2 } });
-    doc.save(`Paysheet_${formatDateToYearMonth(selectedDate)}.pdf`);
+    // Use Browser Print functionality which allows Save as PDF
+    window.print();
   };
 
   const displayMonth = selectedDate.toLocaleString('default', { month: 'long', year: 'numeric' });
 
   return (
     <div className="p-4 md:p-8 bg-gray-50 min-h-screen relative">
-      {/* NEW LIGHT GLASS ANIMATION */}
+      {/* OVERLAYS */}
       {isSubmitting && <SubmitOverlay />}
+      {notification && (
+        <NotificationModal 
+          type={notification.type} 
+          title={notification.title} 
+          message={notification.message} 
+          onClose={() => setNotification(null)} 
+        />
+      )}
 
-      <div className="bg-white p-4 rounded-lg shadow border border-gray-200 mb-6 flex flex-wrap justify-between items-center gap-4">
+      <div className="bg-white p-4 rounded-lg shadow border border-gray-200 mb-6 flex flex-wrap justify-between items-center gap-4 print:hidden">
         <div className="flex items-center border border-gray-300 rounded-md bg-white shadow-sm">
           <button onClick={() => changeMonth(-1)} className="p-2 text-gray-600 hover:bg-gray-100 rounded-l-md"><ChevronLeft className="h-5 w-5" /></button>
           <div className="px-4 py-2 text-sm font-bold text-gray-800 border-l border-r border-gray-200 w-40 text-center">{displayMonth}</div>
@@ -552,21 +591,19 @@ export default function PaysheetPage() {
             </>
           ) : (
             <>
-              <button onClick={handleCheckData} className="flex items-center bg-blue-600 text-white px-4 py-2 rounded shadow hover:bg-blue-700 text-sm font-medium">
-                <CheckCircle className="h-4 w-4 mr-2" /> Check
-              </button>
+              {/* REMOVED CHECK BUTTON FROM HERE */}
               <button onClick={handleSubmitChanges} disabled={isSubmitting} className="flex items-center bg-green-600 text-white px-4 py-2 rounded shadow hover:bg-green-700 text-sm font-medium">
                 <UploadCloud className="h-4 w-4 mr-2" /> Submit
               </button>
               <div className="h-6 w-px bg-gray-300 mx-2"></div>
               <button onClick={() => setIsEditMode(true)} className="flex items-center bg-yellow-500 text-white px-4 py-2 rounded shadow hover:bg-yellow-600 text-sm font-medium"><Edit className="h-4 w-4 mr-2" /> Edit</button>
-              <button onClick={handleDownloadExcel} className="flex items-center bg-blue-600 text-white px-4 py-2 rounded shadow hover:bg-blue-700 text-sm font-medium"><Download className="h-4 w-4 mr-2" /> Excel</button>
-              <button onClick={handleDownloadPDF} className="flex items-center bg-red-600 text-white px-4 py-2 rounded shadow hover:bg-red-700 text-sm font-medium"><Printer className="h-4 w-4 mr-2" /> PDF</button>
+              <button onClick={handleDownloadExcel} className="flex items-center bg-blue-600 text-white px-4 py-2 rounded shadow hover:bg-blue-700 text-sm font-medium"><Download className="h-4 w-4 mr-2" /> CSV</button>
+              <button onClick={handleDownloadPDF} className="flex items-center bg-red-600 text-white px-4 py-2 rounded shadow hover:bg-red-700 text-sm font-medium"><Printer className="h-4 w-4 mr-2" /> Print/PDF</button>
             </>
           )}
         </div>
       </div>
-      {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-6 text-sm">{error}</div>}
+      {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-6 text-sm print:hidden">{error}</div>}
       {isLoading ? <LoadingSpinner /> : <PaysheetTable title={title} employees={employees} onEmployeeChange={handleEmployeeChange} isEditMode={isEditMode} />}
     </div>
   );
