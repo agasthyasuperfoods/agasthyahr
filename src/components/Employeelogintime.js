@@ -226,13 +226,13 @@ function Employeelogintime() {
               className="px-4 py-1 rounded-lg bg-gray-200 text-gray-700 text-lg font-bold border shadow-sm transition hover:bg-gray-300 disabled:opacity-50"
               disabled={page <= 1}
               onClick={() => fetchPage(page - 1)}
-            >Prev</button>
+            >Next</button>
             <span className="text-gray-700 text-sm font-medium">Page {page} / {pages}</span>
             <button
               className="px-4 py-1 rounded-lg bg-gray-200 text-gray-700 text-lg font-bold border shadow-sm transition hover:bg-gray-300 disabled:opacity-50"
               disabled={page >= pages}
               onClick={() => fetchPage(page + 1)}
-            >Next</button>
+            >Prev</button>
           </div>
         )}
       </div>
