@@ -44,7 +44,7 @@ export default function Emplogin() {
         if (data.employeeName) localStorage.setItem("employeeName", data.employeeName);
         if (data.employeeEmail) localStorage.setItem("employeeEmail", data.employeeEmail);
         // Add more fields as needed.
-        router.push('/Edash');
+        router.push('/Loginstime');
       } else {
         Swal.fire({
           title: 'Login Failed',
