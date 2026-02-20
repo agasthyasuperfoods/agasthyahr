@@ -5,8 +5,8 @@ import { FaMoneyBillAlt, FaFileInvoiceDollar, FaUserCheck, FaCalendarAlt } from 
 const navItems = [
   // { label: "Payslips", icon: <FaMoneyBillAlt />, href: "/Edash" },
     { label: "Logins", icon: <FaUserCheck />, href: "/Loginstime" },
-  { label: "Leaves", icon: <FaCalendarAlt />, href: "/Employeeleaves" }
-  { label: "Reimbursement", icon: <FaFileInvoiceDollar />, href: "/ReimbursementRequest" },
+  { label: "Leaves", icon: <FaCalendarAlt />, href: "/Employeeleaves" },
+  { label: "Reimbursement", icon: <FaFileInvoiceDollar />, href: "/ReimbursementRequest" }
 
 ];
 
