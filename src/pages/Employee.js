@@ -74,6 +74,8 @@ function getDailyQuote(now = new Date()) {
 function AttendanceCalendar({ className = "" }) {
   const [statusMap, setStatusMap] = useState({});
   const [loading, setLoading] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
 
   const today = new Date();
   const year = today.getFullYear();
@@ -141,7 +143,9 @@ function AttendanceCalendar({ className = "" }) {
             <Loader2 className="h-3.5 w-3.5 animate-spin" /> loading…
           </div>
         ) : (
-          <div className="text-xs text-gray-500">{today.toLocaleDateString()}</div>
+          <div className="text-xs text-gray-500">
+            {mounted ? new Date().toLocaleDateString('en-GB') : ""}
+          </div>
         )}
       </div>
       <div className="grid grid-cols-7 text-center text-[11px] text-gray-500 mb-1">

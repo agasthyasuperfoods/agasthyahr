@@ -22,7 +22,7 @@ const COMPANY_OPTIONS = [
   "ASF-FACTORY",
   "ANM",
   "AVION",
-  "SRI CHAKRA MILK",
+  "SRI CHAKRA MILK", 
   "NATURE'S WELLNESS",
 ];
 
@@ -50,7 +50,11 @@ function toHumanMonth(yyyyMm) {
 
 // normalize Employee ID for lookup
 const normId = (s) =>
-  String(s ?? "").trim().replace(/\s+/g, "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  String(s ?? "")
+    .trim()
+    .replace(/\s+/g, "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "");
 const idVariants = (raw) => {
   const base = normId(raw);
   const digits = base.replace(/[^0-9]/g, "");
@@ -67,8 +71,17 @@ const parseHHMMToMinutes = (s) => {
   if (!s) return null;
   const m = String(s).match(/^(\d{1,2}):(\d{2})$/);
   if (!m) return null;
-  const hh = Number(m[1]), mm = Number(m[2]);
-  if (Number.isNaN(hh) || Number.isNaN(mm) || hh < 0 || hh > 23 || mm < 0 || mm > 59) return null;
+  const hh = Number(m[1]),
+    mm = Number(m[2]);
+  if (
+    Number.isNaN(hh) ||
+    Number.isNaN(mm) ||
+    hh < 0 ||
+    hh > 23 ||
+    mm < 0 ||
+    mm > 59
+  )
+    return null;
   return hh * 60 + mm;
 };
 const minutesToHumanHMM = (mins) => {
@@ -81,10 +94,15 @@ const minutesToHumanHMM = (mins) => {
 
 // statusClass used earlier
 const statusClass = (s) => {
-  const v = String(s || "").trim().toLowerCase();
-  if (v === "present" || v === "p") return "bg-emerald-50 text-emerald-700 border-emerald-200";
-  if (v === "absent" || v === "a") return "bg-red-50 text-red-700 border-red-200";
-  if (v === "leave" || v === "l") return "bg-amber-50 text-amber-700 border-amber-200";
+  const v = String(s || "")
+    .trim()
+    .toLowerCase();
+  if (v === "present" || v === "p")
+    return "bg-emerald-50 text-emerald-700 border-emerald-200";
+  if (v === "absent" || v === "a")
+    return "bg-red-50 text-red-700 border-red-200";
+  if (v === "leave" || v === "l")
+    return "bg-amber-50 text-amber-700 border-amber-200";
   return "bg-white text-gray-800 border-gray-300";
 };
 
@@ -117,13 +135,18 @@ export default function Hrdashboard() {
   // Modals
   const [showCreate, setShowCreate] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
+  const [showProbation, setShowProbation] = useState(false);
   const [editEmployee, setEditEmployee] = useState(null);
+  const [showOffboarding, setShowOffboarding] = useState(false);
 
   // ANM
   const [anmDate, setAnmDate] = useState(todayIso());
   const [anmSite, setAnmSite] = useState(null);
   const [showAnmPreview, setShowAnmPreview] = useState(false);
-  const [anmSubmitted, setAnmSubmitted] = useState({ tandur: false, talakondapally: false });
+  const [anmSubmitted, setAnmSubmitted] = useState({
+    tandur: false,
+    talakondapally: false,
+  });
 
   // Paysheet month default previous month
   const [reportMonth, setReportMonth] = useState(() => prevMonthYYYYMM());
@@ -150,7 +173,9 @@ export default function Hrdashboard() {
     setHrName(name);
     const userObj = localStorage.getItem("hr_user");
     if (userObj) {
-      try { setHrUser(JSON.parse(userObj)); } catch {}
+      try {
+        setHrUser(JSON.parse(userObj));
+      } catch {}
     }
   }, [router]);
 
@@ -162,7 +187,11 @@ export default function Hrdashboard() {
       const res = await fetch("/api/users");
       const j = await res.json().catch(() => ({}));
       // server returns { data: [...] } or array; be flexible
-      const arr = Array.isArray(j?.data) ? j.data : (Array.isArray(j) ? j : j?.data || []);
+      const arr = Array.isArray(j?.data)
+        ? j.data
+        : Array.isArray(j)
+          ? j
+          : j?.data || [];
       setUsers(Array.isArray(arr) ? arr : []);
     } catch (e) {
       setUsersError(e.message || "Failed to load users");
@@ -208,7 +237,9 @@ export default function Hrdashboard() {
       setExistingCount(0);
       setDailyRows([]);
 
-      const res = await fetch(`/api/attendance/check?date=${encodeURIComponent(date)}`);
+      const res = await fetch(
+        `/api/attendance/check?date=${encodeURIComponent(date)}`,
+      );
       const cj = await res.json().catch(() => ({}));
       const has = !!cj?.hasData;
       const cnt = Number(cj?.count || 0);
@@ -216,7 +247,9 @@ export default function Hrdashboard() {
       setExistingCount(cnt);
 
       if (has) {
-        const r2 = await fetch(`/api/attendance/daily?date=${encodeURIComponent(date)}`);
+        const r2 = await fetch(
+          `/api/attendance/daily?date=${encodeURIComponent(date)}`,
+        );
         const j2 = await r2.json().catch(() => ({}));
         setDailyRows(Array.isArray(j2?.rows) ? j2.rows : []);
       }
@@ -238,14 +271,21 @@ export default function Hrdashboard() {
   // fetch ANM submitted statuses
   const fetchAnmSubmittedStatuses = useCallback(async (date) => {
     try {
-      const r = await fetch(`/api/attendance/anm/status?date=${encodeURIComponent(date)}`);
+      const r = await fetch(
+        `/api/attendance/anm/status?date=${encodeURIComponent(date)}`,
+      );
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(j?.error || "Failed fetching ANM statuses");
       const sites = j?.sites || {};
       const tand = sites?.tandur ?? j?.tandur ?? null;
-      const tal = sites?.talakondapally ?? j?.talakondapally ?? j?.talak ?? null;
-      const isSubmitted = (v) => v != null && String(v).trim().toLowerCase() === "submitted";
-      setAnmSubmitted({ tandur: isSubmitted(tand), talakondapally: isSubmitted(tal) });
+      const tal =
+        sites?.talakondapally ?? j?.talakondapally ?? j?.talak ?? null;
+      const isSubmitted = (v) =>
+        v != null && String(v).trim().toLowerCase() === "submitted";
+      setAnmSubmitted({
+        tandur: isSubmitted(tand),
+        talakondapally: isSubmitted(tal),
+      });
     } catch (e) {
       console.warn("fetchAnmSubmittedStatuses:", e?.message || e);
       setAnmSubmitted({ tandur: false, talakondapally: false });
@@ -261,15 +301,27 @@ export default function Hrdashboard() {
   const onParse = async (e) => {
     e.preventDefault();
     if (!uploadDate) {
-      Swal.fire({ icon: "warning", title: "Pick a date", text: "Please select the attendance date." });
+      Swal.fire({
+        icon: "warning",
+        title: "Pick a date",
+        text: "Please select the attendance date.",
+      });
       return;
     }
     if (uploadDate > dateMax) {
-      Swal.fire({ icon: "warning", title: "Invalid date", text: "Future dates are not allowed." });
+      Swal.fire({
+        icon: "warning",
+        title: "Invalid date",
+        text: "Future dates are not allowed.",
+      });
       return;
     }
     if (!file) {
-      Swal.fire({ icon: "warning", title: "No file", text: "Choose a .xlsx, .xls or .csv file." });
+      Swal.fire({
+        icon: "warning",
+        title: "No file",
+        text: "Choose a .xlsx, .xls or .csv file.",
+      });
       return;
     }
     try {
@@ -277,14 +329,25 @@ export default function Hrdashboard() {
       const form = new FormData();
       form.append("file", file);
       form.append("report_date", uploadDate);
-      const res = await fetch("/api/attendance/preview", { method: "POST", body: form });
+      const res = await fetch("/api/attendance/preview", {
+        method: "POST",
+        body: form,
+      });
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j?.error || "Preview failed");
       // Expect server returns rows as array of objects; our PreviewDailyModal will normalize them further
       setPreviewRows(Array.isArray(j?.rows) ? j.rows : []);
-      Swal.fire({ icon: "success", title: "Parsed", text: `Found ${j?.count ?? (Array.isArray(j?.rows) ? j.rows.length : 0)} rows for ${toHumanDate(uploadDate)}.` });
+      Swal.fire({
+        icon: "success",
+        title: "Parsed",
+        text: `Found ${j?.count ?? (Array.isArray(j?.rows) ? j.rows.length : 0)} rows for ${toHumanDate(uploadDate)}.`,
+      });
     } catch (err) {
-      Swal.fire({ icon: "error", title: "Preview failed", text: err?.message || "Something went wrong" });
+      Swal.fire({
+        icon: "error",
+        title: "Preview failed",
+        text: err?.message || "Something went wrong",
+      });
     } finally {
       setUploading(false);
     }
@@ -303,13 +366,23 @@ export default function Hrdashboard() {
     }).then((r) => r.isConfirmed);
     if (!ok) return;
     try {
-      const res = await fetch(`/api/users?id=${employeeid}`, { method: "DELETE" });
+      const res = await fetch(`/api/users?id=${employeeid}`, {
+        method: "DELETE",
+      });
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j?.error || "Failed to delete");
-      Swal.fire({ icon: "success", title: "Deleted", text: `Employee #${employeeid} deleted.` });
+      Swal.fire({
+        icon: "success",
+        title: "Deleted",
+        text: `Employee #${employeeid} deleted.`,
+      });
       await loadUsers();
     } catch (e) {
-      Swal.fire({ icon: "error", title: "Delete failed", text: e?.message || "Something went wrong" });
+      Swal.fire({
+        icon: "error",
+        title: "Delete failed",
+        text: e?.message || "Something went wrong",
+      });
     }
   };
 
@@ -325,13 +398,31 @@ export default function Hrdashboard() {
         const empIdVariants = idVariants(u.employeeid);
         // check id variants against query
         for (const v of empIdVariants) {
-          if (String(v || "").toLowerCase().includes(q)) return true;
+          if (
+            String(v || "")
+              .toLowerCase()
+              .includes(q)
+          )
+            return true;
         }
-      } catch (e) { /* ignore */ }
+      } catch (e) {
+        /* ignore */
+      }
 
       // also check common fields
-      const fields = [u.employeeid, u.name, u.email, u.role, u.company, u.number];
-      return fields.some((v) => String(v || "").toLowerCase().includes(q));
+      const fields = [
+        u.employeeid,
+        u.name,
+        u.email,
+        u.role,
+        u.company,
+        u.number,
+      ];
+      return fields.some((v) =>
+        String(v || "")
+          .toLowerCase()
+          .includes(q),
+      );
     });
   }, [users, searchQuery]);
 
@@ -378,7 +469,8 @@ export default function Hrdashboard() {
               localStorage.removeItem("hr_employeeid");
             }
             await router.push("/Hlogin");
-            if (typeof window !== "undefined") window.location.replace("/Hlogin");
+            if (typeof window !== "undefined")
+              window.location.replace("/Hlogin");
           }}
         />
 
@@ -386,13 +478,33 @@ export default function Hrdashboard() {
           {/* Intro */}
           <div className="bg-white border border-gray-200 shadow-sm p-6 rounded-lg">
             <h2 className="text-lg font-semibold text-gray-900 mb-2">{`Welcome, ${hrName || "HR"}`}</h2>
-            <p className="text-sm text-gray-600">Manage employees and attendance. Generate monthly paysheets for Finance.</p>
-            <div className="mt-4">
+            <p className="text-sm text-gray-600">
+              Manage employees and attendance. Generate monthly paysheets for
+              Finance.
+            </p>
+            <div className="mt-6 flex flex-wrap items-center gap-3">
+              {/* Onboard Button */}
               <button
                 onClick={() => setShowCreate(true)}
-                className="inline-flex items-center rounded-lg bg-[#C1272D] px-3 py-2 text-sm font-medium text-white hover:bg-[#a02125]"
+                className="inline-flex items-center justify-center rounded-lg bg-[#C1272D] px-6 py-2 text-sm font-bold text-white hover:bg-[#a02125] transition-colors shadow-sm"
               >
                 + Onboard Employee
+              </button>
+
+              {/* Probation Button */}
+              <button
+                onClick={() => setShowProbation(true)}
+                className="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-6 py-2 text-sm font-bold text-gray-700 hover:border-[#C1272D] hover:text-[#C1272D] transition-all shadow-sm"
+              >
+                Employees Under Probation
+              </button>
+              
+              {/* Offboard Button */}
+              <button
+                onClick={async () => { await loadUsers(); setShowOffboarding(true); }}
+                className="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-6 py-2 text-sm font-bold text-gray-700 hover:border-[#C1272D] hover:text-[#C1272D] transition-all shadow-sm"
+              >
+                Offboard Employee
               </button>
             </div>
           </div>
@@ -400,17 +512,25 @@ export default function Hrdashboard() {
           {/* Attendance & ANM */}
           <section className="bg-white border border-gray-200 rounded-lg shadow-sm p-6">
             <div className="mb-4">
-              <h3 className="text-base font-semibold text-gray-900">Attendance</h3>
-              <p className="text-xs text-gray-500">Upload biometric file or view ANM farms (Tandur/Talakondapally)</p>
+              <h3 className="text-base font-semibold text-gray-900">
+                Attendance
+              </h3>
+              <p className="text-xs text-gray-500">
+                Upload biometric file or view ANM farms (Tandur/Talakondapally)
+              </p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Upload */}
               <div className="rounded-xl border border-gray-200 p-4">
-                <h4 className="text-sm font-semibold text-gray-900 mb-3">Agasthya Biometric</h4>
+                <h4 className="text-sm font-semibold text-gray-900 mb-3">
+                  Agasthya Biometric
+                </h4>
 
                 <div className="mb-3">
-                  <label className="block text-sm font-medium text-gray-700">Report Date</label>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Report Date
+                  </label>
                   <input
                     type="date"
                     value={uploadDate}
@@ -421,14 +541,22 @@ export default function Hrdashboard() {
                     }}
                     className="mt-1 rounded-lg border border-gray-300 px-3 py-2 text-sm"
                   />
-                  <div className="mt-1 text-xs text-gray-600">{toHumanDate(uploadDate)}</div>
+                  <div className="mt-1 text-xs text-gray-600">
+                    {toHumanDate(uploadDate)}
+                  </div>
 
                   {dailyLoading ? (
-                    <div className="mt-1 text-xs text-gray-500">Checking existing data…</div>
+                    <div className="mt-1 text-xs text-gray-500">
+                      Checking existing data…
+                    </div>
                   ) : hasData ? (
-                    <div className="mt-1 text-xs text-emerald-700">Existing records found: {existingCount}</div>
+                    <div className="mt-1 text-xs text-emerald-700">
+                      Existing records found: {existingCount}
+                    </div>
                   ) : (
-                    <div className="mt-1 text-xs text-gray-500">No existing records for this date yet.</div>
+                    <div className="mt-1 text-xs text-gray-500">
+                      No existing records for this date yet.
+                    </div>
                   )}
                 </div>
 
@@ -453,18 +581,30 @@ export default function Hrdashboard() {
                   disabled={!previewRows.length && !dailyRows.length}
                   onClick={() => setShowPreview(true)}
                   className={`mt-3 inline-flex items-center rounded-lg px-3 py-2 text-sm font-medium ${
-                    (previewRows.length || dailyRows.length) ? "bg-[#C1272D] text-white hover:bg-[#a02125]" : "bg-gray-200 text-gray-500 cursor-not-allowed"
+                    previewRows.length || dailyRows.length
+                      ? "bg-[#C1272D] text-white hover:bg-[#a02125]"
+                      : "bg-gray-200 text-gray-500 cursor-not-allowed"
                   }`}
                 >
-                  {previewRows.length ? "View & Submit" : hasData ? "Update" : "View & Submit"}
+                  {previewRows.length
+                    ? "View & Submit"
+                    : hasData
+                      ? "Update"
+                      : "View & Submit"}
                 </button>
               </div>
 
               {/* ANM farms */}
               <div className="rounded-xl border border-gray-200 p-4">
-                <h4 className="text-sm font-semibold text-gray-900">ANM FARMS</h4>
-                <p className="text-xs text-gray-500 mb-3">Daily attendance view for Tandur & Talakondapally</p>
-                <label className="block text-sm font-medium text-gray-700">Report Date</label>
+                <h4 className="text-sm font-semibold text-gray-900">
+                  ANM FARMS
+                </h4>
+                <p className="text-xs text-gray-500 mb-3">
+                  Daily attendance view for Tandur & Talakondapally
+                </p>
+                <label className="block text-sm font-medium text-gray-700">
+                  Report Date
+                </label>
                 <input
                   type="date"
                   value={anmDate}
@@ -472,31 +612,51 @@ export default function Hrdashboard() {
                   onChange={(e) => setAnmDate(e.target.value)}
                   className="mt-1 rounded-lg border border-gray-300 px-3 py-2 text-sm"
                 />
-                <div className="mt-1 text-xs text-gray-600">{toHumanDate(anmDate)}</div>
+                <div className="mt-1 text-xs text-gray-600">
+                  {toHumanDate(anmDate)}
+                </div>
 
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   <button
                     type="button"
                     onClick={() => {
-                      if (!anmDate) { Swal.fire({ icon: "warning", title: "Pick a date", text: "Please select the date." }); return; }
+                      if (!anmDate) {
+                        Swal.fire({
+                          icon: "warning",
+                          title: "Pick a date",
+                          text: "Please select the date.",
+                        });
+                        return;
+                      }
                       setAnmSite("tandur");
                       setShowAnmPreview(true);
                     }}
                     className={`inline-flex items-center rounded-md border px-3 py-1.5 text-sm ${anmSubmitted.tandur ? "bg-emerald-600 text-white hover:bg-emerald-700" : "bg-[#C1272D] text-white hover:bg-[#a02125]"}`}
                   >
-                    {anmSubmitted.tandur ? "Submitted ✓ (Tandur)" : "View & Submit (Tandur)"}
+                    {anmSubmitted.tandur
+                      ? "Submitted ✓ (Tandur)"
+                      : "View & Submit (Tandur)"}
                   </button>
 
                   <button
                     type="button"
                     onClick={() => {
-                      if (!anmDate) { Swal.fire({ icon: "warning", title: "Pick a date", text: "Please select the date." }); return; }
+                      if (!anmDate) {
+                        Swal.fire({
+                          icon: "warning",
+                          title: "Pick a date",
+                          text: "Please select the date.",
+                        });
+                        return;
+                      }
                       setAnmSite("talakondapally");
                       setShowAnmPreview(true);
                     }}
                     className={`inline-flex items-center rounded-md border px-3 py-1.5 text-sm ${anmSubmitted.talakondapally ? "bg-emerald-600 text-white hover:bg-emerald-700" : "bg-[#C1272D] text-white hover:bg-[#a02125]"}`}
                   >
-                    {anmSubmitted.talakondapally ? "Submitted ✓ (Talakondapally)" : "View & Submit (Talakondapally)"}
+                    {anmSubmitted.talakondapally
+                      ? "Submitted ✓ (Talakondapally)"
+                      : "View & Submit (Talakondapally)"}
                   </button>
                 </div>
               </div>
@@ -506,14 +666,36 @@ export default function Hrdashboard() {
           {/* Monthly Paysheet cards (ASF, Tandur, Talakondapally) */}
           <section className="bg-white border border-gray-200 rounded-lg shadow-sm p-6">
             <div className="mb-4">
-              <h3 className="text-base font-semibold text-gray-900">Monthly Paysheet</h3>
-              <p className="text-xs text-gray-500">Choose month and site → View / Export to Excel</p>
+              <h3 className="text-base font-semibold text-gray-900">
+                Monthly Paysheet
+              </h3>
+              <p className="text-xs text-gray-500">
+                Choose month and site → View / Export to Excel
+              </p>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              <PaysheetCard company="ASF" name="Head Office (ASF)" reportMonth={reportMonth} setReportMonth={setReportMonth} router={router} />
-              <PaysheetCard company="TANDUR" name="Tandur" reportMonth={reportMonth} setReportMonth={setReportMonth} router={router} />
-              <PaysheetCard company="TALAKONDAPALLY" name="Talakondapally" reportMonth={reportMonth} setReportMonth={setReportMonth} router={router} />
+              <PaysheetCard
+                company="ASF"
+                name="Head Office (ASF)"
+                reportMonth={reportMonth}
+                setReportMonth={setReportMonth}
+                router={router}
+              />
+              <PaysheetCard
+                company="TANDUR"
+                name="Tandur"
+                reportMonth={reportMonth}
+                setReportMonth={setReportMonth}
+                router={router}
+              />
+              <PaysheetCard
+                company="TALAKONDAPALLY"
+                name="Talakondapally"
+                reportMonth={reportMonth}
+                setReportMonth={setReportMonth}
+                router={router}
+              />
             </div>
           </section>
 
@@ -521,8 +703,12 @@ export default function Hrdashboard() {
           <section className="bg-white border border-gray-200 rounded-lg shadow-sm p-4">
             <div className="mb-3 flex items-center justify-between">
               <div>
-                <h3 className="text-base font-semibold text-gray-900">Employees</h3>
-                <p className="text-xs text-gray-500">Create / edit / remove employees</p>
+                <h3 className="text-base font-semibold text-gray-900">
+                  Employees
+                </h3>
+                <p className="text-xs text-gray-500">
+                  Create / edit / remove employees
+                </p>
               </div>
 
               <div className="flex items-center gap-2">
@@ -533,7 +719,11 @@ export default function Hrdashboard() {
                   placeholder="Search by name, id, email..."
                   className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
                 />
-                <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))} className="rounded-lg border border-gray-300 px-2 py-2 text-sm">
+                <select
+                  value={pageSize}
+                  onChange={(e) => setPageSize(Number(e.target.value))}
+                  className="rounded-lg border border-gray-300 px-2 py-2 text-sm"
+                >
                   <option value={10}>10</option>
                   <option value={20}>20</option>
                   <option value={50}>50</option>
@@ -563,41 +753,96 @@ export default function Hrdashboard() {
                   <tbody>
                     {usersLoading ? (
                       <tr>
-                        <td colSpan={11} className="px-3 py-6 text-center text-gray-500">
+                        <td
+                          colSpan={11}
+                          className="px-3 py-6 text-center text-gray-500"
+                        >
                           <span className="inline-block h-5 w-5 mr-2 animate-spin rounded-full border-2 border-gray-300 border-t-transparent" />
                           Loading employees…
                         </td>
                       </tr>
                     ) : usersError ? (
                       <tr>
-                        <td colSpan={11} className="px-3 py-6 text-center text-red-600">{usersError}</td>
+                        <td
+                          colSpan={11}
+                          className="px-3 py-6 text-center text-red-600"
+                        >
+                          {usersError}
+                        </td>
                       </tr>
                     ) : filteredUsers.length === 0 ? (
                       <tr>
-                        <td colSpan={11} className="px-3 py-6 text-center text-gray-500">
-                          {users.length === 0 ? <>No employees. Click <span className="font-medium">Onboard Employee</span> to add one.</> : <>No matches for <span className="font-semibold">“{searchQuery}”</span>.</>}
+                        <td
+                          colSpan={11}
+                          className="px-3 py-6 text-center text-gray-500"
+                        >
+                          {users.length === 0 ? (
+                            <>
+                              No employees. Click{" "}
+                              <span className="font-medium">
+                                Onboard Employee
+                              </span>{" "}
+                              to add one.
+                            </>
+                          ) : (
+                            <>
+                              No matches for{" "}
+                              <span className="font-semibold">
+                                “{searchQuery}”
+                              </span>
+                              .
+                            </>
+                          )}
                         </td>
                       </tr>
                     ) : (
                       pagedUsers.map((u) => (
-                        <tr key={u.employeeid} className="odd:bg-white even:bg-gray-50">
-                          <td className="px-3 py-2 border-t">{u.employeeid ?? "-"}</td>
-                          <td className="px-3 py-2 border-t">{u.name || "-"}</td>
-                          <td className="px-3 py-2 border-t">{u.email || "-"}</td>
-                          <td className="px-3 py-2 border-t"><span className="rounded bg-gray-100 px-2 py-0.5">{u.role || "-"}</span></td>
-                          <td className="px-3 py-2 border-t">{u.doj || "-"}</td>
-                          <td className="px-3 py-2 border-t">{u.number || "-"}</td>
-                          <td className="px-3 py-2 border-t">{u.company || "-"}</td>
-                          <td className="px-3 py-2 border-t whitespace-nowrap">
-                            <div className="text-gray-900">{resolveManagerName(u.reporting_to_id) || "—"}</div>
-                            <div className="text-[11px] text-gray-500">{u.reporting_to_id || "-"}</div>
+                        <tr
+                          key={u.employeeid}
+                          className="odd:bg-white even:bg-gray-50"
+                        >
+                          <td className="px-3 py-2 border-t">
+                            {u.employeeid ?? "-"}
                           </td>
-                          <td className="px-3 py-2 border-t">{u.designation || "-"}</td>
-                          <td className="px-3 py-2 border-t">{u.address || "-"}</td>
+                          <td className="px-3 py-2 border-t">
+                            {u.name || "-"}
+                          </td>
+                          <td className="px-3 py-2 border-t">
+                            {u.email || "-"}
+                          </td>
+                          <td className="px-3 py-2 border-t">
+                            <span className="rounded bg-gray-100 px-2 py-0.5">
+                              {u.role || "-"}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 border-t">{u.doj || "-"}</td>
+                          <td className="px-3 py-2 border-t">
+                            {u.number || "-"}
+                          </td>
+                          <td className="px-3 py-2 border-t">
+                            {u.company || "-"}
+                          </td>
+                          <td className="px-3 py-2 border-t whitespace-nowrap">
+                            <div className="text-gray-900">
+                              {resolveManagerName(u.reporting_to_id) || "—"}
+                            </div>
+                            <div className="text-[11px] text-gray-500">
+                              {u.reporting_to_id || "-"}
+                            </div>
+                          </td>
+                          <td className="px-3 py-2 border-t">
+                            {u.designation || "-"}
+                          </td>
+                          <td className="px-3 py-2 border-t">
+                            {u.address || "-"}
+                          </td>
                           <td className="px-3 py-2 border-t text-right">
                             <div className="inline-flex items-center gap-1.5">
                               <button
-                                onClick={() => { setEditEmployee(u); setShowEdit(true); }}
+                                onClick={() => {
+                                  setEditEmployee(u);
+                                  setShowEdit(true);
+                                }}
                                 className="p-2 rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
                                 title="Edit employee"
                               >
@@ -622,7 +867,15 @@ export default function Hrdashboard() {
               <div className="border-t bg-white px-3 py-2">
                 <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                   <div className="text-sm text-gray-600">
-                    Showing <span className="font-medium">{total === 0 ? 0 : (page - 1) * pageSize + 1}</span>–<span className="font-medium">{Math.min(total, page * pageSize)}</span> of <span className="font-medium">{total}</span>
+                    Showing{" "}
+                    <span className="font-medium">
+                      {total === 0 ? 0 : (page - 1) * pageSize + 1}
+                    </span>
+                    –
+                    <span className="font-medium">
+                      {Math.min(total, page * pageSize)}
+                    </span>{" "}
+                    of <span className="font-medium">{total}</span>
                   </div>
 
                   <div className="flex items-center gap-1">
@@ -634,19 +887,26 @@ export default function Hrdashboard() {
                       Prev
                     </button>
 
-                    {Array.from({ length: Math.max(1, Math.ceil(total / pageSize)) }, (_, i) => i + 1).slice(0, 7).map((p) => (
-                      <button
-                        key={p}
-                        className={`px-3 py-2 text-sm rounded-lg border ${p === page ? "border-gray-900 bg-gray-900 text-white" : "border-gray-300 bg-white hover:bg-gray-50"}`}
-                        onClick={() => setPage(p)}
-                      >
-                        {p}
-                      </button>
-                    ))}
+                    {Array.from(
+                      { length: Math.max(1, Math.ceil(total / pageSize)) },
+                      (_, i) => i + 1,
+                    )
+                      .slice(0, 7)
+                      .map((p) => (
+                        <button
+                          key={p}
+                          className={`px-3 py-2 text-sm rounded-lg border ${p === page ? "border-gray-900 bg-gray-900 text-white" : "border-gray-300 bg-white hover:bg-gray-50"}`}
+                          onClick={() => setPage(p)}
+                        >
+                          {p}
+                        </button>
+                      ))}
 
                     <button
                       className="px-3 py-2 text-sm rounded-lg border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-50"
-                      onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                      onClick={() =>
+                        setPage((p) => Math.min(totalPages, p + 1))
+                      }
                       disabled={page >= totalPages}
                     >
                       Next
@@ -654,7 +914,6 @@ export default function Hrdashboard() {
                   </div>
                 </div>
               </div>
-
             </div>
           </section>
         </div>
@@ -664,7 +923,11 @@ export default function Hrdashboard() {
           <CreateEmployeeModal
             idToName={idToName}
             onClose={() => setShowCreate(false)}
-            onCreated={async () => { setShowCreate(false); await loadUsers(); Swal.fire({ icon: "success", title: "Employee created" }); }}
+            onCreated={async () => {
+              setShowCreate(false);
+              await loadUsers();
+              Swal.fire({ icon: "success", title: "Employee created" });
+            }}
           />
         )}
 
@@ -672,8 +935,16 @@ export default function Hrdashboard() {
           <EditEmployeeModal
             idToName={idToName}
             employee={editEmployee}
-            onClose={() => { setShowEdit(false); setEditEmployee(null); }}
-            onUpdated={async () => { setShowEdit(false); setEditEmployee(null); await loadUsers(); Swal.fire({ icon: "success", title: "Employee updated" }); }}
+            onClose={() => {
+              setShowEdit(false);
+              setEditEmployee(null);
+            }}
+            onUpdated={async () => {
+              setShowEdit(false);
+              setEditEmployee(null);
+              await loadUsers();
+              Swal.fire({ icon: "success", title: "Employee updated" });
+            }}
           />
         )}
 
@@ -686,7 +957,11 @@ export default function Hrdashboard() {
               setShowPreview(false);
               setPreviewRows([]);
               setReportMonth(uploadDate.slice(0, 7));
-              Swal.fire({ icon: "success", title: "Saved", text: `Saved ${j?.saved ?? 0} rows for ${toHumanDate(uploadDate)}.` });
+              Swal.fire({
+                icon: "success",
+                title: "Saved",
+                text: `Saved ${j?.saved ?? 0} rows for ${toHumanDate(uploadDate)}.`,
+              });
               await refreshDailyForDate(uploadDate);
             }}
           />
@@ -696,8 +971,29 @@ export default function Hrdashboard() {
           <AnmPreviewDailyModal
             site={anmSite}
             date={anmDate}
-            onClose={() => { setShowAnmPreview(false); setAnmSite(null); fetchAnmSubmittedStatuses(anmDate).catch(() => {}); }}
-            onSaved={() => { setAnmSubmitted((s) => ({ ...s, [anmSite]: true })); fetchAnmSubmittedStatuses(anmDate).catch(() => {}); }}
+            onClose={() => {
+              setShowAnmPreview(false);
+              setAnmSite(null);
+              fetchAnmSubmittedStatuses(anmDate).catch(() => {});
+            }}
+            onSaved={() => {
+              setAnmSubmitted((s) => ({ ...s, [anmSite]: true }));
+              fetchAnmSubmittedStatuses(anmDate).catch(() => {});
+            }}
+          />
+        )}
+        {showProbation && (
+          <ProbationModal onClose={() => setShowProbation(false)} />
+        )}
+
+        {showOffboarding && (
+          <OffboardingModal 
+            users={users} 
+            onClose={() => setShowOffboarding(false)} 
+            onProcessed={async () => {
+              setShowOffboarding(false);
+              await loadUsers();
+            }} 
           />
         )}
       </main>
@@ -708,20 +1004,45 @@ export default function Hrdashboard() {
 /* -------------------------
    Paysheet Card
    - Note: Nature's Wellness intentionally not shown as a paysheet card.
-   ------------------------- */
+   --------------------------*/
 function PaysheetCard({ company, name, reportMonth, setReportMonth, router }) {
   return (
     <div className="rounded-xl border border-gray-200 p-4">
       <h4 className="text-sm font-semibold text-gray-900 mb-3">{name}</h4>
       <div className="flex items-center gap-3">
-        <input type="month" value={reportMonth} onChange={(e) => setReportMonth(e.target.value)} className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-        <span className="text-sm text-gray-600">{toHumanMonth(reportMonth)}</span>
+        <input
+          type="month"
+          value={reportMonth}
+          onChange={(e) => setReportMonth(e.target.value)}
+          className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+        />
+        <span className="text-sm text-gray-600">
+          {toHumanMonth(reportMonth)}
+        </span>
       </div>
 
       <div className="mt-3 flex gap-2">
-        <button type="button" onClick={() => router.push(`/Paysheet?company=${company}&month=${reportMonth}`)} className="inline-flex items-center rounded-lg bg-[#C1272D] px-3 py-2 text-sm font-medium text-white hover:bg-[#a02125]">View</button>
+        <button
+          type="button"
+          onClick={() =>
+            router.push(`/Paysheet?company=${company}&month=${reportMonth}`)
+          }
+          className="inline-flex items-center rounded-lg bg-[#C1272D] px-3 py-2 text-sm font-medium text-white hover:bg-[#a02125]"
+        >
+          View
+        </button>
 
-        <button type="button" onClick={() => router.push(`/Paysheet?company=${company}&month=${reportMonth}&action=export_excel`)} className="inline-flex items-center rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium hover:bg-gray-50">Export to Excel</button>
+        <button
+          type="button"
+          onClick={() =>
+            router.push(
+              `/Paysheet?company=${company}&month=${reportMonth}&action=export_excel`,
+            )
+          }
+          className="inline-flex items-center rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium hover:bg-gray-50"
+        >
+          Export to Excel
+        </button>
       </div>
     </div>
   );
@@ -742,7 +1063,7 @@ function PaysheetCard({ company, name, reportMonth, setReportMonth, router }) {
    - Groups rows by company and sorts inside group by numeric part of employeeid
    - Normalizes many incoming column names and handles NW / SCM -> SRI CHAKRA MILK mapping
    - SEARCH: matches idVariants(employeeid) and raw SI-like fields so "186" will match "EMP186"
-   =========================== */
+   ============================ */
 function PreviewDailyModal({ date, rows, onClose, onSaved }) {
   // helper: map multiple known company variants to canonical names
   const normalizeCompany = (raw) => {
@@ -752,12 +1073,18 @@ function PreviewDailyModal({ date, rows, onClose, onSaved }) {
     const u = s.toUpperCase();
 
     // NW / NATURE variants
-    if (/\bNATURE'?S?\b/.test(u) || /\bNAT\b/.test(u) || /\bNW\b/.test(u) || /^NATURES?$/i.test(s)) {
+    if (
+      /\bNATURE'?S?\b/.test(u) ||
+      /\bNAT\b/.test(u) ||
+      /\bNW\b/.test(u) ||
+      /^NATURES?$/i.test(s)
+    ) {
       return "NATURE'S WELLNESS";
     }
 
     // SRI CHAKRA MILK and variants, SCM short code
-    if (/SRI\s*CHAKRA\s*MILK|SRI\s*CHAKRA|SRICHAKRA|SRICH?AKRA/i.test(s)) return "SRI CHAKRA MILK";
+    if (/SRI\s*CHAKRA\s*MILK|SRI\s*CHAKRA|SRICHAKRA|SRICH?AKRA/i.test(s))
+      return "SRI CHAKRA MILK";
     if (/^\s*SCM\s*$/i.test(s) || /\bSCM\b/i.test(u)) return "SRI CHAKRA MILK";
 
     // ASF / ASF-FACTORY
@@ -787,10 +1114,10 @@ function PreviewDailyModal({ date, rows, onClose, onSaved }) {
       raw.SI ??
       raw.Sno ??
       raw.SNo ??
-      raw['SI/EMP ID'] ??
-      raw['SI'] ??
-      raw['Emp No'] ??
-      raw['EmpID'] ??
+      raw["SI/EMP ID"] ??
+      raw["SI"] ??
+      raw["Emp No"] ??
+      raw["EmpID"] ??
       "";
 
     let employeeid = String(possibleId ?? "").trim();
@@ -802,10 +1129,10 @@ function PreviewDailyModal({ date, rows, onClose, onSaved }) {
         raw.si ??
         raw.Sno ??
         raw.SNo ??
-        raw['SNo'] ??
-        raw['S No'] ??
-        raw['SI/EMP ID'] ??
-        raw['Emp No'] ??
+        raw["SNo"] ??
+        raw["S No"] ??
+        raw["SI/EMP ID"] ??
+        raw["Emp No"] ??
         "";
       const sVal = String(siCand || "").trim();
       if (/^\d+$/.test(sVal)) {
@@ -825,11 +1152,38 @@ function PreviewDailyModal({ date, rows, onClose, onSaved }) {
       }
     }
 
-    const name = String(raw.name ?? raw.Name ?? raw['Employee Name'] ?? raw['Emp Name'] ?? raw.NAME ?? "").trim();
-    const shift = String(raw.shift ?? raw.Shift ?? raw['Shift Name'] ?? "").trim();
+    const name = String(
+      raw.name ??
+        raw.Name ??
+        raw["Employee Name"] ??
+        raw["Emp Name"] ??
+        raw.NAME ??
+        "",
+    ).trim();
+    const shift = String(
+      raw.shift ?? raw.Shift ?? raw["Shift Name"] ?? "",
+    ).trim();
 
-    const intimeRaw = raw.intime ?? raw.InTime ?? raw['In Time'] ?? raw['IN TIME'] ?? raw['IN_TIME'] ?? raw['Time In'] ?? raw['IN'] ?? raw['Time_In'] ?? "";
-    const outtimeRaw = raw.outtime ?? raw.OutTime ?? raw['Out Time'] ?? raw['OUT TIME'] ?? raw['OUT_TIME'] ?? raw['Time Out'] ?? raw['OUT'] ?? raw['Time_Out'] ?? "";
+    const intimeRaw =
+      raw.intime ??
+      raw.InTime ??
+      raw["In Time"] ??
+      raw["IN TIME"] ??
+      raw["IN_TIME"] ??
+      raw["Time In"] ??
+      raw["IN"] ??
+      raw["Time_In"] ??
+      "";
+    const outtimeRaw =
+      raw.outtime ??
+      raw.OutTime ??
+      raw["Out Time"] ??
+      raw["OUT TIME"] ??
+      raw["OUT_TIME"] ??
+      raw["Time Out"] ??
+      raw["OUT"] ??
+      raw["Time_Out"] ??
+      "";
 
     // helper to coerce various time forms (07:30, 7:30, 07:30:00, 730, Excel decimal)
     const parseToHHMM = (val) => {
@@ -837,15 +1191,21 @@ function PreviewDailyModal({ date, rows, onClose, onSaved }) {
       const s = String(val).trim();
       const m = s.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
       if (m) {
-        const hh = String(Math.max(0, Math.min(23, Number(m[1])))).padStart(2, "0");
-        const mm = String(Math.max(0, Math.min(59, Number(m[2])))).padStart(2, "0");
+        const hh = String(Math.max(0, Math.min(23, Number(m[1])))).padStart(
+          2,
+          "0",
+        );
+        const mm = String(Math.max(0, Math.min(59, Number(m[2])))).padStart(
+          2,
+          "0",
+        );
         return `${hh}:${mm}`;
       }
       const m2 = s.match(/^(\d{3,4})$/);
       if (m2) {
         const num = m2[1];
-        if (num.length === 3) return `${'0' + num[0]}:${num.slice(1)}`;
-        return `${num.slice(0, num.length - 2).padStart(2, '0')}:${num.slice(-2)}`;
+        if (num.length === 3) return `${"0" + num[0]}:${num.slice(1)}`;
+        return `${num.slice(0, num.length - 2).padStart(2, "0")}:${num.slice(-2)}`;
       }
       const asNum = Number(s);
       // Excel time serials (0 < n < 1)
@@ -853,7 +1213,7 @@ function PreviewDailyModal({ date, rows, onClose, onSaved }) {
         const totalMin = Math.round(asNum * 24 * 60);
         const hh = Math.floor(totalMin / 60);
         const mm = totalMin % 60;
-        return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+        return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
       }
       return "";
     };
@@ -861,8 +1221,12 @@ function PreviewDailyModal({ date, rows, onClose, onSaved }) {
     const intime = parseToHHMM(intimeRaw);
     const outtime = parseToHHMM(outtimeRaw);
 
-    const status = String(raw.status ?? raw.Status ?? raw.attendance ?? raw.Attendance ?? "").trim();
-    const remarks = String(raw.remarks ?? raw.Remarks ?? raw.note ?? raw.Note ?? "").trim();
+    const status = String(
+      raw.status ?? raw.Status ?? raw.attendance ?? raw.Attendance ?? "",
+    ).trim();
+    const remarks = String(
+      raw.remarks ?? raw.Remarks ?? raw.note ?? raw.Note ?? "",
+    ).trim();
 
     // Collect possible company/site fields from many column names
     const companyRaw =
@@ -874,17 +1238,27 @@ function PreviewDailyModal({ date, rows, onClose, onSaved }) {
       raw.Branch ??
       raw.location ??
       raw.Location ??
-      raw['Company'] ??
-      raw['Company Name'] ??
-      raw['Branch Name'] ??
-      raw['Site'] ??
+      raw["Company"] ??
+      raw["Company Name"] ??
+      raw["Branch Name"] ??
+      raw["Site"] ??
       "";
 
     let company = normalizeCompany(companyRaw);
 
     // If company still empty, try dept/group/other columns
     if (!company || company === "") {
-      const extra = String(raw.dept ?? raw.department ?? raw.dept_name ?? raw.group ?? raw.Division ?? raw.DEPARTMENT ?? raw['Business Unit'] ?? raw['BU'] ?? "").trim();
+      const extra = String(
+        raw.dept ??
+          raw.department ??
+          raw.dept_name ??
+          raw.group ??
+          raw.Division ??
+          raw.DEPARTMENT ??
+          raw["Business Unit"] ??
+          raw["BU"] ??
+          "",
+      ).trim();
       if (extra) {
         if (/SCM\b/i.test(extra) || /^SCM$/i.test(extra)) {
           company = "SRI CHAKRA MILK";
@@ -898,7 +1272,14 @@ function PreviewDailyModal({ date, rows, onClose, onSaved }) {
     if (!company) company = "";
 
     // Work duration conversions
-    let workdur = raw.workdur ?? raw.work_dur ?? raw.WorkDur ?? raw['Work Duration'] ?? raw['work_hours'] ?? raw.WorkHours ?? null;
+    let workdur =
+      raw.workdur ??
+      raw.work_dur ??
+      raw.WorkDur ??
+      raw["Work Duration"] ??
+      raw["work_hours"] ??
+      raw.WorkHours ??
+      null;
     let workdur_hours = "";
     if (typeof workdur === "number") {
       workdur_hours = minutesToHumanHMM(workdur);
@@ -923,7 +1304,9 @@ function PreviewDailyModal({ date, rows, onClose, onSaved }) {
   };
 
   // Initialize state from rows using normalizeRow
-  const [data, setData] = useState(() => (rows || []).map((r) => normalizeRow(r)));
+  const [data, setData] = useState(() =>
+    (rows || []).map((r) => normalizeRow(r)),
+  );
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
 
@@ -932,7 +1315,12 @@ function PreviewDailyModal({ date, rows, onClose, onSaved }) {
   }, [rows]);
 
   const headers = [
-    { key: "employeeid", label: "Employee ID", readOnly: true, className: "w-32" },
+    {
+      key: "employeeid",
+      label: "Employee ID",
+      readOnly: true,
+      className: "w-32",
+    },
     { key: "name", label: "Employee Name", className: "w-56" },
     { key: "intime", label: "In Time (HH:MM)", className: "w-40" },
     { key: "outtime", label: "Out Time (HH:MM)", className: "w-40" },
@@ -942,24 +1330,24 @@ function PreviewDailyModal({ date, rows, onClose, onSaved }) {
     { key: "company", label: "Company", className: "w-48" },
   ];
 
-const setCell = (i, key, val) => {
-  setData((prev) => {
-    const next = [...prev];
-    const updated = { ...next[i], [key]: val };
-    // Mark manual override when user edits the workdur input
-    if (key === "workdur_hours") {
-      updated._manualWork = (String(val || "").trim() !== "");
-    }
-    // If user edits intime/outtime, clear manual override so computed shows again
-    if (key === "intime" || key === "outtime") {
-      // leave manual flag only if user explicitly set workdur after editing times
-      updated._manualWork = next[i]._manualWork || false; // preserve if already set
-      // but we'll keep it; below in render we treat computed prioritized unless _manualWork true
-    }
-    next[i] = updated;
-    return next;
-  });
-};
+  const setCell = (i, key, val) => {
+    setData((prev) => {
+      const next = [...prev];
+      const updated = { ...next[i], [key]: val };
+      // Mark manual override when user edits the workdur input
+      if (key === "workdur_hours") {
+        updated._manualWork = String(val || "").trim() !== "";
+      }
+      // If user edits intime/outtime, clear manual override so computed shows again
+      if (key === "intime" || key === "outtime") {
+        // leave manual flag only if user explicitly set workdur after editing times
+        updated._manualWork = next[i]._manualWork || false; // preserve if already set
+        // but we'll keep it; below in render we treat computed prioritized unless _manualWork true
+      }
+      next[i] = updated;
+      return next;
+    });
+  };
 
   const numericId = (empid) => {
     if (!empid && empid !== 0) return null;
@@ -974,20 +1362,32 @@ const setCell = (i, key, val) => {
 
   // items filtered & grouped by company, sorted by numeric employee id inside each company
   const items = useMemo(() => {
-    const q = String(search || "").trim().toLowerCase();
+    const q = String(search || "")
+      .trim()
+      .toLowerCase();
     const filtered = data
       .map((r, idx) => ({ idx, r }))
       .filter(({ r }) => {
         if (!q) return true;
 
         // id variants
-        const idMatches = idVariants(r.employeeid || "").some((v) => String(v || "").toLowerCase().includes(q));
+        const idMatches = idVariants(r.employeeid || "").some((v) =>
+          String(v || "")
+            .toLowerCase()
+            .includes(q),
+        );
 
         // raw SI-like fields
         const rawCandidate = r._raw || {};
         const siFields = [
-          rawCandidate.si, rawCandidate.SI, rawCandidate.Sno, rawCandidate.SNo,
-          rawCandidate['SNo'], rawCandidate['S No'], rawCandidate['SI/EMP ID'], rawCandidate['SI']
+          rawCandidate.si,
+          rawCandidate.SI,
+          rawCandidate.Sno,
+          rawCandidate.SNo,
+          rawCandidate["SNo"],
+          rawCandidate["S No"],
+          rawCandidate["SI/EMP ID"],
+          rawCandidate["SI"],
         ];
         const rawMatch = siFields.some((v) => {
           if (v == null || v === "") return false;
@@ -995,8 +1395,18 @@ const setCell = (i, key, val) => {
         });
 
         // fallback text match
-        const textMatch = [r.name, r.shift, r.status, r.remarks, r.company, r.intime, r.outtime].some((v) =>
-          String(v || "").toLowerCase().includes(q)
+        const textMatch = [
+          r.name,
+          r.shift,
+          r.status,
+          r.remarks,
+          r.company,
+          r.intime,
+          r.outtime,
+        ].some((v) =>
+          String(v || "")
+            .toLowerCase()
+            .includes(q),
         );
 
         return idMatches || rawMatch || textMatch;
@@ -1013,12 +1423,16 @@ const setCell = (i, key, val) => {
 
       if (na != null && nb != null) {
         if (na !== nb) return na - nb;
-        return String(a.r.employeeid || "").localeCompare(String(b.r.employeeid || ""));
+        return String(a.r.employeeid || "").localeCompare(
+          String(b.r.employeeid || ""),
+        );
       }
       if (na != null && nb == null) return -1;
       if (na == null && nb != null) return 1;
 
-      const cmpId = String(a.r.employeeid || "").localeCompare(String(b.r.employeeid || ""));
+      const cmpId = String(a.r.employeeid || "").localeCompare(
+        String(b.r.employeeid || ""),
+      );
       if (cmpId !== 0) return cmpId;
 
       return String(a.r.name || "").localeCompare(String(b.r.name || ""));
@@ -1071,8 +1485,22 @@ const setCell = (i, key, val) => {
 
   const save = async () => {
     for (const r of data) {
-      if (r.intime && !isHHMM(r.intime)) { Swal.fire({ icon: "error", title: "Invalid time", text: `Invalid In Time for ${r.name || r.employeeid}. Use HH:MM.` }); return; }
-      if (r.outtime && !isHHMM(r.outtime)) { Swal.fire({ icon: "error", title: "Invalid time", text: `Invalid Out Time for ${r.name || r.employeeid}. Use HH:MM.` }); return; }
+      if (r.intime && !isHHMM(r.intime)) {
+        Swal.fire({
+          icon: "error",
+          title: "Invalid time",
+          text: `Invalid In Time for ${r.name || r.employeeid}. Use HH:MM.`,
+        });
+        return;
+      }
+      if (r.outtime && !isHHMM(r.outtime)) {
+        Swal.fire({
+          icon: "error",
+          title: "Invalid time",
+          text: `Invalid Out Time for ${r.name || r.employeeid}. Use HH:MM.`,
+        });
+        return;
+      }
     }
 
     setSaving(true);
@@ -1082,7 +1510,7 @@ const setCell = (i, key, val) => {
         const outMin = parseHHMMToMinutes(r.outtime);
         let workMinutes = null;
         if (typeof inMin === "number" && typeof outMin === "number") {
-          if (outMin < inMin) workMinutes = (outMin + 24 * 60) - inMin;
+          if (outMin < inMin) workMinutes = outMin + 24 * 60 - inMin;
           else workMinutes = outMin - inMin;
         } else {
           workMinutes = parseWorkInputToMinutes(r.workdur_hours);
@@ -1109,7 +1537,11 @@ const setCell = (i, key, val) => {
       if (!res.ok) throw new Error(j?.error || "Save failed");
       onSaved?.(j);
     } catch (e) {
-      Swal.fire({ icon: "error", title: "Save failed", text: e?.message || "Something went wrong" });
+      Swal.fire({
+        icon: "error",
+        title: "Save failed",
+        text: e?.message || "Something went wrong",
+      });
     } finally {
       setSaving(false);
     }
@@ -1119,27 +1551,59 @@ const setCell = (i, key, val) => {
   const shownRows = items.filter((x) => x.type === "row").length;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" aria-modal="true" role="dialog">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} aria-hidden="true" />
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      aria-modal="true"
+      role="dialog"
+    >
+      <div
+        className="absolute inset-0 bg-black/40"
+        onClick={onClose}
+        aria-hidden="true"
+      />
       <div className="relative w-full bg-white border border-gray-200 rounded-t-2xl md:rounded-2xl shadow-xl m-0 md:m-4 max-h-[88vh] flex flex-col">
         <div className="px-6 pt-6 pb-3 flex items-center justify-between border-b border-gray-200">
           <div>
-            <h3 className="text-lg font-semibold text-gray-900">Preview • {toHumanDate(date)}</h3>
-            <div className="mt-1 text-xs text-gray-600">Showing {shownRows} of {totalRows} records</div>
+            <h3 className="text-lg font-semibold text-gray-900">
+              Preview • {toHumanDate(date)}
+            </h3>
+            <div className="mt-1 text-xs text-gray-600">
+              Showing {shownRows} of {totalRows} records
+            </div>
           </div>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-700">✕</button>
+          <button
+            onClick={onClose}
+            className="text-gray-500 hover:text-gray-700"
+          >
+            ✕
+          </button>
         </div>
 
         <div className="px-6 py-3 border-b border-gray-200 bg-white">
           <div className="flex items-center gap-2 w-full md:max-w-md">
-            <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by ID, name, company..." className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-            {search && <button onClick={() => setSearch("")} className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm hover:bg-gray-50">Clear</button>}
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by ID, name, company..."
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            />
+            {search && (
+              <button
+                onClick={() => setSearch("")}
+                className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm hover:bg-gray-50"
+              >
+                Clear
+              </button>
+            )}
           </div>
         </div>
 
         <div className="px-6 py-4 overflow-hidden flex-1 flex flex-col">
           {!data?.length ? (
-            <div className="py-8 text-center text-gray-600">No rows parsed.</div>
+            <div className="py-8 text-center text-gray-600">
+              No rows parsed.
+            </div>
           ) : (
             <div className="border border-gray-200 rounded-xl overflow-hidden flex-1 min-h-0">
               <div className="overflow-auto max-h-[68vh]">
@@ -1147,46 +1611,137 @@ const setCell = (i, key, val) => {
                   <thead className="bg-gray-50 sticky top-0 z-10">
                     <tr className="text-left text-gray-600">
                       {headers.map((h) => (
-                        <th key={h.key} className={`px-3 py-2 border-b ${h.className || ""}`}>{h.label}</th>
+                        <th
+                          key={h.key}
+                          className={`px-3 py-2 border-b ${h.className || ""}`}
+                        >
+                          {h.label}
+                        </th>
                       ))}
                     </tr>
                   </thead>
 
                   <tbody>
                     {items.length === 0 ? (
-                      <tr><td colSpan={headers.length} className="px-3 py-6 text-center text-gray-500">No matches for “{search}”.</td></tr>
-                    ) : items.map((it, i) => {
-                      if (it.type === "group") {
-                        return <tr key={`g-${it.key}-${i}`}><td colSpan={headers.length} className="bg-gray-100/70 text-gray-800 px-3 py-2 border-t font-semibold">{it.key || "—"}</td></tr>;
-                      }
-                      const r = data[it.idx];
-                      const inMin = parseHHMMToMinutes(r.intime);
-                      const outMin = parseHHMMToMinutes(r.outtime);
-                      const computedWork = (typeof inMin === "number" && typeof outMin === "number") ? (outMin < inMin ? (outMin + 24 * 60 - inMin) : (outMin - inMin)) : null;
-                      return (
-                        <tr key={`r-${it.idx}-${i}`} className="odd:bg-white even:bg-gray-50">
-                          {headers.map((h) => (
-                            <td key={h.key} className="px-3 py-2 border-t align-top">
-                              {h.readOnly ? <span className="block text-gray-800">{r[h.key] || "-"}</span> :
-                                h.key === "workdur_hours" ? (
+                      <tr>
+                        <td
+                          colSpan={headers.length}
+                          className="px-3 py-6 text-center text-gray-500"
+                        >
+                          No matches for “{search}”.
+                        </td>
+                      </tr>
+                    ) : (
+                      items.map((it, i) => {
+                        if (it.type === "group") {
+                          return (
+                            <tr key={`g-${it.key}-${i}`}>
+                              <td
+                                colSpan={headers.length}
+                                className="bg-gray-100/70 text-gray-800 px-3 py-2 border-t font-semibold"
+                              >
+                                {it.key || "—"}
+                              </td>
+                            </tr>
+                          );
+                        }
+                        const r = data[it.idx];
+                        const inMin = parseHHMMToMinutes(r.intime);
+                        const outMin = parseHHMMToMinutes(r.outtime);
+                        const computedWork =
+                          typeof inMin === "number" &&
+                          typeof outMin === "number"
+                            ? outMin < inMin
+                              ? outMin + 24 * 60 - inMin
+                              : outMin - inMin
+                            : null;
+                        return (
+                          <tr
+                            key={`r-${it.idx}-${i}`}
+                            className="odd:bg-white even:bg-gray-50"
+                          >
+                            {headers.map((h) => (
+                              <td
+                                key={h.key}
+                                className="px-3 py-2 border-t align-top"
+                              >
+                                {h.readOnly ? (
+                                  <span className="block text-gray-800">
+                                    {r[h.key] || "-"}
+                                  </span>
+                                ) : h.key === "workdur_hours" ? (
                                   <div className="flex items-center gap-2">
-                                    <input type="text" value={r.workdur_hours ?? (computedWork != null ? minutesToHumanHMM(computedWork) : "")} onChange={(e) => setCell(it.idx, "workdur_hours", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1" placeholder="e.g., 7:30 or 7.30 or 7.5" />
-                                    <div className="text-xs text-gray-500">{computedWork != null ? `${minutesToHumanHMM(computedWork)} (calc)` : ""}</div>
+                                    <input
+                                      type="text"
+                                      value={
+                                        r.workdur_hours ??
+                                        (computedWork != null
+                                          ? minutesToHumanHMM(computedWork)
+                                          : "")
+                                      }
+                                      onChange={(e) =>
+                                        setCell(
+                                          it.idx,
+                                          "workdur_hours",
+                                          e.target.value,
+                                        )
+                                      }
+                                      className="w-full rounded border border-gray-300 px-2 py-1"
+                                      placeholder="e.g., 7:30 or 7.30 or 7.5"
+                                    />
+                                    <div className="text-xs text-gray-500">
+                                      {computedWork != null
+                                        ? `${minutesToHumanHMM(computedWork)} (calc)`
+                                        : ""}
+                                    </div>
                                   </div>
                                 ) : h.key === "remarks" ? (
-                                  <textarea rows={2} value={r.remarks ?? ""} onChange={(e) => setCell(it.idx, "remarks", e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1" placeholder="Optional notes" />
-                                ) : h.key === "intime" || h.key === "outtime" ? (
-                                  <input type="time" step="60" value={r[h.key] || ""} onChange={(e) => setCell(it.idx, h.key, e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1" />
+                                  <textarea
+                                    rows={2}
+                                    value={r.remarks ?? ""}
+                                    onChange={(e) =>
+                                      setCell(it.idx, "remarks", e.target.value)
+                                    }
+                                    className="w-full rounded border border-gray-300 px-2 py-1"
+                                    placeholder="Optional notes"
+                                  />
+                                ) : h.key === "intime" ||
+                                  h.key === "outtime" ? (
+                                  <input
+                                    type="time"
+                                    step="60"
+                                    value={r[h.key] || ""}
+                                    onChange={(e) =>
+                                      setCell(it.idx, h.key, e.target.value)
+                                    }
+                                    className="w-full rounded border border-gray-300 px-2 py-1"
+                                  />
                                 ) : h.key === "status" ? (
-                                  <input type="text" value={r.status ?? ""} onChange={(e) => setCell(it.idx, "status", e.target.value)} className={`w-full rounded border px-2 py-1 ${statusClass(r.status)}`} placeholder="Present / Absent / Leave" />
+                                  <input
+                                    type="text"
+                                    value={r.status ?? ""}
+                                    onChange={(e) =>
+                                      setCell(it.idx, "status", e.target.value)
+                                    }
+                                    className={`w-full rounded border px-2 py-1 ${statusClass(r.status)}`}
+                                    placeholder="Present / Absent / Leave"
+                                  />
                                 ) : (
-                                  <input type="text" value={r[h.key] ?? ""} onChange={(e) => setCell(it.idx, h.key, e.target.value)} className="w-full rounded border border-gray-300 px-2 py-1" />
+                                  <input
+                                    type="text"
+                                    value={r[h.key] ?? ""}
+                                    onChange={(e) =>
+                                      setCell(it.idx, h.key, e.target.value)
+                                    }
+                                    className="w-full rounded border border-gray-300 px-2 py-1"
+                                  />
                                 )}
-                            </td>
-                          ))}
-                        </tr>
-                      );
-                    })}
+                              </td>
+                            ))}
+                          </tr>
+                        );
+                      })
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -1195,14 +1750,24 @@ const setCell = (i, key, val) => {
         </div>
 
         <div className="px-6 pt-3 pb-6 flex items-center justify-end gap-3 border-t border-gray-200">
-          <button onClick={onClose} className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
-          <button onClick={save} disabled={!data.length || saving} className="inline-flex items-center rounded-lg bg-[#C1272D] px-4 py-2 text-sm font-medium text-white hover:bg-[#a02125] disabled:opacity-60">{saving ? "Saving…" : "Save"}</button>
+          <button
+            onClick={onClose}
+            className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={save}
+            disabled={!data.length || saving}
+            className="inline-flex items-center rounded-lg bg-[#C1272D] px-4 py-2 text-sm font-medium text-white hover:bg-[#a02125] disabled:opacity-60"
+          >
+            {saving ? "Saving…" : "Save"}
+          </button>
         </div>
       </div>
     </div>
   );
 }
-
 
 /* ===========================
    ANM Preview Modal (Tandur / Talakondapally)
@@ -1227,7 +1792,9 @@ function AnmPreviewDailyModal({ site, date, onClose, onSaved }) {
   const reload = useCallback(async () => {
     try {
       setLoading(true);
-      const r = await fetch(`/api/attendance/anm/daily?site=${encodeURIComponent(site)}&date=${encodeURIComponent(date)}`);
+      const r = await fetch(
+        `/api/attendance/anm/daily?site=${encodeURIComponent(site)}&date=${encodeURIComponent(date)}`,
+      );
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(j?.error || "Failed to fetch ANM attendance");
       const rows = Array.isArray(j?.rows) ? j.rows.map(normalizeRow) : [];
@@ -1237,23 +1804,42 @@ function AnmPreviewDailyModal({ site, date, onClose, onSaved }) {
     } catch (e) {
       setData([]);
       setOrig([]);
-      Swal.fire({ icon: "error", title: "Load error", text: e?.message || "Could not fetch data" });
+      Swal.fire({
+        icon: "error",
+        title: "Load error",
+        text: e?.message || "Could not fetch data",
+      });
     } finally {
       setLoading(false);
     }
   }, [site, date]);
 
-  useEffect(() => { reload(); }, [reload]);
+  useEffect(() => {
+    reload();
+  }, [reload]);
 
   const viewRows = useMemo(() => {
-    const q = String(search || "").trim().toLowerCase();
-    const list = !q ? [...data] : data.filter((r) => [r.name, r.status, String(r.si)].some((v) => String(v || "").toLowerCase().includes(q)));
+    const q = String(search || "")
+      .trim()
+      .toLowerCase();
+    const list = !q
+      ? [...data]
+      : data.filter((r) =>
+          [r.name, r.status, String(r.si)].some((v) =>
+            String(v || "")
+              .toLowerCase()
+              .includes(q),
+          ),
+        );
     return list.sort(bySiAsc);
   }, [data, search]);
 
   const changedRows = useMemo(() => {
     const map = new Map(orig.map((o) => [o.si, o]));
-    return data.filter((r) => { const o = map.get(r.si); return o ? (o.name !== r.name || o.status !== r.status) : true; });
+    return data.filter((r) => {
+      const o = map.get(r.si);
+      return o ? o.name !== r.name || o.status !== r.status : true;
+    });
   }, [data, orig]);
 
   const submit = async () => {
@@ -1261,81 +1847,168 @@ function AnmPreviewDailyModal({ site, date, onClose, onSaved }) {
       setSaving(true);
       if (changedRows.length > 0) {
         for (const r of changedRows) {
-          const res = await fetch(`/api/attendance/anm/row?site=${encodeURIComponent(site)}`, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ si: r.si, name: r.name, status: r.status }),
-          });
+          const res = await fetch(
+            `/api/attendance/anm/row?site=${encodeURIComponent(site)}`,
+            {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                si: r.si,
+                name: r.name,
+                status: r.status,
+              }),
+            },
+          );
           const j = await res.json().catch(() => ({}));
-          if (!res.ok) throw new Error(j?.error || `Failed to update SI ${r.si}`);
+          if (!res.ok)
+            throw new Error(j?.error || `Failed to update SI ${r.si}`);
         }
       }
       // mark review as Submitted
       try {
-        await fetch(`/api/attendance/anm/review?site=${encodeURIComponent(site)}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ date, review: "Submitted" }),
-        });
-      } catch { /*ignore best-effort*/ }
+        await fetch(
+          `/api/attendance/anm/review?site=${encodeURIComponent(site)}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ date, review: "Submitted" }),
+          },
+        );
+      } catch {
+        /*ignore best-effort*/
+      }
 
       setOrig([...data].sort(bySiAsc));
-      await Swal.fire({ icon: "success", title: "Submitted", text: changedRows.length ? `Updated ${changedRows.length} rows.` : "No edits detected." });
+      await Swal.fire({
+        icon: "success",
+        title: "Submitted",
+        text: changedRows.length
+          ? `Updated ${changedRows.length} rows.`
+          : "No edits detected.",
+      });
       onSaved?.({ saved: changedRows.length, submitted: true });
       onClose?.();
     } catch (e) {
-      Swal.fire({ icon: "error", title: "Submit failed", text: e?.message || "Something went wrong" });
+      Swal.fire({
+        icon: "error",
+        title: "Submit failed",
+        text: e?.message || "Something went wrong",
+      });
     } finally {
       setSaving(false);
     }
   };
 
   const onDelete = async (si) => {
-    const ok = await Swal.fire({ icon: "warning", title: `Delete row #${si}?`, text: "This cannot be undone.", showCancelButton: true, confirmButtonText: "Delete", cancelButtonText: "Cancel", confirmButtonColor: "#C1272D" }).then((r) => r.isConfirmed);
+    const ok = await Swal.fire({
+      icon: "warning",
+      title: `Delete row #${si}?`,
+      text: "This cannot be undone.",
+      showCancelButton: true,
+      confirmButtonText: "Delete",
+      cancelButtonText: "Cancel",
+      confirmButtonColor: "#C1272D",
+    }).then((r) => r.isConfirmed);
     if (!ok) return;
     try {
-      const res = await fetch(`/api/attendance/anm/row?site=${encodeURIComponent(site)}&si=${encodeURIComponent(si)}`, { method: "DELETE" });
+      const res = await fetch(
+        `/api/attendance/anm/row?site=${encodeURIComponent(site)}&si=${encodeURIComponent(si)}`,
+        { method: "DELETE" },
+      );
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j?.error || "Delete failed");
       setData((prev) => prev.filter((r) => r.si !== si));
       setOrig((prev) => prev.filter((r) => r.si !== si));
-      Swal.fire({ icon: "success", title: "Deleted", text: `Row #${si} removed.` });
+      Swal.fire({
+        icon: "success",
+        title: "Deleted",
+        text: `Row #${si} removed.`,
+      });
     } catch (e) {
-      Swal.fire({ icon: "error", title: "Delete failed", text: e?.message || "Something went wrong" });
+      Swal.fire({
+        icon: "error",
+        title: "Delete failed",
+        text: e?.message || "Something went wrong",
+      });
     }
   };
 
   const isDirty = changedRows.length > 0;
   const handleClose = async () => {
     if (!isDirty) return onClose?.();
-    const confirm = await Swal.fire({ icon: "warning", title: "Discard changes?", text: "You have unsaved edits. Close without submitting?", showCancelButton: true, confirmButtonText: "Discard", cancelButtonText: "Stay", confirmButtonColor: "#C1272D" }).then((r) => r.isConfirmed);
+    const confirm = await Swal.fire({
+      icon: "warning",
+      title: "Discard changes?",
+      text: "You have unsaved edits. Close without submitting?",
+      showCancelButton: true,
+      confirmButtonText: "Discard",
+      cancelButtonText: "Stay",
+      confirmButtonColor: "#C1272D",
+    }).then((r) => r.isConfirmed);
     if (confirm) onClose?.();
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" aria-modal="true" role="dialog">
-      <div className="absolute inset-0 bg-black/40" onClick={handleClose} aria-hidden="true" />
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      aria-modal="true"
+      role="dialog"
+    >
+      <div
+        className="absolute inset-0 bg-black/40"
+        onClick={handleClose}
+        aria-hidden="true"
+      />
       <div className="relative w-full md:max-w-5xl bg-white border border-gray-200 rounded-t-2xl md:rounded-2xl shadow-xl m-0 md:m-4 h-[90vh] max-h-[90vh] overflow-hidden flex flex-col">
         <div className="px-6 pt-6 pb-3 flex items-center justify-between border-b border-gray-200 shrink-0">
           <div>
-            <h3 className="text-lg font-semibold text-gray-900">{siteLabel} • {toHumanDate(date)}</h3>
-            <div className="mt-1 text-xs text-gray-600">{loading ? "Loading…" : `Showing ${viewRows.length} of ${data.length} employees`}</div>
+            <h3 className="text-lg font-semibold text-gray-900">
+              {siteLabel} • {toHumanDate(date)}
+            </h3>
+            <div className="mt-1 text-xs text-gray-600">
+              {loading
+                ? "Loading…"
+                : `Showing ${viewRows.length} of ${data.length} employees`}
+            </div>
           </div>
-          <button onClick={handleClose} className="text-gray-500 hover:text-gray-700">✕</button>
+          <button
+            onClick={handleClose}
+            className="text-gray-500 hover:text-gray-700"
+          >
+            ✕
+          </button>
         </div>
 
         <div className="px-6 py-3 border-b border-gray-200 bg-white shrink-0">
           <div className="flex items-center gap-2 w-full md:max-w-2xl">
-            <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" placeholder="Search by SI, name, or status…" disabled={loading} />
-            <button onClick={reload} className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm hover:bg-gray-50" disabled={loading}>Refresh</button>
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              placeholder="Search by SI, name, or status…"
+              disabled={loading}
+            />
+            <button
+              onClick={reload}
+              className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm hover:bg-gray-50"
+              disabled={loading}
+            >
+              Refresh
+            </button>
           </div>
         </div>
 
         <div className="px-6 flex-1 min-h-0 flex flex-col">
           {loading ? (
-            <div className="py-8 text-center text-gray-600"><span className="inline-block h-5 w-5 mr-2 animate-spin rounded-full border-2 border-gray-300 border-t-transparent" />Loading attendance…</div>
+            <div className="py-8 text-center text-gray-600">
+              <span className="inline-block h-5 w-5 mr-2 animate-spin rounded-full border-2 border-gray-300 border-t-transparent" />
+              Loading attendance…
+            </div>
           ) : !data?.length ? (
-            <div className="py-8 text-center text-gray-600">No rows found for {siteLabel} on {toHumanDate(date)}.</div>
+            <div className="py-8 text-center text-gray-600">
+              No rows found for {siteLabel} on {toHumanDate(date)}.
+            </div>
           ) : (
             <div className="border border-gray-200 rounded-xl flex-1 min-h-0">
               <div className="h-full overflow-y-auto">
@@ -1345,7 +2018,9 @@ function AnmPreviewDailyModal({ site, date, onClose, onSaved }) {
                       <th className="px-3 py-2 border-b w-24">SI</th>
                       <th className="px-3 py-2 border-b">Name</th>
                       <th className="px-3 py-2 border-b w-56">Status</th>
-                      <th className="px-3 py-2 border-b w-32 text-right">Actions</th>
+                      <th className="px-3 py-2 border-b w-32 text-right">
+                        Actions
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1353,15 +2028,48 @@ function AnmPreviewDailyModal({ site, date, onClose, onSaved }) {
                       const idx = data.findIndex((x) => x.si === r.si);
                       return (
                         <tr key={r.si} className="odd:bg-white even:bg-gray-50">
-                          <td className="px-3 py-2 border-t align-top">{r.si}</td>
                           <td className="px-3 py-2 border-t align-top">
-                            <input type="text" value={r.name} onChange={(e) => { const v = e.target.value; setData((prev) => { const next = [...prev]; next[idx] = { ...next[idx], name: v }; return next; }); }} className="w-full rounded border border-gray-300 px-2 py-1" placeholder="Name" />
+                            {r.si}
                           </td>
                           <td className="px-3 py-2 border-t align-top">
-                            <input type="text" value={r.status} onChange={(e) => { const v = e.target.value; setData((prev) => { const next = [...prev]; next[idx] = { ...next[idx], status: v }; return next; }); }} className={`w-full rounded border px-2 py-1 ${statusClass(r.status)}`} placeholder="Status (Present/Absent/Leave)" />
+                            <input
+                              type="text"
+                              value={r.name}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                setData((prev) => {
+                                  const next = [...prev];
+                                  next[idx] = { ...next[idx], name: v };
+                                  return next;
+                                });
+                              }}
+                              className="w-full rounded border border-gray-300 px-2 py-1"
+                              placeholder="Name"
+                            />
+                          </td>
+                          <td className="px-3 py-2 border-t align-top">
+                            <input
+                              type="text"
+                              value={r.status}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                setData((prev) => {
+                                  const next = [...prev];
+                                  next[idx] = { ...next[idx], status: v };
+                                  return next;
+                                });
+                              }}
+                              className={`w-full rounded border px-2 py-1 ${statusClass(r.status)}`}
+                              placeholder="Status (Present/Absent/Leave)"
+                            />
                           </td>
                           <td className="px-3 py-2 border-t align-top text-right">
-                            <button onClick={() => onDelete(r.si)} className="p-2 rounded-md border border-red-200 bg-red-50 text-red-600 hover:bg-red-100">Delete</button>
+                            <button
+                              onClick={() => onDelete(r.si)}
+                              className="p-2 rounded-md border border-red-200 bg-red-50 text-red-600 hover:bg-red-100"
+                            >
+                              Delete
+                            </button>
                           </td>
                         </tr>
                       );
@@ -1374,8 +2082,19 @@ function AnmPreviewDailyModal({ site, date, onClose, onSaved }) {
         </div>
 
         <div className="px-6 pt-3 pb-6 flex items-center justify-end gap-3 border-t border-gray-200 shrink-0">
-          <button onClick={handleClose} className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
-          <button onClick={submit} disabled={loading || saving} className="inline-flex items-center rounded-lg bg-[#C1272D] px-4 py-2 text-sm font-medium text-white hover:bg-[#a02125] disabled:opacity-60">{saving ? "Submitting…" : "Submit"}</button>
+          <button
+            onClick={handleClose}
+            className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={submit}
+            disabled={loading || saving}
+            className="inline-flex items-center rounded-lg bg-[#C1272D] px-4 py-2 text-sm font-medium text-white hover:bg-[#a02125] disabled:opacity-60"
+          >
+            {saving ? "Submitting…" : "Submit"}
+          </button>
         </div>
       </div>
     </div>
@@ -1403,49 +2122,30 @@ function CreateEmployeeModal({ idToName = {}, onClose, onCreated }) {
   const [address, setAddress] = useState("");
   const [designation, setDesignation] = useState("");
   const [reportingToId, setReportingToId] = useState("");
-  const [reportingToName, setReportingToName] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [isProbation, setIsProbation] = useState("no");
+  const [probationDays, setProbationDays] = useState("90");
+  const [customDays, setCustomDays] = useState("");
 
-  // Try local lookup first + best-effort API lookup (debounced simplistic)
-  useEffect(() => {
-    if (!reportingToId) { setReportingToName(""); return; }
-    const local = (() => {
-      for (const k of idVariants(reportingToId)) {
-        if (idToName?.[k]) return idToName[k];
-      }
-      return "";
-    })();
-    setReportingToName(local || "");
-    let mounted = true;
-    (async () => {
-      try {
-        const res = await fetch(`/api/users?id=${encodeURIComponent(String(reportingToId).trim())}`);
-        const j = await res.json().catch(() => ({}));
-        if (!mounted) return;
-        if (res.ok && Array.isArray(j?.data) && j.data.length > 0 && j.data[0].name) {
-          setReportingToName(j.data[0].name);
-        } else {
-          if (!local) setReportingToName("");
-        }
-      } catch {
-        // network failure -> keep local result
-      }
-    })();
-    return () => { mounted = false; };
-  }, [reportingToId, idToName]);
 
   const validateLocal = () => {
-    if (!employeeId || !String(employeeId).trim()) return "Employee ID is required.";
+    if (!employeeId || !String(employeeId).trim())
+      return "Employee ID is required.";
     if (!name || !name.trim()) return "Full name is required.";
     // if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email).trim())) return "Valid email is required.";
     if (!company || !String(company).trim()) return "Company is required.";
-    if (gross !== "" && isNaN(Number(gross))) return "Gross salary must be a number.";
-    const aadDigits = String(aadhaar || "").replace(/\D/g, "");
-    if (aadhaar && aadDigits.length !== 12) return "Aadhaar must be exactly 12 digits when provided.";
+    if (gross !== "" && isNaN(Number(gross)))
+      return "Gross salary must be a number.";
+  const aadDigits = String(aadhaar || "").replace(/\D/g, "");
+  if (!aadDigits || aadDigits.length !== 12) {
+    return "Aadhaar Number is required and must be exactly 12 digits.";
+  }
     const panNorm = String(pan || "").toUpperCase();
-    if (pan && !/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(panNorm)) return "PAN format is invalid (e.g., ABCDE1234F).";
-    if ((role === "HR" || role === "FINANCE") && !password.trim()) return "Password is required for HR/FINANCE.";
+    if (pan && !/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(panNorm))
+      return "PAN format is invalid (e.g., ABCDE1234F).";
+    if ((role === "HR" || role === "FINANCE") && !password.trim())
+      return "Password is required for HR/FINANCE.";
     return null;
   };
 
@@ -1462,16 +2162,32 @@ function CreateEmployeeModal({ idToName = {}, onClose, onCreated }) {
 
       // duplicate check by employee id (best-effort)
       try {
-        const checkRes = await fetch(`/api/users?id=${encodeURIComponent(String(employeeId).trim())}`);
+        const checkRes = await fetch(
+          `/api/users?id=${encodeURIComponent(String(employeeId).trim())}`,
+        );
         const checkJson = await checkRes.json().catch(() => ({}));
-        if (checkRes.ok && Array.isArray(checkJson?.data) && checkJson.data.length > 0) {
-          Swal.fire({ icon: "error", title: "User ID already exists", text: `Employee ID ${employeeId} already exists.` });
+        if (
+          checkRes.ok &&
+          Array.isArray(checkJson?.data) &&
+          checkJson.data.length > 0
+        ) {
+          Swal.fire({
+            icon: "error",
+            title: "User ID already exists",
+            text: `Employee ID ${employeeId} already exists.`,
+          });
           setSubmitting(false);
           return;
         }
       } catch {
         // if check call fails, proceed and let server handle duplicates
       }
+ const finalDays =
+   isProbation === "yes"
+     ? probationDays === "custom"
+       ? Number(customDays)
+       : Number(probationDays)
+     : 0;
 
       const body = {
         employeeid: String(employeeId).trim(),
@@ -1487,8 +2203,14 @@ function CreateEmployeeModal({ idToName = {}, onClose, onCreated }) {
         address: address || null,
         designation: designation ? String(designation).trim() : null,
         reporting_to_id: reportingToId ? String(reportingToId).trim() : null,
+        probation: isProbation === "yes" ? "YES" : "NO",
+        probation_status:
+          isProbation === "yes" ? "under_probation" : "confirmed",
+        initial_period_days: finalDays, // Changed this key name
+        probation_extension_days: 0, // Always 0 for a new hi
       };
-      if (role === "HR" || role === "FINANCE") body.password = String(password || "");
+      if (role === "HR" || role === "FINANCE")
+        body.password = String(password || "");
 
       const res = await fetch("/api/users", {
         method: "POST",
@@ -1498,110 +2220,308 @@ function CreateEmployeeModal({ idToName = {}, onClose, onCreated }) {
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j?.error || "Failed to create employee");
 
-      Swal.fire({ icon: "success", title: "Employee created", text: `Employee ${body.employeeid} added.` });
+      Swal.fire({
+        icon: "success",
+        title: "Employee created",
+        text: `Employee ${body.employeeid} added.`,
+      });
       onCreated?.(j);
     } catch (e) {
-      Swal.fire({ icon: "error", title: "Create failed", text: e?.message || "Something went wrong" });
+      Swal.fire({
+        icon: "error",
+        title: "Create failed",
+        text: e?.message || "Something went wrong",
+      });
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" aria-modal="true" role="dialog">
-      <div className="absolute inset-0 bg-black/40" onClick={() => onClose?.()} aria-hidden="true" />
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      aria-modal="true"
+      role="dialog"
+    >
+      <div
+        className="absolute inset-0 bg-black/40"
+        onClick={() => onClose?.()}
+        aria-hidden="true"
+      />
       <div className="relative w-full md:max-w-3xl bg-white border border-gray-200 rounded-2xl shadow-xl p-6 m-0 md:m-4">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-gray-900">Create Employee</h3>
-          <button onClick={() => onClose?.()} className="text-gray-500 hover:text-gray-700" aria-label="Close">✕</button>
+          <h3 className="text-lg font-semibold text-gray-900">
+            Employee Onboarding
+          </h3>
+          <button
+            onClick={() => onClose?.()}
+            className="text-gray-500 hover:text-gray-700"
+            aria-label="Close"
+          >
+            ✕
+          </button>
         </div>
 
         <form onSubmit={handleCreate} className="grid grid-cols-1 gap-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700">Employee ID</label>
-              <input value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2" placeholder="e.g. EMP1001" />
+              <label className="block text-sm font-medium text-gray-700">
+                Employee ID
+              </label>
+              <input
+                value={employeeId}
+                onChange={(e) => setEmployeeId(e.target.value)}
+                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+                placeholder="e.g. EMP1001"
+              />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700">Full name</label>
-              <input value={name} onChange={(e) => setName(e.target.value)} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2" placeholder="e.g. Harini" />
+              <label className="block text-sm font-medium text-gray-700">
+                Full name
+              </label>
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+                placeholder="e.g. Harini"
+              />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700">Role</label>
-              <select value={role} onChange={(e) => setRole(e.target.value)} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2">
-                {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+              <label className="block text-sm font-medium text-gray-700">
+                Role
+              </label>
+              <select
+                value={role}
+                onChange={(e) => setRole(e.target.value)}
+                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+              >
+                {ROLES.map((r) => (
+                  <option key={r} value={r}>
+                    {r}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700">Email</label>
-              <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2" placeholder="user@company.com" />
+              <label className="block text-sm font-medium text-gray-700">
+                Email
+              </label>
+              <input
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                type="email"
+                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+                placeholder="user@company.com"
+              />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700">Date of Joining</label>
-              <input value={doj} onChange={(e) => setDoj(e.target.value)} type="date" className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2" />
+              <label className="block text-sm font-medium text-gray-700">
+                Date of Joining
+              </label>
+              <input
+                value={doj}
+                onChange={(e) => setDoj(e.target.value)}
+                type="date"
+                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+              />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700">Phone</label>
-              <input value={phone} onChange={(e) => setPhone(e.target.value)} type="tel" className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2" placeholder="+91 98765 43210" />
+              <label className="block text-sm font-medium text-gray-700">
+                Phone
+              </label>
+              <input
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                type="tel"
+                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+                placeholder="+91 98765 43210"
+              />
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700">Company</label>
-              <select value={company} onChange={(e) => setCompany(e.target.value)} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2">
+              <label className="block text-sm font-medium text-gray-700">
+                Company
+              </label>
+              <select
+                value={company}
+                onChange={(e) => setCompany(e.target.value)}
+                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+              >
                 <option value="">Select company…</option>
-                {COMPANY_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
+                {COMPANY_OPTIONS.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700">Gross Salary</label>
-              <input value={gross} onChange={(e) => setGross(e.target.value)} type="number" step="0.01" className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2" placeholder="e.g., 30000" />
+              <label className="block text-sm font-medium text-gray-700">
+                Gross Salary
+              </label>
+              <input
+                value={gross}
+                onChange={(e) => setGross(e.target.value)}
+                type="number"
+                step="0.01"
+                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+                placeholder="e.g., 30000"
+              />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700">Aadhaar (optional)</label>
-              <input value={aadhaar} onChange={(e) => setAadhaar(e.target.value.replace(/\D/g, "").slice(0, 12))} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2" placeholder="12 digits" />
-              <div className="mt-1 text-xs text-gray-500">If provided, must be 12 digits.</div>
+              <label className="block text-sm font-medium text-gray-700">
+                Aadhaar 
+              </label>
+              <input
+                value={aadhaar}
+                onChange={(e) =>
+                  setAadhaar(e.target.value.replace(/\D/g, "").slice(0, 12))
+                }
+                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+                placeholder="12 digits"
+              />
+              <div className="mt-1 text-xs text-gray-500">
+                If provided, must be 12 digits.
+              </div>
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700">PAN (optional)</label>
-              <input value={pan} onChange={(e) => setPan(e.target.value.toUpperCase().slice(0, 10))} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2" placeholder="ABCDE1234F" />
-              <div className="mt-1 text-xs text-gray-500">If provided, must match PAN format.</div>
+              <label className="block text-sm font-medium text-gray-700">
+                PAN (optional)
+              </label>
+              <input
+                value={pan}
+                onChange={(e) =>
+                  setPan(e.target.value.toUpperCase().slice(0, 10))
+                }
+                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+                placeholder="ABCDE1234F"
+              />
+              <div className="mt-1 text-xs text-gray-500">
+                If provided, must match PAN format.
+              </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700">Designation</label>
-              <input value={designation} onChange={(e) => setDesignation(e.target.value)} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2" placeholder="e.g., Sr. Executive" />
+              <label className="block text-sm font-medium text-gray-700">
+                Designation
+              </label>
+              <input
+                value={designation}
+                onChange={(e) => setDesignation(e.target.value)}
+                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+                placeholder="e.g., Sr. Executive"
+              />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700">Reporting To (Employee ID)</label>
-              <input value={reportingToId} onChange={(e) => setReportingToId(e.target.value)} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2" placeholder="e.g. EMP1002" />
-              <div className="mt-1 text-xs text-gray-600">{reportingToId ? (reportingToName ? `Manager: ${reportingToName}` : "No match found") : ""}</div>
+              <label className="block text-sm font-medium text-gray-700">
+                Reporting To (Employee ID)
+              </label>
+              <input
+                value={reportingToId}
+                onChange={(e) => setReportingToId(e.target.value)}
+                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-[#C1272D] outline-none"
+                placeholder="e.g. EMP1002"
+              />
             </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                Under Probation?
+              </label>
+              <select
+                value={isProbation}
+                onChange={(e) => setIsProbation(e.target.value)}
+                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-[#C1272D] outline-none"
+              >
+                <option value="no">No</option>
+                <option value="yes">Yes</option>
+              </select>
+            </div>
+
+            {isProbation === "yes" && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Probation Period
+                </label>
+                <div className="flex gap-2">
+                  <select
+                    value={probationDays}
+                    onChange={(e) => setProbationDays(e.target.value)}
+                    className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-[#C1272D] outline-none"
+                  >
+                    <option value="30">30 Days</option>
+                    <option value="60">60 Days</option>
+                    <option value="90">90 Days</option>
+                    <option value="custom">Custom Days</option>
+                  </select>
+                  {probationDays === "custom" && (
+                    <input
+                      type="number"
+                      value={customDays}
+                      onChange={(e) => setCustomDays(e.target.value)}
+                      placeholder="Days"
+                      className="mt-1 block w-24 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-[#C1272D] outline-none"
+                    />
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
           {(role === "HR" || role === "FINANCE") && (
             <div>
-              <label className="block text-sm font-medium text-gray-700">Password (required for HR/FINANCE)</label>
-              <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2" placeholder="Set a password" />
+              <label className="block text-sm font-medium text-gray-700">
+                Password (required for HR/FINANCE)
+              </label>
+              <input
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                type="password"
+                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+                placeholder="Set a password"
+              />
             </div>
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-700">Address</label>
-            <textarea value={address} onChange={(e) => setAddress(e.target.value)} rows={2} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2" placeholder="Flat / Street / City / State / PIN" />
+            <label className="block text-sm font-medium text-gray-700">
+              Address
+            </label>
+            <textarea
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              rows={2}
+              className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+              placeholder="Flat / Street / City / State / PIN"
+            />
           </div>
 
           <div className="pt-2 flex items-center justify-end gap-3">
-            <button type="button" onClick={() => onClose?.()} className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
-            <button type="submit" disabled={submitting} className="inline-flex items-center justify-center rounded-lg bg-[#C1272D] text-white font-medium px-4 py-2 hover:bg-[#a02125]">{submitting ? "Creating…" : "Create Employee"}</button>
+            <button
+              type="button"
+              onClick={() => onClose?.()}
+              className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={submitting}
+              className="inline-flex items-center justify-center rounded-lg bg-[#C1272D] text-white font-medium px-4 py-2 hover:bg-[#a02125]"
+            >
+              {submitting ? "Creating…" : "Create Employee"}
+            </button>
           </div>
         </form>
       </div>
@@ -1609,7 +2529,12 @@ function CreateEmployeeModal({ idToName = {}, onClose, onCreated }) {
   );
 }
 
-function EditEmployeeModal({ idToName = {}, employee = {}, onClose, onUpdated }) {
+function EditEmployeeModal({
+  idToName = {},
+  employee = {},
+  onClose,
+  onUpdated,
+}) {
   const [name, setName] = useState(employee?.name || "");
   const [email, setEmail] = useState(employee?.email || "");
   const [role, setRole] = useState(employee?.role || "EMPLOYEE");
@@ -1620,14 +2545,21 @@ function EditEmployeeModal({ idToName = {}, employee = {}, onClose, onUpdated })
   const [pan, setPan] = useState(employee?.pancard || "");
   const [address, setAddress] = useState(employee?.address || "");
   const [designation, setDesignation] = useState(employee?.designation || "");
-  const [reportingToId, setReportingToId] = useState(employee?.reporting_to_id || "");
+  const [reportingToId, setReportingToId] = useState(
+    employee?.reporting_to_id || "",
+  );
   const [reportingToName, setReportingToName] = useState("");
-  const [gross, setGross] = useState(String(employee?.grosssalary ?? employee?.grossSalary ?? ""));
+  const [gross, setGross] = useState(
+    String(employee?.grosssalary ?? employee?.grossSalary ?? ""),
+  );
   const [submitting, setSubmitting] = useState(false);
 
   // lookup manager name locally and from API
   useEffect(() => {
-    if (!reportingToId) { setReportingToName(""); return; }
+    if (!reportingToId) {
+      setReportingToName("");
+      return;
+    }
     const local = (() => {
       for (const k of idVariants(reportingToId)) {
         if (idToName?.[k]) return idToName[k];
@@ -1638,10 +2570,17 @@ function EditEmployeeModal({ idToName = {}, employee = {}, onClose, onUpdated })
     let mounted = true;
     (async () => {
       try {
-        const res = await fetch(`/api/users?id=${encodeURIComponent(String(reportingToId).trim())}`);
+        const res = await fetch(
+          `/api/users?id=${encodeURIComponent(String(reportingToId).trim())}`,
+        );
         const j = await res.json().catch(() => ({}));
         if (!mounted) return;
-        if (res.ok && Array.isArray(j?.data) && j.data.length > 0 && j.data[0].name) {
+        if (
+          res.ok &&
+          Array.isArray(j?.data) &&
+          j.data.length > 0 &&
+          j.data[0].name
+        ) {
           setReportingToName(j.data[0].name);
         } else {
           if (!local) setReportingToName("");
@@ -1650,25 +2589,36 @@ function EditEmployeeModal({ idToName = {}, employee = {}, onClose, onUpdated })
         // ignore network issues
       }
     })();
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+    };
   }, [reportingToId, idToName]);
 
-  const managerName = useMemo(() => reportingToName || (() => {
-    for (const k of idVariants(reportingToId)) {
-      if (idToName?.[k]) return idToName[k];
-    }
-    return "";
-  })(), [reportingToName, reportingToId, idToName]);
+  const managerName = useMemo(
+    () =>
+      reportingToName ||
+      (() => {
+        for (const k of idVariants(reportingToId)) {
+          if (idToName?.[k]) return idToName[k];
+        }
+        return "";
+      })(),
+    [reportingToName, reportingToId, idToName],
+  );
 
   const validateLocal = () => {
     if (!name || !name.trim()) return "Full name is required.";
     // if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email).trim())) return "Valid email is required.";
     if (!company || !String(company).trim()) return "Company is required.";
-    const aadDigits = String(aadhaar || "").replace(/\D/g, "");
-    if (aadhaar && aadDigits.length !== 12) return "Aadhaar must be exactly 12 digits when provided.";
+   const aadDigits = String(aadhaar || "").replace(/\D/g, "");
+   if (!aadDigits || aadDigits.length !== 12) {
+     return "Aadhaar Number is required and must be exactly 12 digits.";
+   }
     const panNorm = String(pan || "").toUpperCase();
-    if (pan && !/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(panNorm)) return "PAN format is invalid (e.g., ABCDE1234F).";
-    if (gross !== "" && isNaN(Number(gross))) return "Gross salary must be a number.";
+    if (pan && !/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(panNorm))
+      return "PAN format is invalid (e.g., ABCDE1234F).";
+    if (gross !== "" && isNaN(Number(gross)))
+      return "Gross salary must be a number.";
     return null;
   };
 
@@ -1705,99 +2655,511 @@ function EditEmployeeModal({ idToName = {}, employee = {}, onClose, onUpdated })
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j?.error || "Failed to update employee");
 
-      Swal.fire({ icon: "success", title: "Employee updated", text: `Employee ${employee.employeeid} updated.` });
+      Swal.fire({
+        icon: "success",
+        title: "Employee updated",
+        text: `Employee ${employee.employeeid} updated.`,
+      });
       onUpdated?.(j);
     } catch (e) {
-      Swal.fire({ icon: "error", title: "Update failed", text: e?.message || "Something went wrong" });
+      Swal.fire({
+        icon: "error",
+        title: "Update failed",
+        text: e?.message || "Something went wrong",
+      });
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" aria-modal="true" role="dialog">
-      <div className="absolute inset-0 bg-black/40" onClick={() => onClose?.()} aria-hidden="true" />
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      aria-modal="true"
+      role="dialog"
+    >
+      <div
+        className="absolute inset-0 bg-black/40"
+        onClick={() => onClose?.()}
+        aria-hidden="true"
+      />
       <div className="relative w-full md:max-w-3xl bg-white border border-gray-200 rounded-2xl shadow-xl p-6 m-0 md:m-4">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-gray-900">Edit Employee #{employee?.employeeid}</h3>
-          <button onClick={() => onClose?.()} className="text-gray-500 hover:text-gray-700" aria-label="Close">✕</button>
+          <h3 className="text-lg font-semibold text-gray-900">
+            Edit Employee #{employee?.employeeid}
+          </h3>
+          <button
+            onClick={() => onClose?.()}
+            className="text-gray-500 hover:text-gray-700"
+            aria-label="Close"
+          >
+            ✕
+          </button>
         </div>
 
         <form onSubmit={handleSave} className="grid grid-cols-1 gap-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700">Full name</label>
-              <input value={name} onChange={(e) => setName(e.target.value)} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2" />
+              <label className="block text-sm font-medium text-gray-700">
+                Full name
+              </label>
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+              />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700">Role</label>
-              <select value={role} onChange={(e) => setRole(e.target.value)} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2">
-                {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+              <label className="block text-sm font-medium text-gray-700">
+                Role
+              </label>
+              <select
+                value={role}
+                onChange={(e) => setRole(e.target.value)}
+                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+              >
+                {ROLES.map((r) => (
+                  <option key={r} value={r}>
+                    {r}
+                  </option>
+                ))}
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700">Email</label>
-              <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2" />
+              <label className="block text-sm font-medium text-gray-700">
+                Email
+              </label>
+              <input
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                type="email"
+                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+              />
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700">Date of Joining</label>
-              <input value={doj} onChange={(e) => setDoj(e.target.value)} type="date" className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2" />
+              <label className="block text-sm font-medium text-gray-700">
+                Date of Joining
+              </label>
+              <input
+                value={doj}
+                onChange={(e) => setDoj(e.target.value)}
+                type="date"
+                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+              />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700">Phone</label>
-              <input value={phone} onChange={(e) => setPhone(e.target.value)} type="tel" className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2" />
+              <label className="block text-sm font-medium text-gray-700">
+                Phone
+              </label>
+              <input
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                type="tel"
+                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+              />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700">Company</label>
-              <select value={company} onChange={(e) => setCompany(e.target.value)} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2">
+              <label className="block text-sm font-medium text-gray-700">
+                Company
+              </label>
+              <select
+                value={company}
+                onChange={(e) => setCompany(e.target.value)}
+                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+              >
                 <option value="">Select company…</option>
-                {COMPANY_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
+                {COMPANY_OPTIONS.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700">Aadhaar (optional)</label>
-              <input value={aadhaar} onChange={(e) => setAadhaar(e.target.value.replace(/\D/g, "").slice(0, 12))} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2" />
+              <label className="block text-sm font-medium text-gray-700">
+                Aadhaar 
+              </label>
+              <input
+                value={aadhaar}
+                onChange={(e) =>
+                  setAadhaar(e.target.value.replace(/\D/g, "").slice(0, 12))
+                }
+                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+              />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700">PAN (optional)</label>
-              <input value={pan} onChange={(e) => setPan(e.target.value.toUpperCase().slice(0, 10))} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2" />
+              <label className="block text-sm font-medium text-gray-700">
+                PAN (optional)
+              </label>
+              <input
+                value={pan}
+                onChange={(e) =>
+                  setPan(e.target.value.toUpperCase().slice(0, 10))
+                }
+                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+              />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700">Designation</label>
-              <input value={designation} onChange={(e) => setDesignation(e.target.value)} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2" />
+              <label className="block text-sm font-medium text-gray-700">
+                Designation
+              </label>
+              <input
+                value={designation}
+                onChange={(e) => setDesignation(e.target.value)}
+                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+              />
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700">Reporting To (Employee ID)</label>
-              <input value={reportingToId} onChange={(e) => setReportingToId(e.target.value)} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2" />
-              <div className="mt-1 text-xs text-gray-600">{reportingToId ? (managerName ? `Manager: ${managerName}` : "No match found") : ""}</div>
+              <label className="block text-sm font-medium text-gray-700">
+                Reporting To (Employee ID)
+              </label>
+              <input
+                value={reportingToId}
+                onChange={(e) => setReportingToId(e.target.value)}
+                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-[#C1272D] outline-none"
+              />
+              <div className="mt-1 text-xs text-gray-600">
+                {reportingToId ? (managerName ? `Manager: ${managerName}` : "No match found") : ""}
+              </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700">Gross Salary</label>
-              <input value={gross} onChange={(e) => setGross(e.target.value)} type="number" step="0.01" className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2" />
+              <label className="block text-sm font-medium text-gray-700">
+                Gross Salary
+              </label>
+              <input
+                value={gross}
+                onChange={(e) => setGross(e.target.value)}
+                type="number"
+                step="0.01"
+                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+              />
             </div>
             <div />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700">Address</label>
-            <textarea value={address} onChange={(e) => setAddress(e.target.value)} rows={2} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2" />
+            <label className="block text-sm font-medium text-gray-700">
+              Address
+            </label>
+            <textarea
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              rows={2}
+              className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+            />
           </div>
 
           <div className="pt-2 flex items-center justify-end gap-3">
-            <button type="button" onClick={() => onClose?.()} className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
-            <button type="submit" disabled={submitting} className="inline-flex items-center justify-center rounded-lg bg-[#C1272D] text-white font-medium px-4 py-2 hover:bg-[#a02125]">{submitting ? "Saving…" : "Save Changes"}</button>
+            <button
+              type="button"
+              onClick={() => onClose?.()}
+              className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={submitting}
+              className="inline-flex items-center justify-center rounded-lg bg-[#C1272D] text-white font-medium px-4 py-2 hover:bg-[#a02125]"
+            >
+              {submitting ? "Saving…" : "Save Changes"}
+            </button>
           </div>
         </form>
       </div>
+    </div>
+  );
+}
+function ProbationModal({ onClose }) {
+  const [list, setList] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [loadingId, setLoadingId] = useState(null);
+
+  const fetchProbation = async () => {
+    try {
+      setLoading(true);
+      const res = await fetch("/api/users/probation");
+      const j = await res.json();
+      setList(j.data || []);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchProbation();
+  }, []);
+
+  const handleAction = async (id, action, days = 0) => {
+    setLoadingId(id);
+    const today = new Date().toISOString().split("T")[0];
+    const body = { employeeid: id, action, days };
+
+    if (action === "CONFIRM") {
+      body.probation = "NO";
+      body.probation_status = "CONFIRMED";
+      body.probation_end_date = today;
+    }
+
+    try {
+      const res = await fetch("/api/users/probation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (res.ok) {
+        const Toast = Swal.mixin({
+          toast: true,
+          position: "top-end",
+          showConfirmButton: false,
+          timer: 2000,
+          timerProgressBar: true,
+        });
+        Toast.fire({
+          icon: "success",
+          title: action === "CONFIRM" ? "Confirmed" : "Extended",
+        });
+        await fetchProbation();
+      } else {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error || "Update failed");
+      }
+    } catch (e) {
+      Swal.fire({ icon: "error", title: "Error", text: e.message });
+    } finally {
+      setLoadingId(null);
+    }
+  };
+  
+  const filteredList = list.filter(
+    (emp) =>
+      emp.name?.toLowerCase().includes(search.toLowerCase()) ||
+      emp.employeeid?.toLowerCase().includes(search.toLowerCase()),
+  );
+
+  return (
+    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+        <div className="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-lg mx-4">
+            <div className="flex justify-between items-center mb-6">
+                <h3 className="text-xl font-bold text-gray-900">
+                    Employees Under Probation
+                </h3>
+                <button
+                    onClick={onClose}
+                    className="p-2 hover:bg-gray-100 rounded-full text-gray-400 transition-colors"
+                >
+                    <svg
+                        className="w-6 h-6"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                    >
+                        <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth="2"
+                            d="M6 18L18 6M6 6l12 12"
+                        />
+                    </svg>
+                </button>
+            </div>
+
+            <div className="relative mb-4">
+              <input
+                type="text"
+                placeholder="Search by name or ID..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-[#C1272D] outline-none"
+              />
+            </div>
+            
+            <div className="max-h-[60vh] overflow-y-auto space-y-4 pr-2">
+              {loading ? (
+                <div className="py-20 text-center">
+                  <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-[#C1272D]" />
+                  <p className="mt-4 text-sm font-bold text-gray-400 uppercase tracking-widest">
+                    Fetching Records
+                  </p>
+                </div>
+              ) : filteredList.length === 0 ? (
+                <div className="py-20 text-center">
+                  <p className="text-gray-500 font-medium">
+                    No probation records found.
+                  </p>
+                </div>
+              ) : (
+                filteredList.map((emp) => {
+                  const probDate = new Date(emp.probation_end_date);
+                  const today = new Date();
+                  const diffDays = Math.ceil(
+                    (probDate - today) / (1000 * 60 * 60 * 24),
+                  );
+                  const isUrgent = diffDays <= 7;
+
+                  return (
+                    <div
+                      key={emp.employeeid}
+                      className="bg-gray-50 p-4 rounded-xl border border-gray-200"
+                    >
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h4 className="font-bold text-gray-800">
+                            {emp.name}
+                          </h4>
+                          <p className="text-xs text-gray-500">
+                            {emp.employeeid}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                           <p className={`font-bold ${isUrgent ? "text-red-600" : "text-gray-800"}`}>
+                            {probDate.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric"})}
+                          </p>
+                          <p className={`text-xs font-bold ${isUrgent ? "text-red-500" : "text-emerald-600"}`}>
+                            {diffDays < 0 ? "Overdue" : `${diffDays} days left`}
+                          </p>
+                        </div>
+                      </div>
+                      
+                      <div className="flex gap-3 mt-4">
+                        <select
+                          onChange={(e) => {
+                            if (e.target.value) handleAction(emp.employeeid, "EXTEND", e.target.value);
+                          }}
+                          className="flex-1 px-4 py-2 border border-gray-200 rounded-xl text-gray-500 font-bold hover:bg-gray-100"
+                        >
+                          <option value="">Extend...</option>
+                          <option value="30">30 Days</option>
+                          <option value="60">60 Days</option>
+                          <option value="90">90 Days</option>
+                        </select>
+                        <button 
+                          onClick={() => handleAction(emp.employeeid, "CONFIRM")}
+                          className="flex-1 px-4 py-2 bg-[#C1272D] text-white rounded-xl font-bold hover:bg-[#a02125]"
+                        >
+                          Confirm
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+        </div>
+    </div>
+  );
+} 
+
+function OffboardingModal({ users, onClose, onProcessed }) {
+  const [search, setSearch] = useState("");
+  const [resignedDate, setResignedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedEmp, setSelectedEmp] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const filtered = useMemo(() => {
+    if (!search.trim()) return [];
+    const q = search.toLowerCase();
+    return users.filter(u => 
+      (u.name && u.name.toLowerCase().includes(q)) || 
+      (u.employeeid && u.employeeid.toLowerCase().includes(q))
+    );
+  }, [users, search]);
+
+  const handleOffboard = async () => {
+    if (!selectedEmp || !resignedDate) return;
+    const result = await Swal.fire({
+      title: 'Transfer to Ex-Employee?',
+      text: `Are you sure you want to move ${selectedEmp.name} to the Ex-Employee list?`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, Offboard',
+      confirmButtonColor: '#C1272D'
+    });
+
+    if (result.isConfirmed) {
+      setLoading(true);
+      try {
+        const res = await fetch('/api/users/offboard', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ employeeid: selectedEmp.employeeid, resigneddate: resignedDate })
+        });
+        if (!res.ok) throw new Error("Offboarding failed");
+        Swal.fire('Success', 'Employee moved to Ex-Employee list', 'success');
+        onProcessed();
+      } catch (e) {
+        Swal.fire('Error', e.message, 'error');
+      } finally { setLoading(false); }
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+        <div className="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-lg mx-4">
+            <h3 className="text-xl font-bold text-gray-900 mb-4">Offboard Employee</h3>
+            <div className="relative mb-4">
+              <label className="text-xs font-bold text-gray-500 uppercase">Search Employee</label>
+              <input 
+                type="text" placeholder="Type Name or ID..." value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full border border-gray-200 rounded-xl px-4 py-2 mt-1 focus:ring-2 focus:ring-[#C1272D] outline-none"
+              />
+              {search && !selectedEmp && (
+                <div className="absolute z-10 w-full bg-white border border-gray-100 rounded-xl mt-1 shadow-lg overflow-hidden">
+                  {filtered.map(u => (
+                    <button key={u.employeeid} onClick={() => { setSelectedEmp(u); setSearch(u.name || u.employeeid); }}
+                      className="w-full text-left px-4 py-2 hover:bg-gray-50 border-b flex justify-between items-center"
+                    >
+                      <span className="font-bold">{u.name || "No Name"}</span>
+                      <span className="text-gray-400 text-xs font-mono">{u.employeeid}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            {selectedEmp && (
+              <div className="bg-red-50 p-4 rounded-xl border border-red-100 mb-4 flex justify-between items-center">
+                <div className="flex flex-col">
+                  <p className="text-[10px] font-bold text-red-600 uppercase tracking-wider mb-1">Selected Employee</p>
+                  <div className="flex items-baseline gap-2">
+                    <p className="font-bold text-gray-900 text-lg">{selectedEmp.name}</p>
+                    <p className="text-xs font-mono text-gray-500 bg-white px-2 py-0.5 rounded border border-gray-100 shadow-sm">
+                      {selectedEmp.employeeid}
+                    </p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => {setSelectedEmp(null); setSearch("");}} 
+                  className="text-xs font-bold text-red-500 hover:underline hover:text-red-700 transition-colors"
+                >
+                  Change
+                </button>
+              </div>
+            )}
+            <label className="text-xs font-bold text-gray-500 uppercase">Resignation Date</label>
+            <input type="date" value={resignedDate} onChange={(e) => setResignedDate(e.target.value)}
+              className="w-full border border-gray-200 rounded-xl px-4 py-2 mt-1 mb-6 focus:ring-2 focus:ring-[#C1272D] outline-none"
+            />
+            <div className="flex gap-3 mt-6">
+              <button onClick={onClose} className="flex-1 px-4 py-2 border border-gray-200 rounded-xl text-gray-500 font-bold hover:bg-gray-50">Cancel</button>
+              <button disabled={!selectedEmp || loading} onClick={handleOffboard} className="flex-1 px-4 py-2 bg-[#C1272D] text-white rounded-xl font-bold hover:bg-[#a02125]">
+                {loading ? "Processing..." : "Confirm Offboarding"}
+              </button>
+            </div>
+        </div>
     </div>
   );
 }
