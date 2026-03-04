@@ -1,10 +1,12 @@
-import React from 'react'
-
-function index() {
-  return (
-    <>
-    </>
-  )
+export async function getServerSideProps(context) {
+  return {
+    redirect: {
+      destination: "/Hlogin",
+      permanent: false,
+    },
+  };
 }
 
-export default index
+export default function Index() {
+  return null;
+}
