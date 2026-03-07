@@ -370,7 +370,6 @@ export default function Employees({ initialDate }) {
                   key={company}
                   company={company}
                   items={items}
-                  onDownload={() => downloadPdf(company)}
                 />
               ))}
             </div>
@@ -421,7 +420,7 @@ function Kpi({ label, value }) {
   );
 }
 
-function CompanyCard({ company, items, onEdit, onDownload }) {
+function CompanyCard({ company, items, onEdit }) {
   // per-company stats
   const present = items.filter((r) => String(r.status || "").toLowerCase().includes("present")).length;
   const absentIncLeave = items.filter((r) => {
@@ -439,14 +438,7 @@ function CompanyCard({ company, items, onEdit, onDownload }) {
       <div className="bg-gray-50/70 px-5 py-3.5 flex items-center justify-between border-b border-gray-200">
         <div className="text-sm font-semibold text-gray-900">{company}</div>
         <div className="flex items-center gap-3">
-          {/* Download per-company */}
-          <button
-            onClick={onDownload}
-            className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium hover:bg-gray-50"
-            title={`Download PDF for ${company}`}
-          >
-            Download
-          </button>
+          
 
           <div className="flex items-center gap-2.5 text-xs">
             <span className="rounded-full bg-emerald-600 text-white px-3 py-1 font-medium">
@@ -532,7 +524,7 @@ function StatusPill({ status }) {
     tone = "bg-blue-600 text-white";
   }
   return (
-    <span className={`inline-flex items-center rounded-full px-3 py-1 font-medium ${tone}`}>
+    <span className={`inline-flex items-center rounded-full px-3 py-1 font-medium whitespace-nowrap ${tone}`}>
       {label}
     </span>
   );

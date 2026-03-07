@@ -291,5 +291,5 @@ function StatusPill({ status }) {
   } else if (s.includes("od")) {
     tone = "bg-blue-600 text-white";
   }
-  return <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 font-medium ${tone}`}>{label}</span>;
+  return <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 font-medium whitespace-nowrap ${tone}`}>{label}</span>;
 }

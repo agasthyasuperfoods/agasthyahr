@@ -288,11 +288,11 @@ async function makeAttendancePdf(items, titleText, opts = {}) {
   const cols = [
     { k: "employeeid", label: "EmpID",  w: 90,  align: "left"   },   // EmpID room
     ...(includeDate ? [{ k: "date", label: "Date", w: 64, align: "center" }] : []),
-    { k: "name",       label: "Name",   w: 140, align: "left"   },    // reduced to free up space
+    { k: "name",       label: "Name",   w: 120, align: "left"   },    // reduced to free up space
     { k: "intime",     label: "In",     w: 56,  align: "center" },  // increased width
     { k: "outtime",    label: "Out",    w: 56,  align: "center" },  // increased width
     { k: "hours",      label: "Hours",  w: 58,  align: "right"  },
-    { k: "status",     label: "Status", w: 50,  align: "left"   },
+    { k: "status",     label: "Status", w: 70,  align: "left"   },
     { k: "remarks",    label: "Remarks", w: 73, align: "left"  },
   ];
   let totalW = cols.reduce((s, c) => s + c.w, 0);

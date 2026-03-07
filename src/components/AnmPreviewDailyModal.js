@@ -261,7 +261,7 @@ function AnmPreviewDailyModal({ site, date, onClose, onSaved }) {
                   <thead className="bg-gray-50 sticky top-0 z-10">
                     <tr className="text-left text-gray-600">
                       <th className="px-3 py-2 border-b w-24">SI</th>
-                      <th className="px-3 py-2 border-b">test</th>
+                      <th className="px-3 py-2 border-b">Name</th>
                       <th className="px-3 py-2 border-b w-40">Date</th>
                       <th className="px-3 py-2 border-b w-56">Status</th>
                       <th className="px-3 py-2 border-b w-32 text-right">Actions</th>
