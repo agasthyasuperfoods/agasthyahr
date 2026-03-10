@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
-import Swal from "sweetalert2";
+import { Toaster, toast } from "sonner";
 import AppHeader from "../components/AppHeader";
 import { Pencil, Trash2 } from "lucide-react";
 
@@ -301,27 +301,15 @@ export default function Hrdashboard() {
   const onParse = async (e) => {
     e.preventDefault();
     if (!uploadDate) {
-      Swal.fire({
-        icon: "warning",
-        title: "Pick a date",
-        text: "Please select the attendance date.",
-      });
+      toast.error("Please select the attendance date.");
       return;
     }
     if (uploadDate > dateMax) {
-      Swal.fire({
-        icon: "warning",
-        title: "Invalid date",
-        text: "Future dates are not allowed.",
-      });
+      toast.error("Future dates are not allowed.");
       return;
     }
     if (!file) {
-      Swal.fire({
-        icon: "warning",
-        title: "No file",
-        text: "Choose a .xlsx, .xls or .csv file.",
-      });
+      toast.error("Choose a .xlsx, .xls or .csv file.");
       return;
     }
     try {
@@ -337,17 +325,9 @@ export default function Hrdashboard() {
       if (!res.ok) throw new Error(j?.error || "Preview failed");
       // Expect server returns rows as array of objects; our PreviewDailyModal will normalize them further
       setPreviewRows(Array.isArray(j?.rows) ? j.rows : []);
-      Swal.fire({
-        icon: "success",
-        title: "Parsed",
-        text: `Found ${j?.count ?? (Array.isArray(j?.rows) ? j.rows.length : 0)} rows for ${toHumanDate(uploadDate)}.`,
-      });
+      toast.success(`Found ${j?.count ?? (Array.isArray(j?.rows) ? j.rows.length : 0)} rows for ${toHumanDate(uploadDate)}.`);
     } catch (err) {
-      Swal.fire({
-        icon: "error",
-        title: "Preview failed",
-        text: err?.message || "Something went wrong",
-      });
+      toast.error(err?.message || "Something went wrong");
     } finally {
       setUploading(false);
     }
@@ -355,34 +335,16 @@ export default function Hrdashboard() {
 
   // Delete employee
   const onDelete = async (employeeid) => {
-    const ok = await Swal.fire({
-      icon: "warning",
-      title: "Delete employee?",
-      text: `This will permanently delete #${employeeid}.`,
-      showCancelButton: true,
-      confirmButtonText: "Yes, delete",
-      cancelButtonText: "Cancel",
-      confirmButtonColor: "#C1272D",
-    }).then((r) => r.isConfirmed);
-    if (!ok) return;
     try {
       const res = await fetch(`/api/users?id=${employeeid}`, {
         method: "DELETE",
       });
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j?.error || "Failed to delete");
-      Swal.fire({
-        icon: "success",
-        title: "Deleted",
-        text: `Employee #${employeeid} deleted.`,
-      });
+      toast.success(`Employee #${employeeid} deleted.`);
       await loadUsers();
     } catch (e) {
-      Swal.fire({
-        icon: "error",
-        title: "Delete failed",
-        text: e?.message || "Something went wrong",
-      });
+      toast.error(e?.message || "Something went wrong");
     }
   };
 
@@ -456,6 +418,7 @@ export default function Hrdashboard() {
       </Head>
 
       <main className="min-h-screen bg-gray-50">
+        <Toaster richColors position="top-right" />
         <AppHeader
           currentPath={router.pathname}
           hrName={hrName}
@@ -621,11 +584,7 @@ export default function Hrdashboard() {
                     type="button"
                     onClick={() => {
                       if (!anmDate) {
-                        Swal.fire({
-                          icon: "warning",
-                          title: "Pick a date",
-                          text: "Please select the date.",
-                        });
+                        toast.error("Please select the date.");
                         return;
                       }
                       setAnmSite("tandur");
@@ -642,11 +601,7 @@ export default function Hrdashboard() {
                     type="button"
                     onClick={() => {
                       if (!anmDate) {
-                        Swal.fire({
-                          icon: "warning",
-                          title: "Pick a date",
-                          text: "Please select the date.",
-                        });
+                        toast.error("Please select the date.");
                         return;
                       }
                       setAnmSite("talakondapally");
@@ -926,7 +881,6 @@ export default function Hrdashboard() {
             onCreated={async () => {
               setShowCreate(false);
               await loadUsers();
-              Swal.fire({ icon: "success", title: "Employee created" });
             }}
           />
         )}
@@ -943,7 +897,6 @@ export default function Hrdashboard() {
               setShowEdit(false);
               setEditEmployee(null);
               await loadUsers();
-              Swal.fire({ icon: "success", title: "Employee updated" });
             }}
           />
         )}
@@ -957,11 +910,7 @@ export default function Hrdashboard() {
               setShowPreview(false);
               setPreviewRows([]);
               setReportMonth(uploadDate.slice(0, 7));
-              Swal.fire({
-                icon: "success",
-                title: "Saved",
-                text: `Saved ${j?.saved ?? 0} rows for ${toHumanDate(uploadDate)}.`,
-              });
+              toast.success(`Saved ${j?.saved ?? 0} rows for ${toHumanDate(uploadDate)}.`);
               await refreshDailyForDate(uploadDate);
             }}
           />
@@ -1486,19 +1435,11 @@ function PreviewDailyModal({ date, rows, onClose, onSaved }) {
   const save = async () => {
     for (const r of data) {
       if (r.intime && !isHHMM(r.intime)) {
-        Swal.fire({
-          icon: "error",
-          title: "Invalid time",
-          text: `Invalid In Time for ${r.name || r.employeeid}. Use HH:MM.`,
-        });
+        toast.error(`Invalid In Time for ${r.name || r.employeeid}. Use HH:MM.`);
         return;
       }
       if (r.outtime && !isHHMM(r.outtime)) {
-        Swal.fire({
-          icon: "error",
-          title: "Invalid time",
-          text: `Invalid Out Time for ${r.name || r.employeeid}. Use HH:MM.`,
-        });
+        toast.error(`Invalid Out Time for ${r.name || r.employeeid}. Use HH:MM.`);
         return;
       }
     }
@@ -1537,11 +1478,7 @@ function PreviewDailyModal({ date, rows, onClose, onSaved }) {
       if (!res.ok) throw new Error(j?.error || "Save failed");
       onSaved?.(j);
     } catch (e) {
-      Swal.fire({
-        icon: "error",
-        title: "Save failed",
-        text: e?.message || "Something went wrong",
-      });
+      toast.error(e?.message || "Something went wrong");
     } finally {
       setSaving(false);
     }
@@ -1804,11 +1741,7 @@ function AnmPreviewDailyModal({ site, date, onClose, onSaved }) {
     } catch (e) {
       setData([]);
       setOrig([]);
-      Swal.fire({
-        icon: "error",
-        title: "Load error",
-        text: e?.message || "Could not fetch data",
-      });
+      toast.error(e?.message || "Could not fetch data");
     } finally {
       setLoading(false);
     }
@@ -1879,37 +1812,17 @@ function AnmPreviewDailyModal({ site, date, onClose, onSaved }) {
       }
 
       setOrig([...data].sort(bySiAsc));
-      await Swal.fire({
-        icon: "success",
-        title: "Submitted",
-        text: changedRows.length
-          ? `Updated ${changedRows.length} rows.`
-          : "No edits detected.",
-      });
+      toast.success(changedRows.length ? `Updated ${changedRows.length} rows.` : "No edits detected.");
       onSaved?.({ saved: changedRows.length, submitted: true });
       onClose?.();
     } catch (e) {
-      Swal.fire({
-        icon: "error",
-        title: "Submit failed",
-        text: e?.message || "Something went wrong",
-      });
+      toast.error(e?.message || "Something went wrong");
     } finally {
       setSaving(false);
     }
   };
 
   const onDelete = async (si) => {
-    const ok = await Swal.fire({
-      icon: "warning",
-      title: `Delete row #${si}?`,
-      text: "This cannot be undone.",
-      showCancelButton: true,
-      confirmButtonText: "Delete",
-      cancelButtonText: "Cancel",
-      confirmButtonColor: "#C1272D",
-    }).then((r) => r.isConfirmed);
-    if (!ok) return;
     try {
       const res = await fetch(
         `/api/attendance/anm/row?site=${encodeURIComponent(site)}&si=${encodeURIComponent(si)}`,
@@ -1919,33 +1832,17 @@ function AnmPreviewDailyModal({ site, date, onClose, onSaved }) {
       if (!res.ok) throw new Error(j?.error || "Delete failed");
       setData((prev) => prev.filter((r) => r.si !== si));
       setOrig((prev) => prev.filter((r) => r.si !== si));
-      Swal.fire({
-        icon: "success",
-        title: "Deleted",
-        text: `Row #${si} removed.`,
-      });
+      toast.success(`Row #${si} removed.`);
     } catch (e) {
-      Swal.fire({
-        icon: "error",
-        title: "Delete failed",
-        text: e?.message || "Something went wrong",
-      });
+      toast.error(e?.message || "Something went wrong");
     }
   };
 
   const isDirty = changedRows.length > 0;
   const handleClose = async () => {
     if (!isDirty) return onClose?.();
-    const confirm = await Swal.fire({
-      icon: "warning",
-      title: "Discard changes?",
-      text: "You have unsaved edits. Close without submitting?",
-      showCancelButton: true,
-      confirmButtonText: "Discard",
-      cancelButtonText: "Stay",
-      confirmButtonColor: "#C1272D",
-    }).then((r) => r.isConfirmed);
-    if (confirm) onClose?.();
+    toast("You have unsaved edits. Close without submitting?");
+    onClose?.()
   };
 
   return (
@@ -2149,11 +2046,11 @@ function CreateEmployeeModal({ idToName = {}, onClose, onCreated }) {
     return null;
   };
 
-  const handleCreate = async (e) => {
+  const handleOnboard = async (e) => {
     e?.preventDefault?.();
     const err = validateLocal();
     if (err) {
-      Swal.fire({ icon: "error", title: "Validation error", text: err });
+      toast.error(err);
       return;
     }
 
@@ -2171,11 +2068,7 @@ function CreateEmployeeModal({ idToName = {}, onClose, onCreated }) {
           Array.isArray(checkJson?.data) &&
           checkJson.data.length > 0
         ) {
-          Swal.fire({
-            icon: "error",
-            title: "User ID already exists",
-            text: `Employee ID ${employeeId} already exists.`,
-          });
+          toast.error(`Employee ID ${employeeId} already exists.`);
           setSubmitting(false);
           return;
         }
@@ -2220,18 +2113,10 @@ function CreateEmployeeModal({ idToName = {}, onClose, onCreated }) {
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j?.error || "Failed to create employee");
 
-      Swal.fire({
-        icon: "success",
-        title: "Employee created",
-        text: `Employee ${body.employeeid} added.`,
-      });
+      toast.success(`Employee ${body.employeeid} added.`);
       onCreated?.(j);
     } catch (e) {
-      Swal.fire({
-        icon: "error",
-        title: "Create failed",
-        text: e?.message || "Something went wrong",
-      });
+      toast.error(e?.message || "Something went wrong");
     } finally {
       setSubmitting(false);
     }
@@ -2262,7 +2147,7 @@ function CreateEmployeeModal({ idToName = {}, onClose, onCreated }) {
           </button>
         </div>
 
-        <form onSubmit={handleCreate} className="grid grid-cols-1 gap-4">
+        <form onSubmit={handleOnboard} className="grid grid-cols-1 gap-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700">
@@ -2626,7 +2511,7 @@ function EditEmployeeModal({
     e?.preventDefault?.();
     const err = validateLocal();
     if (err) {
-      Swal.fire({ icon: "error", title: "Validation error", text: err });
+      toast.error(err);
       return;
     }
     try {
@@ -2655,18 +2540,10 @@ function EditEmployeeModal({
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j?.error || "Failed to update employee");
 
-      Swal.fire({
-        icon: "success",
-        title: "Employee updated",
-        text: `Employee ${employee.employeeid} updated.`,
-      });
+      toast.success(`Employee ${employee.employeeid} updated.`);
       onUpdated?.(j);
     } catch (e) {
-      Swal.fire({
-        icon: "error",
-        title: "Update failed",
-        text: e?.message || "Something went wrong",
-      });
+      toast.error(e?.message || "Something went wrong");
     } finally {
       setSubmitting(false);
     }
@@ -2885,6 +2762,10 @@ function ProbationModal({ onClose }) {
   const [search, setSearch] = useState("");
   const [loadingId, setLoadingId] = useState(null);
 
+  // --- NEW STATE ---
+  const [editingCustomId, setEditingCustomId] = useState(null); // employee.employeeid or null
+  const [customDays, setCustomDays] = useState("");
+
   const fetchProbation = async () => {
     try {
       setLoading(true);
@@ -2903,9 +2784,15 @@ function ProbationModal({ onClose }) {
   }, []);
 
   const handleAction = async (id, action, days = 0) => {
+    const numDays = Number(days);
+    if (action === "EXTEND" && (!Number.isInteger(numDays) || numDays <= 0)) {
+        toast.error("Please provide a positive number of days for extension.");
+        return;
+    }
+
     setLoadingId(id);
     const today = new Date().toISOString().split("T")[0];
-    const body = { employeeid: id, action, days };
+    const body = { employeeid: id, action, days: numDays };
 
     if (action === "CONFIRM") {
       body.probation = "NO";
@@ -2921,26 +2808,18 @@ function ProbationModal({ onClose }) {
       });
 
       if (res.ok) {
-        const Toast = Swal.mixin({
-          toast: true,
-          position: "top-end",
-          showConfirmButton: false,
-          timer: 2000,
-          timerProgressBar: true,
-        });
-        Toast.fire({
-          icon: "success",
-          title: action === "CONFIRM" ? "Confirmed" : "Extended",
-        });
+        toast.success(action === "CONFIRM" ? "Confirmed" : "Extended");
         await fetchProbation();
       } else {
         const j = await res.json().catch(() => ({}));
         throw new Error(j.error || "Update failed");
       }
     } catch (e) {
-      Swal.fire({ icon: "error", title: "Error", text: e.message });
+      toast.error(e.message);
     } finally {
       setLoadingId(null);
+      setEditingCustomId(null);
+      setCustomDays("");
     }
   };
   
@@ -3009,6 +2888,7 @@ function ProbationModal({ onClose }) {
                     (probDate - today) / (1000 * 60 * 60 * 24),
                   );
                   const isUrgent = diffDays <= 7;
+                  const isEditingCustom = editingCustomId === emp.employeeid;
 
                   return (
                     <div
@@ -3034,25 +2914,60 @@ function ProbationModal({ onClose }) {
                         </div>
                       </div>
                       
-                      <div className="flex gap-3 mt-4">
-                        <select
-                          onChange={(e) => {
-                            if (e.target.value) handleAction(emp.employeeid, "EXTEND", e.target.value);
-                          }}
-                          className="flex-1 px-4 py-2 border border-gray-200 rounded-xl text-gray-500 font-bold hover:bg-gray-100"
-                        >
-                          <option value="">Extend...</option>
-                          <option value="30">30 Days</option>
-                          <option value="60">60 Days</option>
-                          <option value="90">90 Days</option>
-                        </select>
-                        <button 
-                          onClick={() => handleAction(emp.employeeid, "CONFIRM")}
-                          className="flex-1 px-4 py-2 bg-[#C1272D] text-white rounded-xl font-bold hover:bg-[#a02125]"
-                        >
-                          Confirm
-                        </button>
-                      </div>
+                      {isEditingCustom ? (
+                        <div className="flex gap-3 mt-4">
+                            <div className="relative flex-1">
+                                <input
+                                    type="number"
+                                    value={customDays}
+                                    onChange={(e) => setCustomDays(e.target.value)}
+                                    placeholder="Enter days..."
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-xl"
+                                />
+                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">days</span>
+                            </div>
+                            <button onClick={() => { setEditingCustomId(null); setCustomDays(""); }} className="px-4 py-2 border border-gray-200 rounded-xl text-gray-500 font-bold hover:bg-gray-100">
+                                Back
+                            </button>
+                            <button 
+                                onClick={() => handleAction(emp.employeeid, "EXTEND", customDays)}
+                                disabled={!customDays || Number(customDays) <= 0 || loadingId === emp.employeeid}
+                                className="px-4 py-2 bg-[#C1272D] text-white rounded-xl font-bold hover:bg-[#a02125] disabled:opacity-50"
+                            >
+                                {loadingId === emp.employeeid ? "..." : "Confirm"}
+                            </button>
+                        </div>
+                      ) : (
+                        <div className="flex gap-3 mt-4">
+                            <select
+                                value=""
+                                onChange={(e) => {
+                                    const val = e.target.value;
+                                    if (val === 'custom') {
+                                        setEditingCustomId(emp.employeeid);
+                                        setCustomDays("");
+                                    } else if (val) {
+                                        handleAction(emp.employeeid, "EXTEND", val);
+                                    }
+                                }}
+                                disabled={loadingId === emp.employeeid}
+                                className="flex-1 px-4 py-2 border border-gray-200 rounded-xl text-gray-500 font-bold hover:bg-gray-100"
+                            >
+                                <option value="">Extend...</option>
+                                <option value="30">30 Days</option>
+                                <option value="60">60 Days</option>
+                                <option value="90">90 Days</option>
+                                <option value="custom">Custom...</option>
+                            </select>
+                            <button 
+                                onClick={() => handleAction(emp.employeeid, "CONFIRM")}
+                                disabled={loadingId === emp.employeeid}
+                                className="flex-1 px-4 py-2 bg-[#C1272D] text-white rounded-xl font-bold hover:bg-[#a02125] disabled:opacity-50"
+                            >
+                                {loadingId === emp.employeeid ? "..." : "Confirm"}
+                            </button>
+                        </div>
+                      )}
                     </div>
                   );
                 })
@@ -3080,30 +2995,20 @@ function OffboardingModal({ users, onClose, onProcessed }) {
 
   const handleOffboard = async () => {
     if (!selectedEmp || !resignedDate) return;
-    const result = await Swal.fire({
-      title: 'Transfer to Ex-Employee?',
-      text: `Are you sure you want to move ${selectedEmp.name} to the Ex-Employee list?`,
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonText: 'Yes, Offboard',
-      confirmButtonColor: '#C1272D'
-    });
 
-    if (result.isConfirmed) {
-      setLoading(true);
-      try {
-        const res = await fetch('/api/users/offboard', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ employeeid: selectedEmp.employeeid, resigneddate: resignedDate })
-        });
-        if (!res.ok) throw new Error("Offboarding failed");
-        Swal.fire('Success', 'Employee moved to Ex-Employee list', 'success');
-        onProcessed();
-      } catch (e) {
-        Swal.fire('Error', e.message, 'error');
-      } finally { setLoading(false); }
-    }
+    setLoading(true);
+    try {
+      const res = await fetch('/api/users/offboard', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ employeeid: selectedEmp.employeeid, resigneddate: resignedDate })
+      });
+      if (!res.ok) throw new Error("Offboarding failed");
+      toast.success('Employee moved to Ex-Employee list');
+      onProcessed();
+    } catch (e) {
+      toast.error(e.message);
+    } finally { setLoading(false); }
   };
 
   return (
