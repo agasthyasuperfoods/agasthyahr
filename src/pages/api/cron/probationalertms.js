@@ -39,7 +39,7 @@ export default async function handler(req, res) {
 
       const mailOptions = {
         from: '"Agasthya HRMS" <wecare.anm@agasthya.co.in>',
-        to: "njsr2005@gmail.com",
+        to: "hr.ho@agasthya.co.in",
         subject: `Probation End Alert: ${emp.name}`,
         html: `
           <!DOCTYPE html>
