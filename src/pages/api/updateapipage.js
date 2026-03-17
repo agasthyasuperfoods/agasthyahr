@@ -39,7 +39,24 @@ async function handleGET(req, res, pool) {
     count,
     limit,
     offset,
+    all,
+    unique,
   } = req.query;
+
+  // FETCH ALL (bypass pagination)
+  if (all === '1' || all === 'true') {
+    const { rows } = await pool.query(`SELECT *, grosssalary FROM public."EmployeeTable" ORDER BY employeeid ASC`);
+    return res.status(200).json({ ok: true, data: rows || [] });
+  }
+
+  if (unique) {
+    const field = unique === 'roles' ? 'role' : unique === 'companies' ? 'company' : null;
+    if (!field) {
+      return res.status(400).json({ ok: false, error: 'Invalid unique field specified' });
+    }
+    const { rows } = await pool.query(`SELECT DISTINCT ${field} FROM public."EmployeeTable" WHERE ${field} IS NOT NULL ORDER BY ${field} ASC`);
+    return res.status(200).json({ ok: true, data: rows.map(r => r[field]) });
+  }
 
   // COUNT (fast path)
   if (count === "1") {
@@ -74,7 +91,7 @@ async function handleGET(req, res, pool) {
   if (id) {
     const idTrim = String(id).trim();
     const { rows } = await pool.query(
-      `SELECT * FROM public."EmployeeTable" WHERE employeeid = $1`,
+      `SELECT *, grosssalary FROM public."EmployeeTable" WHERE employeeid = $1`,
       [idTrim]
     );
     return res.status(200).json({ ok: true, data: rows || [] });
@@ -84,7 +101,7 @@ async function handleGET(req, res, pool) {
   if (email) {
     const emailTrim = String(email).trim();
     const { rows } = await pool.query(
-      `SELECT * FROM public."EmployeeTable" WHERE email = $1`,
+      `SELECT *, grosssalary FROM public."EmployeeTable" WHERE email = $1`,
       [emailTrim]
     );
     return res.status(200).json({ ok: true, data: rows || [] });
@@ -98,7 +115,7 @@ async function handleGET(req, res, pool) {
 
     const { rows } = await pool.query(
       `
-        SELECT * FROM public."EmployeeTable"
+        SELECT *, grosssalary FROM public."EmployeeTable"
         WHERE name ILIKE $1
         ORDER BY name ASC, employeeid ASC
         LIMIT $2 OFFSET $3
@@ -108,19 +125,40 @@ async function handleGET(req, res, pool) {
     return res.status(200).json({ ok: true, data: rows || [] });
   }
 
-  // DEFAULT: list (paged)
+  // DEFAULT: list (paged and filtered)
   {
-    const lim = normLimit(limit, 50, 200);
-    const off = Math.max(Number(offset || 0), 0);
-    const { rows } = await pool.query(
-      `
-        SELECT * FROM public."EmployeeTable"
-        ORDER BY employeeid ASC
-        LIMIT $1 OFFSET $2
-      `,
-      [lim, off]
-    );
-    return res.status(200).json({ ok: true, data: rows || [], total: rows?.length || 0 });
+    const { page, company } = req.query;
+    const lim = normLimit(limit, 15, 50);
+    // Calculate offset from page number (1-based)
+    const off = page ? (Math.max(Number(page) - 1, 0) * lim) : (Math.max(Number(offset || 0), 0));
+
+    const whereClauses = [];
+    const queryParams = [];
+
+    if (company && company !== 'All') {
+      queryParams.push(company);
+      // Use ILIKE for case-insensitive matching
+      whereClauses.push(`company ILIKE $${queryParams.length}`);
+    }
+
+    const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+
+    // 1. Get total count with the filter applied
+    const countResult = await pool.query(`SELECT COUNT(*)::int FROM public."EmployeeTable" ${whereSql}`, queryParams);
+    const total = countResult.rows[0].count;
+
+    // 2. Get the paginated data with the same filter
+    const dataParams = [...queryParams, lim, off];
+    const dataSql = `
+      SELECT *, grosssalary FROM public."EmployeeTable"
+      ${whereSql}
+      ORDER BY employeeid ASC
+      LIMIT $${queryParams.length + 1} OFFSET $${queryParams.length + 2}
+    `;
+    
+    const { rows } = await pool.query(dataSql, dataParams);
+    
+    return res.status(200).json({ ok: true, data: rows || [], total });
   }
 }
 
@@ -132,77 +170,71 @@ function coerceNullOrText(v) {
 }
 
 async function handlePUT(req, res, pool) {
-  // Dynamic UPDATE builder
-  const {
-    employeeid,            // required (WHERE)
-    name,
-    email,                 // optional in UI
-    role,
-    doj,
-    number,                // phone
-    company,
-    grosssalary,
-    adhaarnumber,
-    pancard,               // optional in UI
-    address,
-    designation,
-    reporting_to_id,
-    location,              // if you choose to pass it
-    // Leaves_cf is read-only in UI; ignore any updates to it
-    Leaves_cf,             // eslint-disable-line no-unused-vars
-    leaves_cf,             // eslint-disable-line no-unused-vars
-  } = req.body || {};
+  // Explicitly define the columns that are allowed to be updated.
+  const allowedColumns = [
+    'name', 'email', 'number', 'designation', 'role', 'company', 
+    'adhaarnumber', 'pancard', 'address', 'grosssalary', 'doj',
+    'reporting_to_id', '"Leaves_cf"'
+  ];
 
-  const id = String(employeeid || "").trim();
-  if (!id) return res.status(400).json({ ok: false, error: "employeeid is required" });
+  const body = req.body || {};
+  const id = String(body.employeeid || req.query.id || '').trim();
 
-  // Map json->db columns (quoted for case-sensitive cols)
-  const inputMap = {
-    name: coerceNullOrText(name),
-    email: coerceNullOrText(email),
-    role: coerceNullOrText(role),
-    doj: coerceNullOrText(doj),
-    number: coerceNullOrText(number),
-    company: coerceNullOrText(company),
-    grosssalary: coerceNullOrText(grosssalary),
-    adhaarnumber: adhaarnumber === undefined ? undefined : (adhaarnumber === null ? null : String(adhaarnumber)),
-    pancard: coerceNullOrText(pancard),
-    address: coerceNullOrText(address),
-    designation: coerceNullOrText(designation),
-    reporting_to_id: coerceNullOrText(reporting_to_id),
-    '"Location"': location === undefined ? undefined : (location === null ? null : String(location)),
-    // NOTE: '"Leaves_cf"' intentionally not updated from this API per UI requirement
-  };
+  if (!id) {
+    return res.status(400).json({ ok: false, error: "employeeid is required for update" });
+  }
+
+  const inputMap = {};
+  for (const key in body) {
+    // Skip the primary key itself from the update set
+    if (key === 'employeeid') continue;
+    
+    // Map frontend keys to database columns
+    let dbKey = key;
+    if (key === 'Leaves_cf') dbKey = '"Leaves_cf"';
+    
+
+    if (allowedColumns.includes(dbKey)) {
+      // Use coerce function to handle nulls and empty strings consistently
+      inputMap[dbKey] = coerceNullOrText(body[key]);
+    }
+  }
 
   const sets = [];
   const values = [];
   let idx = 1;
 
   for (const [col, val] of Object.entries(inputMap)) {
-    if (val === undefined) continue; // not provided
+    if (val === undefined) continue; // Skip fields not present in the body
     sets.push(`${col} = $${idx++}`);
     values.push(val);
   }
 
   if (sets.length === 0) {
-    // Nothing to update -> just return the row
-    const { rows } = await pool.query(`SELECT * FROM public."EmployeeTable" WHERE employeeid = $1`, [id]);
+    // If nothing to update, it could be a no-op success or an error.
+    // For a PUT request, arguably it's a success. Let's return the existing record.
+    const { rows } = await pool.query(`SELECT *, grosssalary FROM public."EmployeeTable" WHERE employeeid = $1`, [id]);
     if (!rows?.length) return res.status(404).json({ ok: false, error: "Employee not found" });
-    return res.status(200).json({ ok: true, data: rows[0] });
+    return res.status(200).json({ ok: true, data: rows[0], message: "No fields to update" });
   }
 
-  values.push(id);
+  values.push(id); // Add employeeid for the WHERE clause
 
   const sql = `
     UPDATE public."EmployeeTable"
        SET ${sets.join(", ")}
      WHERE employeeid = $${idx}
-   RETURNING *;
+   RETURNING *, grosssalary;
   `;
 
-  const { rows } = await pool.query(sql, values);
-  if (!rows?.length) return res.status(404).json({ ok: false, error: "Employee not found" });
-  return res.status(200).json({ ok: true, data: rows[0] });
+  try {
+    const { rows } = await pool.query(sql, values);
+    if (!rows?.length) return res.status(404).json({ ok: false, error: "Employee not found" });
+    return res.status(200).json({ ok: true, data: rows[0] });
+  } catch (dbError) {
+    console.error('DB Error:', dbError);
+    return res.status(500).json({ ok: false, error: "Database update failed." });
+  }
 }
 
 export default async function handler(req, res) {
@@ -222,7 +254,7 @@ export default async function handler(req, res) {
     res.setHeader("Allow", "GET, PUT");
     return res.status(405).json({ ok: false, error: "Method Not Allowed" });
   } catch (e) {
-    console.error("updateapipage error:", e);
-    return res.status(500).json({ ok: false, error: e?.message || "Server error" });
+    console.error("Error in /api/updateapipage:", e);
+    return res.status(500).json({ ok: false, error: "An unexpected error occurred. Check server logs for details." });
   }
 }

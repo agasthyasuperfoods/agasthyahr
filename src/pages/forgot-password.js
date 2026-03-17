@@ -117,7 +117,7 @@ export default function ForgotPassword() {
                       type="text"
                       value={identifier}
                       onChange={(e) => setIdentifier(e.target.value)}
-                      autoFocus
+                      autoFocus 
                       className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-4 focus:ring-[#C1272D]/20 focus:border-[#C1272D]"
                       placeholder="e.g. no-reply@agasthya.co.in or EMP1001"
                     />

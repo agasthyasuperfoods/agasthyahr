@@ -1,7 +1,7 @@
 // /pages/api/auth/reset/request.js
 import jwt from "jsonwebtoken";
 import { query } from "@/lib/db";
-import { sendMailO365 } from "@/lib/o365";
+import { sendMail } from "@/lib/o365";
 
 const APP_URL = process.env.APP_URL;
 const SECRET = process.env.RESET_TOKEN_SECRET;
@@ -46,7 +46,7 @@ export default async function handler(req, res) {
         </div>
       `;
       try {
-        await sendMailO365({
+        await sendMail({
           to: user.email,
           subject: "Reset your Agasthya password",
           html,

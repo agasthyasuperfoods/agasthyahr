@@ -12,6 +12,7 @@ import AppHeader from "@/components/AppHeader";
 // import CalendarMini from "@/components/CalendarMini";
 import Swal from "sweetalert2";
 import { Users, Search as SearchIcon, Loader2, Pencil, X as XIcon, Save } from "lucide-react";
+import EmployeeEditModal from "@/components/EmployeeEditModal";
 
 const ASSETS_API = "/api/assets/Aindex";
 const USERS_API = "/api/users";
@@ -148,88 +149,6 @@ function AttendanceCalendar({ className = "" }) {
             </div>
           );
         })}
-      </div>
-    </div>
-  );
-}
-
-/* ========= Update Employee Modal ========= */
-function EmployeeEditModal({ user, onClose, onSaved }) {
-  const [name, setName] = useState(user?.name || "");
-  const [email, setEmail] = useState(user?.email || "");
-  const [role, setRole] = useState(user?.role || "");
-  const [doj, setDoj] = useState(user?.doj ? String(user.doj).slice(0, 10) : "");
-  const [phone, setPhone] = useState(user?.number || "");
-  const [company, setCompany] = useState(user?.company || "");
-  const [grosssalary, setGrosssalary] = useState(user?.grosssalary ?? "");
-  const [adhaarnumber, setAadhaar] = useState(user?.adhaarnumber || "");
-  const [pancard, setPAN] = useState(user?.pancard || "");
-  const [address, setAddress] = useState(user?.address || "");
-  const [saving, setSaving] = useState(false);
-
-  const save = async () => {
-    try {
-      setSaving(true);
-      const body = {
-        employeeid: user.employeeid,
-        name,
-        email,
-        role,
-        doj: doj || null,
-        phone: phone || null,
-        company,
-        grosssalary: grosssalary === "" ? null : String(grosssalary),
-        adhaarnumber: adhaarnumber || null,
-        pancard: pancard || null,
-        address: address || null,
-      };
-      const res = await fetch(`/api/users?id=${encodeURIComponent(user.employeeid)}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const j = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(j?.error || "Update failed");
-      onSaved?.(j.data || body);
-      onClose?.();
-      await Swal.fire({ icon: "success", title: "Updated", text: "Employee details saved." });
-    } catch (e) {
-      await Swal.fire({ icon: "error", title: "Update failed", text: e.message || "Update failed" });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative w-full sm:max-w-[95vw] md:max-w-3xl lg:max-w-4xl max-h-[95vh] overflow-y-auto bg-white border border-gray-200 rounded-t-2xl md:rounded-2xl shadow-xl p-6 m-0 md:m-4">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-gray-900">Update • {user?.employeeid}</h3>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
-            <XIcon className="h-5 w-5" />
-          </button>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div><label className="block text-sm text-gray-700 mb-1">Name</label><input value={name} onChange={(e)=>setName(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" /></div>
-          <div><label className="block text-sm text-gray-700 mb-1">Email</label><input value={email} onChange={(e)=>setEmail(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" /></div>
-          <div><label className="block text-sm text-gray-700 mb-1">Role</label><input value={role} onChange={(e)=>setRole(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" /></div>
-          <div><label className="block text-sm text-gray-700 mb-1">Company</label><input value={company} onChange={(e)=>setCompany(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" /></div>
-          <div><label className="block text-sm text-gray-700 mb-1">Phone</label><input value={phone} onChange={(e)=>setPhone(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" /></div>
-          <div><label className="block text-sm text-gray-700 mb-1">Date of Joining</label><input type="date" value={doj} onChange={(e)=>setDoj(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" /></div>
-          <div><label className="block text-sm text-gray-700 mb-1">Gross Salary</label><input value={grosssalary ?? ""} onChange={(e)=>setGrosssalary(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" /></div>
-          <div><label className="block text-sm text-gray-700 mb-1">Aadhaar</label><input value={adhaarnumber} onChange={(e)=>setAadhaar(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" /></div>
-          <div><label className="block text-sm text-gray-700 mb-1">PAN</label><input value={pancard} onChange={(e)=>setPAN(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" /></div>
-          <div className="md:col-span-2"><label className="block text-sm text-gray-700 mb-1">Address</label><textarea rows={2} value={address} onChange={(e)=>setAddress(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" /></div>
-        </div>
-
-        <div className="mt-5 flex items-center justify-end gap-3">
-          <button onClick={onClose} className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Cancel</button>
-          <button onClick={save} disabled={saving} className="inline-flex items-center gap-2 rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-60">
-            <Save className="h-4 w-4" /> {saving ? "Saving…" : "Save Changes"}
-          </button>
-        </div>
       </div>
     </div>
   );
