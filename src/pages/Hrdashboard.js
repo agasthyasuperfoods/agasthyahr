@@ -2405,7 +2405,7 @@ function CreateEmployeeModal({ idToName = {}, onClose, onCreated }) {
               disabled={submitting}
               className="inline-flex items-center justify-center rounded-lg bg-[#C1272D] text-white font-medium px-4 py-2 hover:bg-[#a02125]"
             >
-              {submitting ? "Creating…" : "Create Employee"}
+              {submitting ? "Creating…" : "Onboard Employee"}
             </button>
           </div>
         </form>

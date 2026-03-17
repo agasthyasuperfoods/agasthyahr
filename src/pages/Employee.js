@@ -6,6 +6,7 @@ import Head from "next/head";
 import { useRouter } from "next/router";
 import AppHeader from "@/components/AppHeader";
 import Swal from "sweetalert2";
+import EmployeeEditModule from "@/components/EmployeeEditModule";
 import { Users, Search as SearchIcon, Loader2, Pencil, X as XIcon, Save } from "lucide-react";
 
 const ASSETS_API = "/api/assets/Aindex";
@@ -195,144 +196,7 @@ async function fetchEmployeeById(id) {
   throw new Error(j?.error || "Employee not found");
 }
 
-/* ========= Update Employee Modal ========= */
-function EmployeeEditModal({ user, onClose, onSaved }) {
-  const [name, setName] = useState(user?.name || "");
-  const [email, setEmail] = useState(user?.email || ""); // OPTIONAL
-  const [role, setRole] = useState(user?.role || "");
-  const [doj, setDoj] = useState(user?.doj ? String(user.doj).slice(0, 10) : "");
-  const [phone, setPhone] = useState(user?.number || "");
-  const [company, setCompany] = useState(user?.company || "");
-  const [grosssalary, setGrosssalary] = useState(user?.grosssalary ?? "");
-  const [adhaarnumber, setAadhaar] = useState(user?.adhaarnumber || "");
-  const [pancard, setPAN] = useState(user?.pancard || ""); // OPTIONAL
-  const [address, setAddress] = useState(user?.address || "");
-  const [saving, setSaving] = useState(false);
 
-  // Read-only / additional fields
-  const [designation, setDesignation] = useState(user?.designation || "");
-  const [reportingToId, setReportingToId] = useState(user?.reporting_to_id || "");
-  const [leavesCf] = useState(user?.Leaves_cf ?? user?.leaves_cf ?? ""); // read-only
-
-  const save = async () => {
-    try {
-      setSaving(true);
-      const body = {
-        employeeid: user.employeeid,
-        name: name || null,
-        email: email || null,                 // optional
-        role: role || null,
-        doj: doj || null,
-        number: phone || null,
-        company: company || null,
-        grosssalary: grosssalary === "" ? null : String(grosssalary),
-        adhaarnumber: adhaarnumber || null,
-        pancard: pancard || null,             // optional
-        address: address || null,
-        designation: designation || null,
-        reporting_to_id: reportingToId || null,
-      };
-      const res = await fetch(`${USERS_API}?id=${encodeURIComponent(user.employeeid)}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const j = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(j?.error || "Update failed");
-      onSaved?.(j.data || { ...user, ...body, Leaves_cf: user?.Leaves_cf ?? user?.leaves_cf });
-      onClose?.();
-      await Swal.fire({ icon: "success", title: "Updated", text: "Employee details saved." });
-    } catch (e) {
-      await Swal.fire({ icon: "error", title: "Update failed", text: e.message || "Update failed" });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative w-full sm:max-w-[95vw] md:max-w-3xl lg:max-w-4xl max-h-[95vh] overflow-y-auto bg-white border border-gray-200 rounded-t-2xl md:rounded-2xl shadow-xl p-6 m-0 md:m-4">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-gray-900">Update • {user?.employeeid}</h3>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
-            <XIcon className="h-5 w-5" />
-          </button>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm text-gray-700 mb-1">Name</label>
-            <input value={name} onChange={(e) => setName(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-          </div>
-          <div>
-            <label className="block text-sm text-gray-700 mb-1">Email (optional)</label>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-          </div>
-
-          <div>
-            <label className="block text-sm text-gray-700 mb-1">Role</label>
-            <input value={role} onChange={(e) => setRole(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-          </div>
-          <div>
-            <label className="block text-sm text-gray-700 mb-1">Company</label>
-            <input value={company} onChange={(e) => setCompany(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-          </div>
-
-          <div>
-            <label className="block text-sm text-gray-700 mb-1">Designation</label>
-            <input value={designation} onChange={(e) => setDesignation(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" placeholder="e.g. Sr. Executive" />
-          </div>
-          <div>
-            <label className="block text-sm text-gray-700 mb-1">Reporting To (Employee ID)</label>
-            <input value={reportingToId} onChange={(e) => setReportingToId(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" placeholder="e.g. EMP1002" />
-          </div>
-
-          <div>
-            <label className="block text-sm text-gray-700 mb-1">Phone</label>
-            <input value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-          </div>
-          <div>
-            <label className="block text-sm text-gray-700 mb-1">Date of Joining</label>
-            <input type="date" value={doj} onChange={(e) => setDoj(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-          </div>
-
-          <div>
-            <label className="block text-sm text-gray-700 mb-1">Gross Salary</label>
-            <input value={grosssalary ?? ""} onChange={(e) => setGrosssalary(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-          </div>
-          <div>
-            <label className="block text-sm text-gray-700 mb-1">Aadhaar</label>
-            <input value={adhaarnumber} onChange={(e) => setAadhaar(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-          </div>
-          <div>
-            <label className="block text-sm text-gray-700 mb-1">PAN (optional)</label>
-            <input value={pancard} onChange={(e) => setPAN(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-          </div>
-
-          <div className="md:col-span-2">
-            <label className="block text-sm text-gray-700 mb-1">Carryforward Leaves (read-only)</label>
-            <input value={leavesCf ?? ""} readOnly className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700" />
-          </div>
-
-          <div className="md:col-span-2">
-            <label className="block text-sm text-gray-700 mb-1">Address</label>
-            <textarea rows={2} value={address} onChange={(e) => setAddress(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-          </div>
-        </div>
-
-        <div className="mt-5 flex items-center justify-end gap-3">
-          <button onClick={onClose} className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
-            Cancel
-          </button>
-          <button onClick={save} disabled={saving} className="inline-flex items-center gap-2 rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-60">
-            <Save className="h-4 w-4" /> {saving ? "Saving…" : "Save Changes"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function Field({ label, value, wide, formatter }) {
   return (
@@ -340,6 +204,110 @@ function Field({ label, value, wide, formatter }) {
       <div className="text-xs text-gray-500">{label}</div>
       <div className="mt-0.5 text-gray-900">{formatter ? formatter(value) : value ?? "-"}</div>
     </div>
+  );
+}
+
+function AllEmployeesTable({ employees, isLoading, onEdit }) {
+  const [companyFilter, setCompanyFilter] = useState('All Companies');
+
+  // Normalize company names to uppercase for unique, case-insensitive filtering
+  const uniqueCompanies = [...new Set(employees.map(e => e.company?.trim().toUpperCase()).filter(Boolean))].sort();
+  const companyChips = ['All Companies', ...uniqueCompanies];
+
+  // Case-insensitive filtering
+  const filteredEmployees = employees.filter(employee => {
+    if (companyFilter === 'All Companies') return true;
+    return employee.company?.trim().toUpperCase() === companyFilter;
+  });
+
+  if (isLoading) {
+    return (
+      <div className="text-center p-6 bg-white border border-gray-200 rounded-xl shadow-sm">
+        <Loader2 className="h-6 w-6 animate-spin inline-block text-gray-400" />
+        <p className="text-gray-500 mt-2">Loading Employees...</p>
+      </div>
+    );
+  }
+
+  if (!employees.length) {
+    return (
+      <div className="text-center p-6 bg-white border border-gray-200 rounded-xl shadow-sm">
+        <p className="text-gray-500">No employees found.</p>
+      </div>
+    );
+  }
+
+  return (
+    <section className="bg-white border border-gray-200 rounded-xl shadow-sm">
+      {/* Sticky Header */}
+      <div className="sticky top-0 z-10 bg-white/95 backdrop-blur-sm px-6 pt-4 pb-3 border-b border-gray-200">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
+          <h3 className="text-base font-semibold text-gray-900 self-center">All Employees</h3>
+          <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap scrollbar-hide flex-nowrap">
+            {companyChips.map(c => (
+              <button
+                key={c}
+                onClick={() => setCompanyFilter(c)}
+                className={`flex-shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors duration-150 border ${
+                  companyFilter === c
+                    ? 'bg-[#b03838] text-white border-transparent'
+                    : 'bg-white text-gray-600 border-gray-300 hover:border-[#b03838] hover:text-[#b03838] hover:bg-red-50'
+                }`}
+              >
+                {c}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="p-6">
+        <div className="overflow-x-auto border border-gray-200 rounded-xl">
+          <table className="min-w-[800px] w-full text-sm">
+            <thead className="bg-gray-50">
+              <tr className="text-left text-gray-600">
+                <th className="px-3 py-2 border-b">Employee ID</th>
+                <th className="px-3 py-2 border-b">Name</th>
+                <th className="px-3 py-2 border-b">Email</th>
+                <th className="px-3 py-2 border-b">Role</th>
+                <th className="px-3 py-2 border-b">Company</th>
+                <th className="px-3 py-2 border-b text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredEmployees.length > 0 ? (
+                filteredEmployees.map((u) => (
+                  <tr key={u.employeeid} className="odd:bg-white even:bg-gray-50 align-top">
+                    <td className="px-3 py-2 border-t">{u.employeeid ?? "-"}</td>
+                    <td className="px-3 py-2 border-t">{u.name || "-"}</td>
+                    <td className="px-3 py-2 border-t">{u.email || "-"}</td>
+                    <td className="px-3 py-2 border-t">
+                      <span className="rounded bg-gray-100 px-2 py-0.5">{u.role || "-"}</span>
+                    </td>
+                    <td className="px-3 py-2 border-t">{u.company || "-"}</td>
+                    <td className="px-3 py-2 border-t text-right">
+                      <button
+                        onClick={() => onEdit(u)}
+                        className="inline-flex items-center gap-1.5 rounded-md bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-700"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                        Edit
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={6} className="text-center text-gray-500 p-6 border-t">
+                    No employees found for the selected company.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -410,8 +378,41 @@ export default function Employee() {
   // Total employees KPI
   const [employeeCount, setEmployeeCount] = useState(null);
 
-  // Update modal
-  const [showEdit, setShowEdit] = useState(false);
+  // Update module
+  const [showEditModule, setShowEditModule] = useState(false);
+
+  // State for the main employee table
+  const [employeeList, setEmployeeList] = useState([]);
+  const [listLoading, setListLoading] = useState(true);
+
+  // State for populating dropdowns in the edit module
+  const [allEmployeesForDropdowns, setAllEmployeesForDropdowns] = useState([]);
+
+  const getUniqueValues = (key) => {
+    const allValues = allEmployeesForDropdowns.map(e => e[key]).filter(Boolean);
+    return [...new Set(allValues)];
+  };
+
+  useEffect(() => {
+    // Fetch all employees to display in the main table and to get roles/companies for the modal
+    (async () => {
+      try {
+        setListLoading(true);
+        const res = await fetch(`${USERS_API}?all=1`);
+        const data = await res.json();
+        if (res.ok) {
+          const employees = data.data || [];
+          setEmployeeList(employees);
+          setAllEmployeesForDropdowns(employees);
+        }
+      } catch (e) {
+        console.error("Failed to fetch all employees", e);
+        // Optionally set an error state here to show in the UI
+      } finally {
+        setListLoading(false);
+      }
+    })();
+  }, []);
 
   // Refs
   const inputRef = useRef(null);
@@ -768,6 +769,21 @@ export default function Employee() {
                         </>
                       )}
                     </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSearch("");
+                        setResults([]);
+                        setSelected(null);
+                        setShowEditModule(false);
+                        hardCloseSuggestions();
+                      }}
+                      className="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                      title="Clear search and show all employees"
+                    >
+                      Clear
+                    </button>
                   </div>
 
                   {/* Suggestions dropdown */}
@@ -927,8 +943,39 @@ export default function Employee() {
             ) : null}
           </section>
 
+          {/* ===== All Employees Table (shown by default) ===== */}
+          {!selected && results.length === 0 ? (
+            <AllEmployeesTable
+              employees={employeeList}
+              isLoading={listLoading}
+              onEdit={(employee) => {
+                setSelected(employee);
+                setShowEditModule(true);
+              }}
+            />
+          ) : null}
+
+
+          {/* ===== New Edit Module ===== */}
+          {showEmployeeDetails && showEditModule ? (
+            <EmployeeEditModule
+              user={selected}
+              onCancel={() => setShowEditModule(false)}
+              onSaved={(updated) => {
+                setSelected(updated);
+                setResults((prev) =>
+                  prev.length === 1 ? [updated] : prev.map((u) => (u.employeeid === updated.employeeid ? updated : u))
+                );
+                setShowEditModule(false);
+              }}
+              roles={getUniqueValues('role')}
+              companies={getUniqueValues('company')}
+            />
+          ) : null}
+
+
           {/* ===== Details + Assets ===== */}
-          {showEmployeeDetails ? (
+          {showEmployeeDetails && !showEditModule ? (
             <section className="space-y-6">
               {/* Employee details */}
               <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-6">
@@ -939,8 +986,8 @@ export default function Employee() {
                   </div>
                   <div>
                     <button
-                      className="inline-flex items-center gap-2 rounded-lg bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-800"
-                      onClick={() => setShowEdit(true)}
+                      className="inline-flex items-center gap-2 rounded-lg bg-[#b03838] px-3 py-1.5 text-sm font-medium text-white hover:bg-[#8e2d2d]"
+                      onClick={() => setShowEditModule(true)}
                     >
                       <Pencil className="h-4 w-4" /> Update
                     </button>
@@ -1037,21 +1084,6 @@ export default function Employee() {
           ) : null}
         </div>
       </main>
-
-      {/* Update Employee Modal */}
-      {showEmployeeDetails && showEdit ? (
-        <EmployeeEditModal
-          user={selected}
-          onClose={() => setShowEdit(false)}
-          onSaved={(updated) => {
-            setSelected(updated);
-            setResults((prev) =>
-              prev.length === 1 ? [updated] : prev.map((u) => (u.employeeid === updated.employeeid ? updated : u))
-            );
-            setShowEdit(false);
-          }}
-        />
-      ) : null}
     </>
   );
 }
