@@ -22,6 +22,7 @@ const COMPANY_OPTIONS = [
   "ASF-FACTORY",
   "ANM",
   "AVION",
+  "ASFPL",
   "SRI CHAKRA MILK", 
   "NATURE'S WELLNESS",
 ];

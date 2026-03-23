@@ -136,7 +136,7 @@ function parseForm(req, options = {}) {
 
 // note: keep canonical strings in lowercase for allowlist checks
 const ALLOWED_COMPANIES = new Set([
-  "sonf", "asf", "anm", "agb", "avion", "dwaraka contract staff", "asf-factory",
+  "sonf", "asf", "anm", "agb", "avion", "dwaraka contract staff", "asf-factory", "asfpl",
   "sri chakra milk", "nature's wellness", "scm", "nw"
 ]);
 
@@ -170,6 +170,7 @@ const mapCompany = (raw) => {
   if (/\bAGB\b/.test(u)) return "AGB";
   if (/\bANM\b/.test(u)) return "ANM";
   if (/\bAVION\b/.test(u)) return "AVION";
+  if (/\bASFPL\b/.test(u)) return "ASFPL";
   if (/DWARAKA/i.test(u) || /^DR/i.test(String(raw).trim())) return "Dwaraka Contract Staff";
 
   // fallback: return trimmed original (so we still capture odd but meaningful names)
